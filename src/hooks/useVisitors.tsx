@@ -1,0 +1,205 @@
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from './useAuth';
+import { useToast } from './use-toast';
+
+export interface Visitor {
+  id: string;
+  visitor_request_id?: string;
+  security_id: string;
+  visitor_name: string;
+  visitor_phone?: string;
+  visiting_unit_id?: string;
+  visiting_tenant_id?: string;
+  purpose: string;
+  time_in: string;
+  time_out?: string;
+  status: 'active' | 'checked_out';
+  security_notes?: string;
+  emergency_contact?: string;
+  created_at: string;
+  updated_at: string;
+  tenant?: {
+    first_name: string;
+    last_name: string;
+  };
+  unit?: {
+    unit_number: string;
+    property: {
+      name: string;
+    };
+  };
+}
+
+export interface CreateVisitor {
+  visitor_request_id?: string;
+  visitor_name: string;
+  visitor_phone?: string;
+  visiting_unit_id?: string;
+  visiting_tenant_id?: string;
+  purpose: string;
+  security_notes?: string;
+  emergency_contact?: string;
+}
+
+export const useVisitors = () => {
+  const [visitors, setVisitors] = useState<Visitor[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { profile } = useAuth();
+  const { toast } = useToast();
+
+  const fetchVisitors = async () => {
+    if (!profile?.id) return;
+
+    try {
+      setLoading(true);
+
+      let query = supabase
+        .from('visitors')
+        .select(`
+          *,
+          tenant:profiles!visitors_visiting_tenant_id_fkey(first_name, last_name),
+          unit:units(unit_number, property:properties(name))
+        `)
+        .order('time_in', { ascending: false });
+
+      // Filter based on user role
+      if (profile.role === 'tenant') {
+        query = query.eq('visiting_tenant_id', profile.id);
+      } else if (profile.role === 'landlord') {
+        // Landlords can see visitors to their properties
+        const { data: properties } = await supabase
+          .from('properties')
+          .select('id')
+          .eq('landlord_id', profile.id);
+
+        if (properties && properties.length > 0) {
+          const propertyIds = properties.map(p => p.id);
+          const { data: units } = await supabase
+            .from('units')
+            .select('id')
+            .in('property_id', propertyIds);
+
+          if (units && units.length > 0) {
+            const unitIds = units.map(u => u.id);
+            query = query.in('visiting_unit_id', unitIds);
+          }
+        }
+      }
+      // Security can see all visitors (no additional filter needed)
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      setVisitors((data || []) as unknown as Visitor[]);
+    } catch (error) {
+      console.error('Error fetching visitors:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load visitors",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const registerVisitor = async (visitorData: CreateVisitor) => {
+    if (!profile?.id || profile.role !== 'security') return false;
+
+    try {
+      const { data, error } = await supabase
+        .from('visitors')
+        .insert({
+          security_id: profile.id,
+          ...visitorData,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast({
+        title: "Visitor Registered",
+        description: "Visitor has been successfully registered.",
+      });
+
+      await fetchVisitors();
+      return true;
+    } catch (error) {
+      console.error('Error registering visitor:', error);
+      toast({
+        title: "Error",
+        description: "Failed to register visitor",
+        variant: "destructive"
+      });
+      return false;
+    }
+  };
+
+  const checkOutVisitor = async (visitorId: string, security_notes?: string) => {
+    if (!profile?.id || profile.role !== 'security') return false;
+
+    try {
+      const updates: any = {
+        status: 'checked_out',
+        time_out: new Date().toISOString(),
+      };
+
+      if (security_notes) {
+        updates.security_notes = security_notes;
+      }
+
+      const { error } = await supabase
+        .from('visitors')
+        .update(updates)
+        .eq('id', visitorId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Visitor Checked Out",
+        description: "Visitor has been checked out successfully.",
+      });
+
+      await fetchVisitors();
+      return true;
+    } catch (error) {
+      console.error('Error checking out visitor:', error);
+      toast({
+        title: "Error",
+        description: "Failed to check out visitor",
+        variant: "destructive"
+      });
+      return false;
+    }
+  };
+
+  const getStats = () => {
+    const active = visitors.filter(v => v.status === 'active').length;
+    const today = new Date().toDateString();
+    const todaysVisitors = visitors.filter(v => 
+      new Date(v.time_in).toDateString() === today
+    ).length;
+    const checkedOut = visitors.filter(v => 
+      v.status === 'checked_out' && 
+      new Date(v.time_in).toDateString() === today
+    ).length;
+
+    return { active, todaysVisitors, checkedOut };
+  };
+
+  useEffect(() => {
+    fetchVisitors();
+  }, [profile?.id]);
+
+  return {
+    visitors,
+    loading,
+    registerVisitor,
+    checkOutVisitor,
+    getStats,
+    refetch: fetchVisitors
+  };
+};
