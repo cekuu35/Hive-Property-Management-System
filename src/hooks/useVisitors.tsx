@@ -138,6 +138,71 @@ export const useVisitors = () => {
     }
   };
 
+  const registerVisitorFromApprovedRequest = async (visitorRequestId: string) => {
+    if (!profile?.id || profile.role !== 'security') return false;
+
+    try {
+      // Get the approved visitor request
+      const { data: request, error: requestError } = await supabase
+        .from('visitor_requests')
+        .select(`
+          *,
+          tenant:profiles!visitor_requests_tenant_id_fkey(id)
+        `)
+        .eq('id', visitorRequestId)
+        .eq('status', 'approved')
+        .single();
+
+      if (requestError) throw requestError;
+
+      if (!request) {
+        throw new Error('Approved visitor request not found');
+      }
+
+      // Get tenant's active unit
+      const { data: lease } = await supabase
+        .from('leases')
+        .select('unit_id')
+        .eq('tenant_id', request.tenant_id)
+        .eq('status', 'active')
+        .single();
+
+      // Register the visitor
+      const { data, error } = await supabase
+        .from('visitors')
+        .insert({
+          security_id: profile.id,
+          visitor_request_id: visitorRequestId,
+          visitor_name: request.visitor_name,
+          visitor_phone: request.visitor_phone,
+          visiting_unit_id: lease?.unit_id,
+          visiting_tenant_id: request.tenant_id,
+          purpose: request.purpose,
+          security_notes: request.security_notes,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast({
+        title: "Visitor Registered",
+        description: "Visitor has been successfully registered and checked in.",
+      });
+
+      await fetchVisitors();
+      return true;
+    } catch (error) {
+      console.error('Error registering visitor from approved request:', error);
+      toast({
+        title: "Error",
+        description: "Failed to register visitor",
+        variant: "destructive"
+      });
+      return false;
+    }
+  };
+
   const checkOutVisitor = async (visitorId: string, security_notes?: string) => {
     if (!profile?.id || profile.role !== 'security') return false;
 
@@ -198,6 +263,7 @@ export const useVisitors = () => {
     visitors,
     loading,
     registerVisitor,
+    registerVisitorFromApprovedRequest,
     checkOutVisitor,
     getStats,
     refetch: fetchVisitors

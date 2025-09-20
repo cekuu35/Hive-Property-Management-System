@@ -6,6 +6,7 @@ import { useToast } from './use-toast';
 export interface VisitorRequest {
   id: string;
   tenant_id: string;
+  security_id?: string;
   visitor_name: string;
   visitor_phone?: string;
   purpose: string;
@@ -19,6 +20,10 @@ export interface VisitorRequest {
   created_at: string;
   updated_at: string;
   tenant?: {
+    first_name: string;
+    last_name: string;
+  };
+  security?: {
     first_name: string;
     last_name: string;
   };
@@ -37,6 +42,11 @@ export interface CreateVisitorRequest {
   expected_arrival: string;
   expected_duration?: number;
   special_instructions?: string;
+  tenant_id?: string; // For security creating requests
+}
+
+export interface CreateSecurityVisitorRequest extends CreateVisitorRequest {
+  tenant_id: string; // Required for security requests
 }
 
 export const useVisitorRequests = () => {
@@ -56,6 +66,7 @@ export const useVisitorRequests = () => {
         .select(`
           *,
           tenant:profiles!visitor_requests_tenant_id_fkey(first_name, last_name),
+          security:profiles!visitor_requests_security_id_fkey(first_name, last_name),
           unit:units(unit_number, property:properties(name))
         `)
         .order('created_at', { ascending: false });
@@ -63,8 +74,11 @@ export const useVisitorRequests = () => {
       // Filter based on user role
       if (profile.role === 'tenant') {
         query = query.eq('tenant_id', profile.id);
+      } else if (profile.role === 'security') {
+        // Security sees requests they created or all requests for approval
+        query = query.or(`security_id.eq.${profile.id},security_id.is.null`);
       }
-      // Security and landlords can see all requests
+      // Landlords can see all requests
 
       const { data, error } = await query;
 
@@ -87,13 +101,25 @@ export const useVisitorRequests = () => {
     if (!profile?.id) return false;
 
     try {
+      const insertData: any = {
+        ...requestData,
+        expected_arrival: new Date(requestData.expected_arrival).toISOString(),
+      };
+
+      // For tenants, set tenant_id; for security, set security_id and tenant_id
+      if (profile.role === 'tenant') {
+        insertData.tenant_id = profile.id;
+      } else if (profile.role === 'security') {
+        if (!requestData.tenant_id) {
+          throw new Error('Tenant ID is required for security requests');
+        }
+        insertData.security_id = profile.id;
+        insertData.tenant_id = requestData.tenant_id;
+      }
+
       const { data, error } = await supabase
         .from('visitor_requests')
-        .insert({
-          tenant_id: profile.id,
-          ...requestData,
-          expected_arrival: new Date(requestData.expected_arrival).toISOString(),
-        })
+        .insert(insertData)
         .select()
         .single();
 
@@ -101,7 +127,9 @@ export const useVisitorRequests = () => {
 
       toast({
         title: "Request Submitted",
-        description: "Your visitor request has been submitted for approval.",
+        description: profile.role === 'security' 
+          ? "Visitor approval request has been sent to the tenant."
+          : "Your visitor request has been submitted for approval.",
       });
 
       await fetchVisitorRequests();
@@ -115,6 +143,11 @@ export const useVisitorRequests = () => {
       });
       return false;
     }
+  };
+
+  const createSecurityVisitorRequest = async (requestData: CreateSecurityVisitorRequest) => {
+    if (!profile?.id || profile.role !== 'security') return false;
+    return await createVisitorRequest(requestData);
   };
 
   const updateVisitorRequestStatus = async (
@@ -192,12 +225,34 @@ export const useVisitorRequests = () => {
 
   useEffect(() => {
     fetchVisitorRequests();
+
+    // Set up real-time subscription
+    const channel = supabase
+      .channel('visitor_requests_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'visitor_requests'
+        },
+        () => {
+          console.log('Visitor request changed, refetching...');
+          fetchVisitorRequests();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [profile?.id]);
 
   return {
     requests,
     loading,
     createVisitorRequest,
+    createSecurityVisitorRequest,
     updateVisitorRequestStatus,
     cancelVisitorRequest,
     refetch: fetchVisitorRequests
