@@ -770,6 +770,7 @@ export type Database = {
           expected_duration: number | null
           id: string
           purpose: string
+          security_id: string | null
           security_notes: string | null
           special_instructions: string | null
           status: string
@@ -786,6 +787,7 @@ export type Database = {
           expected_duration?: number | null
           id?: string
           purpose: string
+          security_id?: string | null
           security_notes?: string | null
           special_instructions?: string | null
           status?: string
@@ -802,6 +804,7 @@ export type Database = {
           expected_duration?: number | null
           id?: string
           purpose?: string
+          security_id?: string | null
           security_notes?: string | null
           special_instructions?: string | null
           status?: string
@@ -810,7 +813,15 @@ export type Database = {
           visitor_name?: string
           visitor_phone?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "visitor_requests_security_id_fkey"
+            columns: ["security_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       visitors: {
         Row: {
