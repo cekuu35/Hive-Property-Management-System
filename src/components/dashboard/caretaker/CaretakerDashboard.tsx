@@ -21,28 +21,7 @@ const CaretakerDashboard = ({ activeSection = 'workorders', onSectionChange }: C
   const { requests, getStats } = useMaintenanceRequests();
   const stats = getStats();
 
-  // Set up real-time updates
-  useEffect(() => {
-    const channel = supabase
-      .channel('maintenance-updates')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'maintenance_requests'
-        },
-        () => {
-          // Trigger re-fetch of data
-          window.location.reload();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
+  // Real-time updates are now handled in useMaintenanceRequests hook
 
   const todayRequests = requests.filter(req => 
     new Date(req.createdDate).toDateString() === new Date().toDateString()

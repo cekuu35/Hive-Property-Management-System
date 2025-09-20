@@ -230,6 +230,31 @@ export const useMaintenanceRequests = () => {
 
   useEffect(() => {
     fetchMaintenanceRequests();
+
+    // Set up real-time subscription for maintenance requests
+    if (profile?.id) {
+      const channel = supabase
+        .channel('maintenance_requests_realtime')
+        .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'maintenance_requests',
+        }, () => {
+          fetchMaintenanceRequests();
+        })
+        .on('postgres_changes', {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'maintenance_requests',
+        }, () => {
+          fetchMaintenanceRequests();
+        })
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
   }, [profile?.id]);
 
   return {
