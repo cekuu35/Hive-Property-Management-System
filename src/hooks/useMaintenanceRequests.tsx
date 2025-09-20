@@ -43,15 +43,44 @@ export const useMaintenanceRequests = () => {
     try {
       setLoading(true);
 
-      const { data: maintenanceData, error } = await supabase
+      let query = supabase
         .from('maintenance_requests')
         .select(`
           *,
           unit:units(unit_number, property:properties(name)),
           tenant:profiles!maintenance_requests_tenant_id_fkey(first_name, last_name),
           assigned:profiles!maintenance_requests_assigned_to_fkey(first_name, last_name)
-        `)
-        .order('created_at', { ascending: false });
+        `);
+
+      // Filter based on user role
+      if (profile.role === 'caretaker') {
+        // Caretakers see requests assigned to them or unassigned requests
+        query = query.or(`assigned_to.eq.${profile.id},assigned_to.is.null`);
+      } else if (profile.role === 'tenant') {
+        // Tenants see only their own requests
+        query = query.eq('tenant_id', profile.id);
+      } else if (profile.role === 'landlord') {
+        // Landlords see requests for their properties
+        const { data: properties } = await supabase
+          .from('properties')
+          .select('id')
+          .eq('landlord_id', profile.id);
+        
+        if (properties && properties.length > 0) {
+          const propertyIds = properties.map(p => p.id);
+          const { data: units } = await supabase
+            .from('units')
+            .select('id')
+            .in('property_id', propertyIds);
+          
+          if (units && units.length > 0) {
+            const unitIds = units.map(u => u.id);
+            query = query.in('unit_id', unitIds);
+          }
+        }
+      }
+
+      const { data: maintenanceData, error } = await query.order('created_at', { ascending: false });
 
       if (error) throw error;
 
@@ -195,6 +224,10 @@ export const useMaintenanceRequests = () => {
       // Update request status in database
       const updates: any = { status };
       if (assignedTo) updates.assigned_to = assignedTo;
+      if (status === 'completed') updates.completed_date = new Date().toISOString().split('T')[0];
+      if (status === 'in-progress' && !assignedTo && profile?.role === 'caretaker') {
+        updates.assigned_to = profile.id;
+      }
 
       const { error } = await supabase
         .from('maintenance_requests')
@@ -205,7 +238,7 @@ export const useMaintenanceRequests = () => {
 
       toast({
         title: "Success",
-        description: "Request updated successfully",
+        description: `Request ${status === 'in-progress' ? 'accepted' : status === 'completed' ? 'completed' : 'updated'} successfully`,
       });
 
       await fetchMaintenanceRequests();
