@@ -64,9 +64,7 @@ export const useVisitorRequests = () => {
       let query = supabase
         .from('visitor_requests')
         .select(`
-          *,
-          tenant:profiles!tenant_id(first_name, last_name),
-          security:profiles!security_id(first_name, last_name)
+          *
         `)
         .order('created_at', { ascending: false });
 
@@ -83,7 +81,37 @@ export const useVisitorRequests = () => {
 
       if (error) throw error;
 
-      setRequests((data || []) as unknown as VisitorRequest[]);
+      // Fetch related data separately
+      const requestsData = data || [];
+      const requestsWithRelations = await Promise.all(
+        requestsData.map(async (request: any) => {
+          const result = { ...request };
+
+          // Fetch tenant info
+          if (request.tenant_id) {
+            const { data: tenant } = await supabase
+              .from('profiles')
+              .select('first_name, last_name')
+              .eq('id', request.tenant_id)
+              .single();
+            result.tenant = tenant;
+          }
+
+          // Fetch security info
+          if (request.security_id) {
+            const { data: security } = await supabase
+              .from('profiles')
+              .select('first_name, last_name')
+              .eq('id', request.security_id)
+              .single();
+            result.security = security;
+          }
+
+          return result;
+        })
+      );
+
+      setRequests(requestsWithRelations as VisitorRequest[]);
     } catch (error) {
       console.error('Error fetching visitor requests:', error);
       toast({

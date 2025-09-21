@@ -56,11 +56,7 @@ export const useVisitors = () => {
 
       let query = supabase
         .from('visitors')
-        .select(`
-          *,
-          tenant:profiles!visiting_tenant_id(first_name, last_name),
-          unit:units!visiting_unit_id(unit_number, property:properties(name))
-        `)
+        .select('*')
         .order('time_in', { ascending: false });
 
       // Filter based on user role
@@ -92,7 +88,40 @@ export const useVisitors = () => {
 
       if (error) throw error;
 
-      setVisitors((data || []) as unknown as Visitor[]);
+      // Fetch related data separately
+      const visitorsData = data || [];
+      const visitorsWithRelations = await Promise.all(
+        visitorsData.map(async (visitor: any) => {
+          const result = { ...visitor };
+
+          // Fetch tenant info
+          if (visitor.visiting_tenant_id) {
+            const { data: tenant } = await supabase
+              .from('profiles')
+              .select('first_name, last_name')
+              .eq('id', visitor.visiting_tenant_id)
+              .single();
+            result.tenant = tenant;
+          }
+
+          // Fetch unit info
+          if (visitor.visiting_unit_id) {
+            const { data: unit } = await supabase
+              .from('units')
+              .select(`
+                unit_number,
+                property:properties(name)
+              `)
+              .eq('id', visitor.visiting_unit_id)
+              .single();
+            result.unit = unit;
+          }
+
+          return result;
+        })
+      );
+
+      setVisitors(visitorsWithRelations as Visitor[]);
     } catch (error) {
       console.error('Error fetching visitors:', error);
       toast({
@@ -145,10 +174,7 @@ export const useVisitors = () => {
       // Get the approved visitor request
       const { data: request, error: requestError } = await supabase
         .from('visitor_requests')
-        .select(`
-          *,
-          tenant:profiles!tenant_id(id)
-        `)
+        .select('*')
         .eq('id', visitorRequestId)
         .eq('status', 'approved')
         .single();
