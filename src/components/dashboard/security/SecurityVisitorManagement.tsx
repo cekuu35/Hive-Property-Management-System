@@ -4,33 +4,29 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { 
   UserCheck, Plus, Clock, User, Phone, Calendar, MapPin, 
-  CheckCircle, XCircle, AlertCircle, Eye, Edit, Trash2, Bell 
+  CheckCircle, XCircle, AlertCircle, Eye, Edit, Trash2, Bell,
+  Search, Check, ChevronsUpDown, Building, Users
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useVisitorRequests } from '@/hooks/useVisitorRequests';
 import { useVisitors } from '@/hooks/useVisitors';
-import { useProperties } from '@/hooks/useProperties';
+import { useSecurityUnits } from '@/hooks/useSecurityUnits';
 import { format } from 'date-fns';
-import { supabase } from '@/integrations/supabase/client';
-
-interface TenantUnit {
-  tenant_id: string;
-  tenant_name: string;
-  unit_id: string;
-  unit_number: string;
-  property_name: string;
-}
+import { cn } from '@/lib/utils';
 
 export const SecurityVisitorManagement = () => {
   const [isCreateRequestDialogOpen, setIsCreateRequestDialogOpen] = useState(false);
-  const [tenantUnits, setTenantUnits] = useState<TenantUnit[]>([]);
-  const [selectedTenantUnit, setSelectedTenantUnit] = useState<string>('');
+  const [selectedUnit, setSelectedUnit] = useState<string>('');
+  const [unitSearchOpen, setUnitSearchOpen] = useState(false);
+  const [unitSearchTerm, setUnitSearchTerm] = useState('');
   const [newRequest, setNewRequest] = useState({
     visitor_name: '',
     visitor_phone: '',
@@ -55,85 +51,28 @@ export const SecurityVisitorManagement = () => {
     getStats 
   } = useVisitors();
 
-  const { properties, units, loading: propertiesLoading } = useProperties();
+  const { 
+    occupiedUnits, 
+    loading: unitsLoading, 
+    getGroupedUnits, 
+    searchUnits 
+  } = useSecurityUnits();
   
   const { toast } = useToast();
 
-  // Fetch tenant-unit relationships from occupied units
-  useEffect(() => {
-    const fetchTenantUnits = async () => {
-      if (propertiesLoading || !units.length) return;
+  // Get filtered units based on search term
+  const filteredUnits = unitSearchTerm ? searchUnits(unitSearchTerm) : occupiedUnits;
+  const groupedUnits = getGroupedUnits();
 
-      try {
-        // Get only occupied units
-        const occupiedUnits = units.filter(unit => unit.status === 'occupied');
-        
-        if (occupiedUnits.length === 0) {
-          setTenantUnits([]);
-          return;
-        }
-
-        // Get active leases for these occupied units
-        const { data: leases, error } = await supabase
-          .from('leases')
-          .select(`
-            tenant_id,
-            unit_id
-          `)
-          .eq('status', 'active')
-          .in('unit_id', occupiedUnits.map(u => u.id));
-
-        if (error) throw error;
-
-        // Get tenant profiles
-        const tenantIds = [...new Set((leases || []).map(lease => lease.tenant_id))];
-        if (tenantIds.length === 0) {
-          setTenantUnits([]);
-          return;
-        }
-
-        const { data: profiles, error: profilesError } = await supabase
-          .from('profiles')
-          .select('id, first_name, last_name')
-          .in('id', tenantIds);
-
-        if (profilesError) throw profilesError;
-
-        const profilesMap = new Map(profiles?.map(p => [p.id, p]) || []);
-        const propertiesMap = new Map(properties.map(p => [p.id, p]));
-
-        const tenantUnitsData = (leases || []).map(lease => {
-          const unit = occupiedUnits.find(u => u.id === lease.unit_id);
-          const property = unit ? propertiesMap.get(unit.property_id) : null;
-          const profile = profilesMap.get(lease.tenant_id);
-          
-          return {
-            tenant_id: lease.tenant_id,
-            tenant_name: profile ? `${profile.first_name} ${profile.last_name}` : 'Unknown Tenant',
-            unit_id: lease.unit_id,
-            unit_number: unit?.unit_number || '',
-            property_name: property?.name || ''
-          };
-        }).filter(tu => tu.unit_number); // Filter out any without unit info
-
-        setTenantUnits(tenantUnitsData);
-      } catch (error) {
-        console.error('Error fetching tenant units:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load available units",
-          variant: "destructive"
-        });
-      }
-    };
-
-    fetchTenantUnits();
-  }, [propertiesLoading, units, properties, toast]);
+  // Get selected unit details
+  const selectedUnitDetails = occupiedUnits.find(unit => 
+    `${unit.tenant_id}-${unit.unit_id}` === selectedUnit
+  );
 
   const stats = getStats();
 
   const handleCreateRequest = async () => {
-    if (!selectedTenantUnit) {
+    if (!selectedUnit) {
       toast({
         title: "Error",
         description: "Please select a tenant and unit",
@@ -142,12 +81,14 @@ export const SecurityVisitorManagement = () => {
       return;
     }
 
-    const tenantUnit = tenantUnits.find(tu => `${tu.tenant_id}-${tu.unit_id}` === selectedTenantUnit);
-    if (!tenantUnit) return;
+    const unitDetails = occupiedUnits.find(unit => 
+      `${unit.tenant_id}-${unit.unit_id}` === selectedUnit
+    );
+    if (!unitDetails) return;
 
     const success = await createSecurityVisitorRequest({
       ...newRequest,
-      tenant_id: tenantUnit.tenant_id,
+      tenant_id: unitDetails.tenant_id,
       expected_duration: newRequest.expected_duration ? parseInt(newRequest.expected_duration) : undefined
     });
 
@@ -161,7 +102,8 @@ export const SecurityVisitorManagement = () => {
         expected_duration: '',
         special_instructions: ''
       });
-      setSelectedTenantUnit('');
+      setSelectedUnit('');
+      setUnitSearchTerm('');
     }
   };
 
@@ -205,8 +147,15 @@ export const SecurityVisitorManagement = () => {
   const approvedRequests = requests.filter(r => r.status === 'approved');
   const activeVisitors = visitors.filter(v => v.status === 'active');
 
-  if (requestsLoading || visitorsLoading || propertiesLoading) {
-    return <div className="flex items-center justify-center p-8">Loading...</div>;
+  if (requestsLoading || visitorsLoading || unitsLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-center space-y-2">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="text-sm text-muted-foreground">Loading visitor management...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -233,20 +182,98 @@ export const SecurityVisitorManagement = () => {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
-              <div>
-                <Label htmlFor="tenant_unit">Tenant & Unit</Label>
-                <Select value={selectedTenantUnit} onValueChange={setSelectedTenantUnit}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select tenant and unit" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {tenantUnits.map((tu) => (
-                      <SelectItem key={`${tu.tenant_id}-${tu.unit_id}`} value={`${tu.tenant_id}-${tu.unit_id}`}>
-                        {tu.tenant_name} - Unit {tu.unit_number} ({tu.property_name})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="space-y-2">
+                <Label htmlFor="tenant_unit" className="text-sm font-medium flex items-center gap-2">
+                  <Building className="h-4 w-4" />
+                  Tenant & Unit Selection
+                </Label>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Search and select from {occupiedUnits.length} occupied units
+                </p>
+                <Popover open={unitSearchOpen} onOpenChange={setUnitSearchOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={unitSearchOpen}
+                      className="w-full justify-between h-auto p-3"
+                    >
+                      {selectedUnitDetails ? (
+                        <div className="flex flex-col items-start text-left">
+                          <span className="font-medium">{selectedUnitDetails.tenant_name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            Unit {selectedUnitDetails.unit_number} • {selectedUnitDetails.property_name}
+                          </span>
+                          {selectedUnitDetails.tenant_phone && (
+                            <span className="text-xs text-muted-foreground">
+                              📞 {selectedUnitDetails.tenant_phone}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">Search tenant or unit...</span>
+                      )}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0">
+                    <Command>
+                      <CommandInput 
+                        placeholder="Search by tenant name, unit number, or property..." 
+                        value={unitSearchTerm}
+                        onValueChange={setUnitSearchTerm}
+                      />
+                      <CommandList>
+                        <CommandEmpty>No occupied units found.</CommandEmpty>
+                        {Object.entries(groupedUnits).map(([propertyName, units]) => (
+                          <CommandGroup key={propertyName} heading={propertyName}>
+                            {units.map((unit) => (
+                              <CommandItem
+                                key={`${unit.tenant_id}-${unit.unit_id}`}
+                                value={`${unit.tenant_name} ${unit.unit_number} ${unit.property_name}`}
+                                onSelect={() => {
+                                  setSelectedUnit(`${unit.tenant_id}-${unit.unit_id}`);
+                                  setUnitSearchOpen(false);
+                                  setUnitSearchTerm('');
+                                }}
+                                className="flex flex-col items-start p-3 cursor-pointer"
+                              >
+                                <div className="flex items-center justify-between w-full">
+                                  <div className="flex items-center gap-2">
+                                    <Users className="h-4 w-4 text-primary" />
+                                    <span className="font-medium">{unit.tenant_name}</span>
+                                  </div>
+                                  <Check
+                                    className={cn(
+                                      "h-4 w-4",
+                                      selectedUnit === `${unit.tenant_id}-${unit.unit_id}` 
+                                        ? "opacity-100" 
+                                        : "opacity-0"
+                                    )}
+                                  />
+                                </div>
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  Unit {unit.unit_number} • {unit.property_address}
+                                </div>
+                                {unit.tenant_phone && (
+                                  <div className="text-xs text-muted-foreground">
+                                    📞 {unit.tenant_phone}
+                                  </div>
+                                )}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        ))}
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                {occupiedUnits.length === 0 && (
+                  <div className="text-center p-4 text-sm text-muted-foreground border rounded-lg bg-muted/20">
+                    <Building className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    No occupied units found. Ensure tenants have active leases.
+                  </div>
+                )}
               </div>
               
               <div>
@@ -313,8 +340,9 @@ export const SecurityVisitorManagement = () => {
               <Button 
                 onClick={handleCreateRequest} 
                 className="w-full"
-                disabled={!newRequest.visitor_name || !newRequest.purpose || !newRequest.expected_arrival || !selectedTenantUnit}
+                disabled={!newRequest.visitor_name || !newRequest.purpose || !newRequest.expected_arrival || !selectedUnit}
               >
+                <Bell className="h-4 w-4 mr-2" />
                 Send Request to Tenant
               </Button>
             </div>
