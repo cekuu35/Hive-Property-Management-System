@@ -15,6 +15,7 @@ import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useVisitorRequests } from '@/hooks/useVisitorRequests';
 import { useVisitors } from '@/hooks/useVisitors';
+import { useProperties } from '@/hooks/useProperties';
 import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -53,26 +54,44 @@ export const SecurityVisitorManagement = () => {
     checkOutVisitor, 
     getStats 
   } = useVisitors();
+
+  const { properties, units, loading: propertiesLoading } = useProperties();
   
   const { toast } = useToast();
 
-  // Fetch tenant-unit relationships
+  // Fetch tenant-unit relationships from occupied units
   useEffect(() => {
     const fetchTenantUnits = async () => {
+      if (propertiesLoading || !units.length) return;
+
       try {
-        const { data, error } = await supabase
+        // Get only occupied units
+        const occupiedUnits = units.filter(unit => unit.status === 'occupied');
+        
+        if (occupiedUnits.length === 0) {
+          setTenantUnits([]);
+          return;
+        }
+
+        // Get active leases for these occupied units
+        const { data: leases, error } = await supabase
           .from('leases')
           .select(`
             tenant_id,
-            unit_id,
-            unit:units(unit_number, property:properties(name))
+            unit_id
           `)
-          .eq('status', 'active');
+          .eq('status', 'active')
+          .in('unit_id', occupiedUnits.map(u => u.id));
 
         if (error) throw error;
 
-        // Get tenant profiles separately
-        const tenantIds = [...new Set((data || []).map(lease => lease.tenant_id))];
+        // Get tenant profiles
+        const tenantIds = [...new Set((leases || []).map(lease => lease.tenant_id))];
+        if (tenantIds.length === 0) {
+          setTenantUnits([]);
+          return;
+        }
+
         const { data: profiles, error: profilesError } = await supabase
           .from('profiles')
           .select('id, first_name, last_name')
@@ -81,26 +100,35 @@ export const SecurityVisitorManagement = () => {
         if (profilesError) throw profilesError;
 
         const profilesMap = new Map(profiles?.map(p => [p.id, p]) || []);
+        const propertiesMap = new Map(properties.map(p => [p.id, p]));
 
-        const tenantUnitsData = (data || []).map(lease => {
+        const tenantUnitsData = (leases || []).map(lease => {
+          const unit = occupiedUnits.find(u => u.id === lease.unit_id);
+          const property = unit ? propertiesMap.get(unit.property_id) : null;
           const profile = profilesMap.get(lease.tenant_id);
+          
           return {
             tenant_id: lease.tenant_id,
             tenant_name: profile ? `${profile.first_name} ${profile.last_name}` : 'Unknown Tenant',
             unit_id: lease.unit_id,
-            unit_number: lease.unit?.unit_number || '',
-            property_name: lease.unit?.property?.name || ''
+            unit_number: unit?.unit_number || '',
+            property_name: property?.name || ''
           };
-        });
+        }).filter(tu => tu.unit_number); // Filter out any without unit info
 
         setTenantUnits(tenantUnitsData);
       } catch (error) {
         console.error('Error fetching tenant units:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load available units",
+          variant: "destructive"
+        });
       }
     };
 
     fetchTenantUnits();
-  }, []);
+  }, [propertiesLoading, units, properties, toast]);
 
   const stats = getStats();
 
@@ -177,7 +205,7 @@ export const SecurityVisitorManagement = () => {
   const approvedRequests = requests.filter(r => r.status === 'approved');
   const activeVisitors = visitors.filter(v => v.status === 'active');
 
-  if (requestsLoading || visitorsLoading) {
+  if (requestsLoading || visitorsLoading || propertiesLoading) {
     return <div className="flex items-center justify-center p-8">Loading...</div>;
   }
 
