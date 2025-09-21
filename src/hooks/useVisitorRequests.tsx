@@ -65,9 +65,8 @@ export const useVisitorRequests = () => {
         .from('visitor_requests')
         .select(`
           *,
-          tenant:profiles!visitor_requests_tenant_id_fkey(first_name, last_name),
-          security:profiles!visitor_requests_security_id_fkey(first_name, last_name),
-          unit:units(unit_number, property:properties(name))
+          tenant:profiles!tenant_id(first_name, last_name),
+          security:profiles!security_id(first_name, last_name)
         `)
         .order('created_at', { ascending: false });
 

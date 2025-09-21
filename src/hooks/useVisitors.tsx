@@ -58,8 +58,8 @@ export const useVisitors = () => {
         .from('visitors')
         .select(`
           *,
-          tenant:profiles!visitors_visiting_tenant_id_fkey(first_name, last_name),
-          unit:units(unit_number, property:properties(name))
+          tenant:profiles!visiting_tenant_id(first_name, last_name),
+          unit:units!visiting_unit_id(unit_number, property:properties(name))
         `)
         .order('time_in', { ascending: false });
 
@@ -147,7 +147,7 @@ export const useVisitors = () => {
         .from('visitor_requests')
         .select(`
           *,
-          tenant:profiles!visitor_requests_tenant_id_fkey(id)
+          tenant:profiles!tenant_id(id)
         `)
         .eq('id', visitorRequestId)
         .eq('status', 'approved')
