@@ -36,7 +36,7 @@ export const WorkOrdersSection = () => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'bg-muted';
-      case 'in_progress': return 'bg-primary text-primary-foreground';
+      case 'in-progress': return 'bg-primary text-primary-foreground';
       case 'completed': return 'bg-success text-success-foreground';
       default: return 'bg-muted';
     }
@@ -83,7 +83,7 @@ export const WorkOrdersSection = () => {
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="in_progress">In Progress</SelectItem>
+                <SelectItem value="in-progress">In Progress</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
               </SelectContent>
             </Select>
