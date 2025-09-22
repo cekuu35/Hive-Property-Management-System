@@ -267,21 +267,19 @@ export const useMaintenanceRequests = () => {
     fetchMaintenanceRequests();
 
     // Set up real-time subscription for maintenance requests
+    // NOTE: RLS Policy Required - Caretakers need read access to maintenance_requests table:
+    // CREATE POLICY "Caretakers can read maintenance requests" 
+    // ON public.maintenance_requests FOR SELECT TO authenticated USING (true);
     if (profile?.id) {
       const channel = supabase
-        .channel('maintenance_requests_realtime')
-        .on('postgres_changes', {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'maintenance_requests',
-        }, () => {
-          fetchMaintenanceRequests();
-        })
-        .on('postgres_changes', {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'maintenance_requests',
-        }, () => {
+        .channel('maintenance_requests')
+        .on('postgres_changes', { 
+          event: '*', 
+          schema: 'public', 
+          table: 'maintenance_requests' 
+        }, (payload) => {
+          console.log('Maintenance request updated:', payload);
+          // Update local state with the new/updated row
           fetchMaintenanceRequests();
         })
         .subscribe();
