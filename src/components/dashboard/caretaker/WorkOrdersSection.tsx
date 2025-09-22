@@ -1,37 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useMaintenanceRequests } from '@/hooks/useMaintenanceRequests';
-import { Clock, MapPin, Search, Filter } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
+import { useWorkOrders } from '@/hooks/useWorkOrders';
+import { Clock, Search, Filter } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 export const WorkOrdersSection = () => {
-  const { profile } = useAuth();
-  const { requests, loading, updateRequestStatus } = useMaintenanceRequests();
+  const requests = useWorkOrders();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [priorityFilter, setPriorityFilter] = useState('all');
 
   const filteredRequests = requests.filter(request => {
-    const matchesSearch = request.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         request.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = request.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         request.tenant_id.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || request.status === statusFilter;
-    const matchesPriority = priorityFilter === 'all' || request.priority === priorityFilter;
     
-    return matchesSearch && matchesStatus && matchesPriority;
+    return matchesSearch && matchesStatus;
   });
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'high': return 'bg-destructive text-destructive-foreground';
-      case 'medium': return 'bg-warning text-warning-foreground';
-      case 'low': return 'bg-success text-success-foreground';
-      default: return 'bg-muted';
-    }
-  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -43,12 +31,11 @@ export const WorkOrdersSection = () => {
   };
 
   const handleStatusUpdate = async (requestId: string, newStatus: string) => {
-    await updateRequestStatus(requestId, newStatus, profile?.id);
+    await supabase
+      .from('maintenance_requests')
+      .update({ status: newStatus })
+      .eq('id', requestId);
   };
-
-  if (loading) {
-    return <div className="flex items-center justify-center p-8">Loading work orders...</div>;
-  }
 
   return (
     <div className="space-y-6">
@@ -66,7 +53,7 @@ export const WorkOrdersSection = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
@@ -87,17 +74,6 @@ export const WorkOrdersSection = () => {
                 <SelectItem value="completed">Completed</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Filter by priority" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Priorities</SelectItem>
-                <SelectItem value="high">High</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="low">Low</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
         </CardContent>
       </Card>
@@ -111,9 +87,6 @@ export const WorkOrdersSection = () => {
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
                     <h3 className="text-lg font-semibold">Request #{request.id.slice(-8)}</h3>
-                    <Badge className={getPriorityColor(request.priority)}>
-                      {request.priority}
-                    </Badge>
                     <Badge className={getStatusColor(request.status)}>
                       {request.status}
                     </Badge>
@@ -122,24 +95,15 @@ export const WorkOrdersSection = () => {
                   <div className="space-y-2 mb-4">
                     <p className="text-muted-foreground">{request.description}</p>
                     <div className="text-sm">
-                      <span className="font-medium">Tenant:</span> {request.tenant}
-                    </div>
-                    <div className="text-sm">
-                      <span className="font-medium">Unit:</span> {request.unit}
+                      <span className="font-medium">Tenant ID:</span> {request.tenant_id}
                     </div>
                   </div>
                   
                   <div className="flex items-center gap-4 text-sm text-muted-foreground">
                     <div className="flex items-center gap-1">
                       <Clock className="h-4 w-4" />
-                      <span>Created: {new Date(request.createdDate).toLocaleDateString()}</span>
+                      <span>Created: {new Date(request.created_at).toLocaleDateString()}</span>
                     </div>
-                    {request.scheduledDate && (
-                      <div className="flex items-center gap-1">
-                        <Clock className="h-4 w-4" />
-                        <span>Scheduled: {new Date(request.scheduledDate).toLocaleDateString()}</span>
-                      </div>
-                    )}
                   </div>
                 </div>
                 
