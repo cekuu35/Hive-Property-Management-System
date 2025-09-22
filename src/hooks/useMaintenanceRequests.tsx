@@ -8,6 +8,7 @@ export interface MaintenanceRequest {
   title: string;
   description: string;
   tenant: string;
+  tenant_id: string;
   unit: string;
   category: string;
   priority: 'low' | 'medium' | 'high' | 'emergency';
@@ -90,6 +91,7 @@ export const useMaintenanceRequests = () => {
         title: request.title,
         description: request.description,
         tenant: request.tenant ? `${request.tenant.first_name} ${request.tenant.last_name}` : 'Unknown',
+        tenant_id: request.tenant_id,
         unit: request.unit ? `${request.unit.property?.name || 'Property'} ${request.unit.unit_number}` : 'Unknown Unit',
         category: request.category,
         priority: request.priority,

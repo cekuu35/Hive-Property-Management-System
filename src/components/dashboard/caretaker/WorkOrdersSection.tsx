@@ -110,7 +110,7 @@ export const WorkOrdersSection = () => {
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
-                    <h3 className="text-lg font-semibold">{request.title}</h3>
+                    <h3 className="text-lg font-semibold">Request #{request.id.slice(-8)}</h3>
                     <Badge className={getPriorityColor(request.priority)}>
                       {request.priority}
                     </Badge>
@@ -119,7 +119,15 @@ export const WorkOrdersSection = () => {
                     </Badge>
                   </div>
                   
-                  <p className="text-muted-foreground mb-4">{request.description}</p>
+                  <div className="space-y-2 mb-4">
+                    <p className="text-muted-foreground">{request.description}</p>
+                    <div className="text-sm">
+                      <span className="font-medium">Tenant:</span> {request.tenant}
+                    </div>
+                    <div className="text-sm">
+                      <span className="font-medium">Unit:</span> {request.unit}
+                    </div>
+                  </div>
                   
                   <div className="flex items-center gap-4 text-sm text-muted-foreground">
                     <div className="flex items-center gap-1">
