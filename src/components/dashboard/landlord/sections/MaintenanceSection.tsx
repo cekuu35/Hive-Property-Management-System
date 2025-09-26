@@ -30,6 +30,15 @@ export const MaintenanceSection = () => {
     await updateRequestStatus(requestId, 'in-progress', contractorId);
   };
 
+  const handleScheduleMaintenence = async (requestId: string) => {
+    // For now, just update status to in-progress
+    await updateRequestStatus(requestId, 'in-progress');
+  };
+
+  const handleCompleteRequest = async (requestId: string) => {
+    await updateRequestStatus(requestId, 'completed');
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -127,39 +136,63 @@ export const MaintenanceSection = () => {
       </div>
 
       {/* Search and Filters */}
-      <div className="flex flex-wrap items-center gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search requests..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
+      <Card className="p-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by title, tenant, or unit..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 bg-background"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-36 bg-background">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="in-progress">In Progress</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+              <SelectTrigger className="w-36 bg-background">
+                <SelectValue placeholder="Priority" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Priority</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="low">Low</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => {
+                setStatusFilter('all');
+                setPriorityFilter('all');
+                setSearchTerm('');
+              }}
+            >
+              Clear Filters
+            </Button>
+          </div>
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-32">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="in-progress">In Progress</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-          <SelectTrigger className="w-32">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Priority</SelectItem>
-            <SelectItem value="high">High</SelectItem>
-            <SelectItem value="medium">Medium</SelectItem>
-            <SelectItem value="low">Low</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+        {(statusFilter !== 'all' || priorityFilter !== 'all' || searchTerm) && (
+          <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+            <span>Showing {filteredRequests.length} of {requests.length} requests</span>
+            {statusFilter !== 'all' && <Badge variant="outline">Status: {statusFilter}</Badge>}
+            {priorityFilter !== 'all' && <Badge variant="outline">Priority: {priorityFilter}</Badge>}
+            {searchTerm && <Badge variant="outline">Search: "{searchTerm}"</Badge>}
+          </div>
+        )}
+      </Card>
 
       {/* Maintenance Tabs */}
       <Tabs defaultValue="requests" className="space-y-4">
@@ -249,10 +282,33 @@ export const MaintenanceSection = () => {
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1">
-                          <Button variant="ghost" size="sm">
-                            <Calendar className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm">
+                          {request.status === 'pending' && (
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => handleScheduleMaintenence(request.id)}
+                              title="Schedule Maintenance"
+                            >
+                              <Calendar className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {request.status === 'in-progress' && (
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => handleCompleteRequest(request.id)}
+                              title="Mark as Completed"
+                              className="text-success hover:text-success"
+                            >
+                              <CheckCircle className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleAssignContractor(request.id, 'contractor-1')}
+                            title="Manage Request"
+                          >
                             <Wrench className="h-4 w-4" />
                           </Button>
                         </div>

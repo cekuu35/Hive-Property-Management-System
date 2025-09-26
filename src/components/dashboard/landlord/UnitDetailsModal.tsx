@@ -62,13 +62,40 @@ export const UnitDetailsModal = ({ unit, open, onOpenChange, onEdit }: UnitDetai
       setLeaseData(lease);
 
       // Fetch tenant profile if lease exists
-      if (lease?.tenant_id) {
-        const { data: tenant } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', lease.tenant_id)
-          .single();
-        setTenantProfile(tenant);
+      if (lease?.tenant_id || lease?.tenant_info_id) {
+        // First try to get from profiles table using tenant_id
+        if (lease.tenant_id) {
+          const { data: tenant } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', lease.tenant_id)
+            .maybeSingle();
+          
+          if (tenant) {
+            setTenantProfile(tenant);
+          }
+        }
+        
+        // If no profile found, try tenant_info table
+        if (!tenantProfile && lease.tenant_info_id) {
+          const { data: tenantInfo } = await supabase
+            .from('tenant_info')
+            .select('*')
+            .eq('id', lease.tenant_info_id)
+            .maybeSingle();
+          
+          if (tenantInfo) {
+            // Transform tenant_info to match profile structure
+            setTenantProfile({
+              id: tenantInfo.id,
+              first_name: tenantInfo.first_name,
+              last_name: tenantInfo.last_name,
+              phone: tenantInfo.phone,
+              avatar_url: tenantInfo.avatar_url,
+              email: tenantInfo.email
+            });
+          }
+        }
       }
 
       // Fetch maintenance requests
