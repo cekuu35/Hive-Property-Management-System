@@ -58,12 +58,17 @@ export const useApprovedLease = () => {
         .maybeSingle();
 
       if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
+        console.error('Supabase query error:', error);
         throw error;
       }
 
       setApprovedLease(data as ApprovedLease);
     } catch (error) {
-      console.error('Error fetching approved lease:', error);
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        console.error('Network connectivity error - unable to reach Supabase:', error);
+      } else {
+        console.error('Error fetching approved lease:', error);
+      }
       setApprovedLease(null);
     } finally {
       setLoading(false);
