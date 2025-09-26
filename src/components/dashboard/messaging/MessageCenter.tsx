@@ -33,6 +33,10 @@ export const MessageCenter = () => {
         const landlord = await getLandlordForTenant();
         if (landlord) {
           setAvailableContacts([landlord]);
+          // Automatically select the landlord conversation for tenants
+          if (!selectedConversation) {
+            setSelectedConversation(landlord.id);
+          }
         }
       } else if (profile?.role === 'landlord') {
         const tenants = await getTenantsForLandlord();
@@ -41,7 +45,7 @@ export const MessageCenter = () => {
     };
 
     loadContacts();
-  }, [profile]);
+  }, [profile, selectedConversation]);
 
   const filteredConversations = conversations.filter(conv =>
     conv.participant_name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -142,15 +146,21 @@ export const MessageCenter = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground mb-2">Messages</h1>
-          <p className="text-muted-foreground">Communicate with your {profile?.role === 'tenant' ? 'landlord' : 'tenants'}</p>
+          <p className="text-muted-foreground">
+            {profile?.role === 'tenant' 
+              ? 'Communicate with your landlord' 
+              : 'Communicate with your tenants'
+            }
+          </p>
         </div>
-        <Dialog open={isNewMessageOpen} onOpenChange={setIsNewMessageOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              New Message
-            </Button>
-          </DialogTrigger>
+        {profile?.role === 'landlord' && (
+          <Dialog open={isNewMessageOpen} onOpenChange={setIsNewMessageOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />
+                New Message
+              </Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>New Message</DialogTitle>
@@ -193,6 +203,7 @@ export const MessageCenter = () => {
             </div>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[600px]">
@@ -218,8 +229,18 @@ export const MessageCenter = () => {
               {filteredConversations.length === 0 ? (
                 <div className="p-4 text-center text-muted-foreground">
                   <MessageCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p>No conversations yet</p>
-                  <p className="text-sm">Start a new message to begin</p>
+                  <p>
+                    {profile?.role === 'tenant' 
+                      ? 'No landlord assigned yet' 
+                      : 'No conversations yet'
+                    }
+                  </p>
+                  <p className="text-sm">
+                    {profile?.role === 'tenant' 
+                      ? 'Contact support if you need assistance' 
+                      : 'Start a new message to begin'
+                    }
+                  </p>
                 </div>
               ) : (
                 filteredConversations.map((conversation) => (
@@ -338,8 +359,18 @@ export const MessageCenter = () => {
             <CardContent className="flex items-center justify-center h-full">
               <div className="text-center text-muted-foreground">
                 <MessageCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <h3 className="text-lg font-medium mb-2">Select a conversation</h3>
-                <p>Choose a conversation from the left to start messaging</p>
+                <h3 className="text-lg font-medium mb-2">
+                  {profile?.role === 'tenant' 
+                    ? 'No landlord conversation available' 
+                    : 'Select a conversation'
+                  }
+                </h3>
+                <p>
+                  {profile?.role === 'tenant' 
+                    ? 'Your landlord will appear here once you have an active lease' 
+                    : 'Choose a conversation from the left to start messaging'
+                  }
+                </p>
               </div>
             </CardContent>
           )}
