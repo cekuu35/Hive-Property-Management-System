@@ -84,7 +84,7 @@ export const AppSidebar = ({ userRole, activeItemId, onSelect }: AppSidebarProps
         {/* Logo Section */}
         <div className="p-4 border-b border-sidebar-border">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-primary rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-gradient-logo-blue rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-sm">PM</span>
             </div>
             <div className="group-data-[collapsible=icon]:hidden">

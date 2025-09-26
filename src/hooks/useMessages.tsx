@@ -143,6 +143,24 @@ export const useMessages = () => {
         }
       });
 
+      // For tenants, ensure their landlord appears in conversations even without messages
+      if (profile.role === 'tenant') {
+        const landlord = await getLandlordForTenant();
+        if (landlord && !conversationMap.has(landlord.id)) {
+          conversationMap.set(landlord.id, {
+            participant_id: landlord.id,
+            participant_name: `${landlord.first_name} ${landlord.last_name}`,
+            participant_role: landlord.role,
+            participant_avatar: landlord.avatar_url,
+            last_message: 'No messages yet',
+            last_message_time: new Date().toISOString(),
+            unread_count: 0,
+            property_name: landlord.property_name,
+            unit_number: landlord.unit_number,
+          });
+        }
+      }
+
       // Calculate unread counts
       for (const [participantId, conversation] of conversationMap) {
         const unreadCount = (messagesData || []).filter(
@@ -168,6 +186,37 @@ export const useMessages = () => {
     if (!profile?.id) return false;
 
     try {
+      // For tenants messaging landlords, try to get property and unit info
+      if (profile.role === 'tenant' && !propertyId) {
+        const landlord = await getLandlordForTenant();
+        if (landlord?.property_name) {
+          // Get property and unit IDs from the landlord's info
+          const { data: propertyData } = await supabase
+            .from('properties')
+            .select('id')
+            .eq('landlord_id', receiverId)
+            .eq('name', landlord.property_name)
+            .single();
+          
+          if (propertyData) {
+            propertyId = propertyData.id;
+            
+            if (landlord.unit_number) {
+              const { data: unitData } = await supabase
+                .from('units')
+                .select('id')
+                .eq('property_id', propertyId)
+                .eq('unit_number', landlord.unit_number)
+                .single();
+              
+              if (unitData) {
+                unitId = unitData.id;
+              }
+            }
+          }
+        }
+      }
+
       const { data, error } = await supabase
         .from('messages')
         .insert({
@@ -221,12 +270,14 @@ export const useMessages = () => {
     if (!profile?.id || profile.role !== 'tenant') return null;
 
     try {
-      // Attempt 1: Lease references profile.id directly
-      const { data: leaseData1, error: leaseError1 } = await supabase
+      // Get the landlord from the tenant's active lease
+      const { data: leaseData, error: leaseError } = await supabase
         .from('leases')
         .select(`
-          units (
-            properties (
+          units!inner(
+            unit_number,
+            properties!inner(
+              name,
               landlord_id,
               profiles!properties_landlord_id_fkey (
                 id,
@@ -238,49 +289,27 @@ export const useMessages = () => {
             )
           )
         `)
-        .eq('tenant_id', profile.id)
+        .or(`tenant_id.eq.${profile.id},tenant_info_id.in.(
+          SELECT id FROM tenant_info WHERE profile_id = '${profile.id}'
+        )`)
         .eq('status', 'active')
         .limit(1);
 
-      if (leaseError1) throw leaseError1;
+      if (leaseError) throw leaseError;
 
-      let landlordProfile = leaseData1?.[0]?.units?.properties?.profiles;
+      const landlordProfile = leaseData?.[0]?.units?.properties?.profiles;
+      const property = leaseData?.[0]?.units?.properties;
+      const unit = leaseData?.[0]?.units;
 
-      // Attempt 2: Resolve via tenant_info.profile_id → leases.tenant_info_id
-      if (!landlordProfile) {
-        const { data: tinfo, error: tinfoError } = await supabase
-          .from('tenant_info')
-          .select('id')
-          .eq('profile_id', profile.id)
-          .maybeSingle();
-        if (tinfoError) throw tinfoError;
-
-        if (tinfo?.id) {
-          const { data: leaseData2, error: leaseError2 } = await supabase
-            .from('leases')
-            .select(`
-              units (
-                properties (
-                  landlord_id,
-                  profiles!properties_landlord_id_fkey (
-                    id,
-                    first_name,
-                    last_name,
-                    avatar_url,
-                    role
-                  )
-                )
-              )
-            `)
-            .eq('tenant_info_id', tinfo.id)
-            .eq('status', 'active')
-            .limit(1);
-          if (leaseError2) throw leaseError2;
-          landlordProfile = leaseData2?.[0]?.units?.properties?.profiles;
-        }
+      if (landlordProfile) {
+        return {
+          ...landlordProfile,
+          property_name: property?.name,
+          unit_number: unit?.unit_number
+        };
       }
 
-      return landlordProfile || null;
+      return null;
     } catch (error) {
       console.error('Error finding landlord:', error);
       return null;
@@ -291,11 +320,19 @@ export const useMessages = () => {
     if (!profile?.id || profile.role !== 'landlord') return [];
 
     try {
-      // Get tenant IDs from leases
+      // Get tenant IDs from leases for this landlord's properties
       const { data: leaseData, error: leaseError } = await supabase
         .from('leases')
-        .select('tenant_id')
-        .eq('status', 'active');
+        .select(`
+          tenant_id,
+          units!inner(
+            properties!inner(
+              landlord_id
+            )
+          )
+        `)
+        .eq('status', 'active')
+        .eq('units.properties.landlord_id', profile.id);
 
       if (leaseError) throw leaseError;
 
@@ -303,15 +340,49 @@ export const useMessages = () => {
 
       if (tenantIds.length === 0) return [];
 
-      // Get tenant profiles
+      // Get tenant profiles with property and unit info
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select('id, first_name, last_name, avatar_url, role')
-        .in('id', tenantIds);
+        .select(`
+          id, 
+          first_name, 
+          last_name, 
+          avatar_url, 
+          role,
+          leases!inner(
+            units!inner(
+              unit_number,
+              properties!inner(
+                name,
+                landlord_id
+              )
+            )
+          )
+        `)
+        .in('id', tenantIds)
+        .eq('leases.status', 'active')
+        .eq('leases.units.properties.landlord_id', profile.id);
 
       if (profileError) throw profileError;
 
-      return profileData || [];
+      // Flatten the data structure
+      const tenants = (profileData || []).map(tenant => {
+        const lease = tenant.leases?.[0];
+        const unit = lease?.units;
+        const property = unit?.properties;
+        
+        return {
+          id: tenant.id,
+          first_name: tenant.first_name,
+          last_name: tenant.last_name,
+          avatar_url: tenant.avatar_url,
+          role: tenant.role,
+          property_name: property?.name,
+          unit_number: unit?.unit_number
+        };
+      });
+
+      return tenants;
     } catch (error) {
       console.error('Error fetching tenants:', error);
       return [];

@@ -53,7 +53,7 @@ export const Header = () => {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-gradient-primary rounded-full flex items-center justify-center">
+              <div className="w-8 h-8 bg-gradient-logo-blue rounded-full flex items-center justify-center">
                 <User className="h-4 w-4 text-white" />
               </div>
               <div className="text-left hidden md:block">

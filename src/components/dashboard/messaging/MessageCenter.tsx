@@ -14,6 +14,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { StartChatWithLandlord } from './StartChatWithLandlord';
+import { QuickChatButton } from './QuickChatButton';
 
 export const MessageCenter = () => {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
@@ -23,6 +25,7 @@ export const MessageCenter = () => {
   const [newMessageReceiver, setNewMessageReceiver] = useState('');
   const [newMessageText, setNewMessageText] = useState('');
   const [availableContacts, setAvailableContacts] = useState<any[]>([]);
+  const [showStartChat, setShowStartChat] = useState(false);
 
   const { conversations, loading, sendMessage, markAsRead, getConversationMessages, getLandlordForTenant, getTenantsForLandlord } = useMessages();
   const { profile } = useAuth();
@@ -33,6 +36,17 @@ export const MessageCenter = () => {
         const landlord = await getLandlordForTenant();
         if (landlord) {
           setAvailableContacts([landlord]);
+          // Check if there are existing conversations
+          if (conversations.length === 0) {
+            setShowStartChat(true);
+          } else {
+            // Automatically select the landlord conversation for tenants
+            if (!selectedConversation) {
+              setSelectedConversation(landlord.id);
+            }
+          }
+        } else {
+          setShowStartChat(true);
         }
       } else if (profile?.role === 'landlord') {
         const tenants = await getTenantsForLandlord();
@@ -41,7 +55,7 @@ export const MessageCenter = () => {
     };
 
     loadContacts();
-  }, [profile]);
+  }, [profile, selectedConversation, conversations.length]);
 
   const filteredConversations = conversations.filter(conv =>
     conv.participant_name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -50,6 +64,11 @@ export const MessageCenter = () => {
   const selectedMessages = selectedConversation 
     ? getConversationMessages(selectedConversation)
     : [];
+
+  const handleStartChat = (landlordId: string) => {
+    setSelectedConversation(landlordId);
+    setShowStartChat(false);
+  };
 
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedConversation) return;
@@ -136,21 +155,48 @@ export const MessageCenter = () => {
     );
   }
 
+  // Show Start Chat interface for tenants when no conversations exist
+  if (profile?.role === 'tenant' && showStartChat) {
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground mb-2">Messages</h1>
+            <p className="text-muted-foreground">Communicate with your landlord</p>
+          </div>
+        </div>
+        
+        {/* Start Chat Interface */}
+        <StartChatWithLandlord onStartChat={handleStartChat} />
+        
+        {/* Quick Chat Button */}
+        <QuickChatButton onStartChat={handleStartChat} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground mb-2">Messages</h1>
-          <p className="text-muted-foreground">Communicate with your {profile?.role === 'tenant' ? 'landlord' : 'tenants'}</p>
+          <p className="text-muted-foreground">
+            {profile?.role === 'tenant' 
+              ? 'Communicate with your landlord' 
+              : 'Communicate with your tenants'
+            }
+          </p>
         </div>
-        <Dialog open={isNewMessageOpen} onOpenChange={setIsNewMessageOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              New Message
-            </Button>
-          </DialogTrigger>
+        {profile?.role === 'landlord' && (
+          <Dialog open={isNewMessageOpen} onOpenChange={setIsNewMessageOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />
+                New Message
+              </Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>New Message</DialogTitle>
@@ -193,6 +239,7 @@ export const MessageCenter = () => {
             </div>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[600px]">
@@ -212,14 +259,35 @@ export const MessageCenter = () => {
                 className="pl-10"
               />
             </div>
+            {profile?.role === 'tenant' && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setShowStartChat(true)}
+                className="mt-2 w-full"
+              >
+                <MessageCircle className="h-4 w-4 mr-2" />
+                Start New Chat
+              </Button>
+            )}
           </CardHeader>
           <CardContent className="p-0">
             <ScrollArea className="h-[450px]">
               {filteredConversations.length === 0 ? (
                 <div className="p-4 text-center text-muted-foreground">
                   <MessageCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p>No conversations yet</p>
-                  <p className="text-sm">Start a new message to begin</p>
+                  <p>
+                    {profile?.role === 'tenant' 
+                      ? 'No landlord assigned yet' 
+                      : 'No conversations yet'
+                    }
+                  </p>
+                  <p className="text-sm">
+                    {profile?.role === 'tenant' 
+                      ? 'Contact support if you need assistance' 
+                      : 'Start a new message to begin'
+                    }
+                  </p>
                 </div>
               ) : (
                 filteredConversations.map((conversation) => (
@@ -338,13 +406,26 @@ export const MessageCenter = () => {
             <CardContent className="flex items-center justify-center h-full">
               <div className="text-center text-muted-foreground">
                 <MessageCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <h3 className="text-lg font-medium mb-2">Select a conversation</h3>
-                <p>Choose a conversation from the left to start messaging</p>
+                <h3 className="text-lg font-medium mb-2">
+                  {profile?.role === 'tenant' 
+                    ? 'No landlord conversation available' 
+                    : 'Select a conversation'
+                  }
+                </h3>
+                <p>
+                  {profile?.role === 'tenant' 
+                    ? 'Your landlord will appear here once you have an active lease' 
+                    : 'Choose a conversation from the left to start messaging'
+                  }
+                </p>
               </div>
             </CardContent>
           )}
         </Card>
       </div>
+      
+      {/* Quick Chat Button for Tenants */}
+      <QuickChatButton onStartChat={handleStartChat} />
     </div>
   );
 };

@@ -211,6 +211,11 @@
     background: var(--gradient-primary);
   }
   
+  /* Blue logo gradient */
+  .bg-gradient-logo-blue {
+    background: linear-gradient(135deg, hsl(217 91% 60%), hsl(217 91% 50%));
+  }
+  
   .bg-gradient-secondary {
     background: var(--gradient-secondary);
   }
