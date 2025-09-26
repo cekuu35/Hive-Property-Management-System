@@ -13,7 +13,7 @@ const roleConfig = {
     icon: Building,
     title: "Landlord",
     description: "Manage properties",
-    gradient: "bg-gradient-primary",
+    gradient: "bg-gradient-logo-blue",
   },
   tenant: {
     icon: Users,
@@ -31,7 +31,7 @@ const roleConfig = {
     icon: Shield,
     title: "Security",
     description: "Monitor security",
-    gradient: "bg-gradient-primary",
+    gradient: "bg-gradient-logo-blue",
   },
 };
 

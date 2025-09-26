@@ -150,7 +150,7 @@ export const LoginForm = () => {
       <div className="relative z-10 w-full max-w-md px-6">
         {/* Logo */}
         <div className="text-center mb-8 animate-fade-in">
-          <div className="w-16 h-16 mx-auto mb-4 bg-gradient-primary rounded-2xl flex items-center justify-center shadow-glow">
+          <div className="w-16 h-16 mx-auto mb-4 bg-gradient-logo-blue rounded-2xl flex items-center justify-center shadow-glow">
             <span className="text-2xl font-bold text-white">PM</span>
           </div>
           <h1 className="text-3xl font-bold text-auth-foreground">Property Manager Pro</h1>
