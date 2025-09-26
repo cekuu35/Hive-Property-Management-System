@@ -643,11 +643,47 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleViewRequest({
+                          id: request.id,
+                          title: request.title,
+                          description: (request as any).description || `${request.category} issue reported`,
+                          status: ((request as any).status === 'in-progress' ? 'in_progress' : (request as any).status) || 'pending',
+                          priority: (request as any).priority || 'medium',
+                          category: request.category || 'General',
+                          date: (request as any).createdDate || (request as any).date || new Date().toISOString(),
+                          assignedTo: (request as any).assignedTo,
+                          images: (request as any).images || [],
+                          estimatedCost: (request as any).estimatedCost,
+                          actualCost: (request as any).actualCost,
+                          scheduledDate: (request as any).scheduledDate,
+                          completedDate: (request as any).completedDate,
+                        })}
+                      >
                         <Eye className="h-4 w-4 mr-1" />
                         View
                       </Button>
-                      <Button variant="outline" size="sm">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleViewRequest({
+                          id: request.id,
+                          title: request.title,
+                          description: (request as any).description || `${request.category} issue reported`,
+                          status: ((request as any).status === 'in-progress' ? 'in_progress' : (request as any).status) || 'pending',
+                          priority: (request as any).priority || 'medium',
+                          category: request.category || 'General',
+                          date: (request as any).createdDate || (request as any).date || new Date().toISOString(),
+                          assignedTo: (request as any).assignedTo,
+                          images: (request as any).images || [],
+                          estimatedCost: (request as any).estimatedCost,
+                          actualCost: (request as any).actualCost,
+                          scheduledDate: (request as any).scheduledDate,
+                          completedDate: (request as any).completedDate,
+                        })}
+                      >
                         <MessageCircle className="h-4 w-4 mr-1" />
                         Chat
                       </Button>
@@ -682,7 +718,25 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
                         </Button>
                       </div>
                     </div>
-                    <Button variant="outline" size="sm">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleViewRequest({
+                        id: request.id,
+                        title: request.title,
+                        description: (request as any).description || `${request.category} issue reported`,
+                        status: ((request as any).status === 'in-progress' ? 'in_progress' : (request as any).status) || 'completed',
+                        priority: (request as any).priority || 'medium',
+                        category: request.category || 'General',
+                        date: (request as any).createdDate || (request as any).date || new Date().toISOString(),
+                        assignedTo: (request as any).assignedTo,
+                        images: (request as any).images || [],
+                        estimatedCost: (request as any).estimatedCost,
+                        actualCost: (request as any).actualCost,
+                        scheduledDate: (request as any).scheduledDate,
+                        completedDate: (request as any).completedDate,
+                      })}
+                    >
                       <Eye className="h-4 w-4 mr-1" />
                       View
                     </Button>
