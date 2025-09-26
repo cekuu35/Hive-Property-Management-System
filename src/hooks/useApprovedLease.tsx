@@ -55,7 +55,7 @@ export const useApprovedLease = () => {
         `)
         .eq('tenant_id', profile.id)
         .eq('status', 'active')
-        .single();
+        .maybeSingle();
 
       if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
         throw error;
