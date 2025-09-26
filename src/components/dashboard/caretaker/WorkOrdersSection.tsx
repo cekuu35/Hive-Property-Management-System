@@ -24,6 +24,11 @@ export const WorkOrdersSection = () => {
   const [estimatedCost, setEstimatedCost] = useState('');
   const [actualCost, setActualCost] = useState('');
 
+  console.log('WorkOrdersSection - All requests:', requests);
+  console.log('WorkOrdersSection - Search term:', searchTerm);
+  console.log('WorkOrdersSection - Status filter:', statusFilter);
+  console.log('WorkOrdersSection - Priority filter:', priorityFilter);
+
   const filteredRequests = requests.filter(request => {
     const matchesSearch = request.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          request.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -33,6 +38,8 @@ export const WorkOrdersSection = () => {
     
     return matchesSearch && matchesStatus && matchesPriority;
   });
+
+  console.log('WorkOrdersSection - Filtered requests:', filteredRequests);
 
   const getStatusColor = (status: string) => {
     switch (status) {

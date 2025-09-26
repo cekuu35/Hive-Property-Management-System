@@ -41,6 +41,8 @@ export const useMaintenanceRequests = () => {
   const fetchMaintenanceRequests = async () => {
     if (!profile?.id) return;
 
+    console.log('Fetching maintenance requests for profile:', profile);
+
     try {
       setLoading(true);
 
@@ -55,8 +57,21 @@ export const useMaintenanceRequests = () => {
 
       // Filter based on user role
       if (profile.role === 'caretaker') {
-        // Caretakers see requests assigned to them or unassigned requests
-        query = query.or(`assigned_to.eq.${profile.id},assigned_to.is.null`);
+        // Caretakers see all requests (assigned to them, unassigned, or assigned to others)
+        // This allows them to see all maintenance requests for better management
+        // query = query.or(`assigned_to.eq.${profile.id},assigned_to.is.null`);
+        
+        // For debugging, let's try a simpler query first
+        console.log('Fetching all maintenance requests for caretaker...');
+        
+        // Test: Try to fetch without any joins first
+        const testQuery = supabase
+          .from('maintenance_requests')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        const testResult = await testQuery;
+        console.log('Test query result for caretaker:', testResult);
       } else if (profile.role === 'tenant') {
         // Tenants see only their own requests
         query = query.eq('tenant_id', profile.id);
@@ -81,16 +96,39 @@ export const useMaintenanceRequests = () => {
         }
       }
 
-      const { data: maintenanceData, error } = await query.order('created_at', { ascending: false });
+      let { data: maintenanceData, error } = await query.order('created_at', { ascending: false });
 
-      if (error) throw error;
+      // If the complex query fails for caretakers, try a simpler one
+      if (error && profile.role === 'caretaker') {
+        console.log('Complex query failed, trying simpler query for caretaker...');
+        const simpleQuery = supabase
+          .from('maintenance_requests')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        const simpleResult = await simpleQuery;
+        if (!simpleResult.error) {
+          maintenanceData = simpleResult.data;
+          error = null;
+          console.log('Simple query succeeded:', maintenanceData);
+        } else {
+          console.error('Simple query also failed:', simpleResult.error);
+        }
+      }
+
+      if (error) {
+        console.error('Error fetching maintenance requests:', error);
+        throw error;
+      }
+
+      console.log('Raw maintenance data for role:', profile.role, maintenanceData);
 
       // Format the data to match our interface
       const formattedRequests: MaintenanceRequest[] = (maintenanceData || []).map((request: any) => ({
         id: request.id,
         title: request.title,
         description: request.description,
-        tenant: request.tenant ? `${request.tenant.first_name} ${request.tenant.last_name}` : 'Unknown',
+        tenant: request.tenant ? `${request.tenant.first_name} ${request.tenant.last_name}` : 'Unknown Tenant',
         tenant_id: request.tenant_id,
         unit: request.unit ? `${request.unit.property?.name || 'Property'} ${request.unit.unit_number}` : 'Unknown Unit',
         category: request.category,
@@ -105,6 +143,7 @@ export const useMaintenanceRequests = () => {
         images: request.images || []
       }));
 
+      console.log('Formatted requests for role:', profile.role, formattedRequests);
       setRequests(formattedRequests);
 
     } catch (error) {
@@ -189,6 +228,7 @@ export const useMaintenanceRequests = () => {
           description: requestData.description,
           category: requestData.category,
           priority: requestData.priority,
+          status: 'pending', // Explicitly set status
           unit_id: unitId,
           tenant_id: profile.id,
           scheduled_date: requestData.preferredDate || null,
