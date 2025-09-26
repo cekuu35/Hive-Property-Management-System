@@ -12,25 +12,25 @@ const roleConfig = {
   landlord: {
     icon: Building,
     title: "Landlord",
-    description: "Manage properties and tenants",
+    description: "Manage properties",
     gradient: "bg-gradient-primary",
   },
   tenant: {
     icon: Users,
     title: "Tenant",
-    description: "Access your rental information",
+    description: "Access rentals",
     gradient: "bg-gradient-secondary",
   },
   caretaker: {
     icon: Wrench,
     title: "Caretaker",
-    description: "Handle maintenance requests",
+    description: "Handle maintenance",
     gradient: "bg-gradient-gold",
   },
   security: {
     icon: Shield,
     title: "Security",
-    description: "Monitor property security",
+    description: "Monitor security",
     gradient: "bg-gradient-primary",
   },
 };
