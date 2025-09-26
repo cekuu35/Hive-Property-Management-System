@@ -189,25 +189,39 @@ export const LoginForm = () => {
                   <h2 className="text-xl font-semibold text-auth-foreground mb-4">
                     {authMode === "login" ? "Welcome back" : "Create account"}
                   </h2>
-                  <div className="flex gap-1 p-1 bg-auth-muted rounded-lg">
-                    <Button
-                      type="button"
-                      variant={authMode === "login" ? "default" : "ghost"}
-                      size="sm"
-                      onClick={() => setAuthMode("login")}
-                      className={`flex-1 ${authMode === "login" ? "bg-primary text-white" : "text-auth-muted-foreground hover:bg-auth-muted hover:text-auth-foreground"}`}
-                    >
-                      Sign In
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={authMode === "signup" ? "default" : "ghost"}
-                      size="sm"
-                      onClick={() => setAuthMode("signup")}
-                      className={`flex-1 ${authMode === "signup" ? "bg-primary text-white" : "text-auth-muted-foreground hover:bg-auth-muted hover:text-auth-foreground"}`}
-                    >
-                      Sign Up
-                    </Button>
+                  <div className="relative bg-auth-muted/30 backdrop-blur-sm rounded-xl p-1 border border-auth-border/30">
+                    <div 
+                      className={`absolute top-1 bottom-1 w-1/2 bg-gradient-to-r from-primary via-primary to-primary/80 rounded-lg shadow-lg transition-all duration-300 ease-out ${
+                        authMode === "login" ? "left-1" : "left-1/2"
+                      }`}
+                      style={{
+                        boxShadow: "0 4px 20px rgba(124, 58, 237, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1)"
+                      }}
+                    />
+                    <div className="relative flex">
+                      <button
+                        type="button"
+                        onClick={() => setAuthMode("login")}
+                        className={`flex-1 py-3 px-4 text-sm font-medium rounded-lg transition-all duration-300 ease-out relative z-10 ${
+                          authMode === "login" 
+                            ? "text-white shadow-sm" 
+                            : "text-auth-muted-foreground hover:text-auth-foreground"
+                        }`}
+                      >
+                        <span className="relative z-10">Sign In</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAuthMode("signup")}
+                        className={`flex-1 py-3 px-4 text-sm font-medium rounded-lg transition-all duration-300 ease-out relative z-10 ${
+                          authMode === "signup" 
+                            ? "text-white shadow-sm" 
+                            : "text-auth-muted-foreground hover:text-auth-foreground"
+                        }`}
+                      >
+                        <span className="relative z-10">Sign Up</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
