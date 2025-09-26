@@ -14,6 +14,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { StartChatWithLandlord } from './StartChatWithLandlord';
+import { QuickChatButton } from './QuickChatButton';
 
 export const MessageCenter = () => {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
@@ -23,6 +25,7 @@ export const MessageCenter = () => {
   const [newMessageReceiver, setNewMessageReceiver] = useState('');
   const [newMessageText, setNewMessageText] = useState('');
   const [availableContacts, setAvailableContacts] = useState<any[]>([]);
+  const [showStartChat, setShowStartChat] = useState(false);
 
   const { conversations, loading, sendMessage, markAsRead, getConversationMessages, getLandlordForTenant, getTenantsForLandlord } = useMessages();
   const { profile } = useAuth();
@@ -33,10 +36,17 @@ export const MessageCenter = () => {
         const landlord = await getLandlordForTenant();
         if (landlord) {
           setAvailableContacts([landlord]);
-          // Automatically select the landlord conversation for tenants
-          if (!selectedConversation) {
-            setSelectedConversation(landlord.id);
+          // Check if there are existing conversations
+          if (conversations.length === 0) {
+            setShowStartChat(true);
+          } else {
+            // Automatically select the landlord conversation for tenants
+            if (!selectedConversation) {
+              setSelectedConversation(landlord.id);
+            }
           }
+        } else {
+          setShowStartChat(true);
         }
       } else if (profile?.role === 'landlord') {
         const tenants = await getTenantsForLandlord();
@@ -45,7 +55,7 @@ export const MessageCenter = () => {
     };
 
     loadContacts();
-  }, [profile, selectedConversation]);
+  }, [profile, selectedConversation, conversations.length]);
 
   const filteredConversations = conversations.filter(conv =>
     conv.participant_name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -54,6 +64,11 @@ export const MessageCenter = () => {
   const selectedMessages = selectedConversation 
     ? getConversationMessages(selectedConversation)
     : [];
+
+  const handleStartChat = (landlordId: string) => {
+    setSelectedConversation(landlordId);
+    setShowStartChat(false);
+  };
 
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedConversation) return;
@@ -136,6 +151,27 @@ export const MessageCenter = () => {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  // Show Start Chat interface for tenants when no conversations exist
+  if (profile?.role === 'tenant' && showStartChat) {
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground mb-2">Messages</h1>
+            <p className="text-muted-foreground">Communicate with your landlord</p>
+          </div>
+        </div>
+        
+        {/* Start Chat Interface */}
+        <StartChatWithLandlord onStartChat={handleStartChat} />
+        
+        {/* Quick Chat Button */}
+        <QuickChatButton onStartChat={handleStartChat} />
       </div>
     );
   }
@@ -223,6 +259,17 @@ export const MessageCenter = () => {
                 className="pl-10"
               />
             </div>
+            {profile?.role === 'tenant' && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setShowStartChat(true)}
+                className="mt-2 w-full"
+              >
+                <MessageCircle className="h-4 w-4 mr-2" />
+                Start New Chat
+              </Button>
+            )}
           </CardHeader>
           <CardContent className="p-0">
             <ScrollArea className="h-[450px]">
@@ -376,6 +423,9 @@ export const MessageCenter = () => {
           )}
         </Card>
       </div>
+      
+      {/* Quick Chat Button for Tenants */}
+      <QuickChatButton onStartChat={handleStartChat} />
     </div>
   );
 };
