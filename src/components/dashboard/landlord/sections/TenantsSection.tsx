@@ -14,7 +14,7 @@ import { TenantForm } from '../TenantForm';
 import { PaymentModal } from '../payments/PaymentModal';
 
 export const TenantsSection = () => {
-  const { tenants, loading, createTenant, updateTenant, terminateLease } = useTenants();
+  const { tenants, loading, createTenant, updateTenant, terminateLease, refetch: refetchTenants } = useTenants();
   const { 
     applications, 
     loading: applicationsLoading, 
@@ -72,6 +72,8 @@ export const TenantsSection = () => {
 
   const handleApproveApplication = async (applicationId: string) => {
     await updateApplicationStatus(applicationId, 'approved');
+    // Refresh tenants list to show newly created active tenant
+    refetchTenants();
   };
 
   const handleRejectApplication = async (applicationId: string) => {
