@@ -28,11 +28,15 @@ const CaretakerDashboard = ({ activeSection = 'workorders', onSectionChange }: C
   );
 
   const urgentRequests = requests.filter(req => 
-    req.priority === 'high' && req.status !== 'completed'
+    (req.priority === 'high' || req.priority === 'emergency') && req.status !== 'completed'
   );
 
   const scheduledRequests = requests.filter(req => 
     req.scheduledDate && req.status !== 'completed'
+  );
+
+  const myAssignedRequests = requests.filter(req => 
+    req.assignedTo && req.assignedTo.includes(profile?.first_name || '') && req.status !== 'completed'
   );
 
   // Render different sections based on activeSection
@@ -106,12 +110,12 @@ const CaretakerDashboard = ({ activeSection = 'workorders', onSectionChange }: C
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card className="bg-gradient-to-r from-primary to-primary-glow text-primary-foreground">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Orders</CardTitle>
+            <CardTitle className="text-sm font-medium">My Assigned Tasks</CardTitle>
             <Clipboard className="h-4 w-4" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.pending + stats.inProgress}</div>
-            <p className="text-xs opacity-90">In progress</p>
+            <div className="text-2xl font-bold">{myAssignedRequests.length}</div>
+            <p className="text-xs opacity-90">Assigned to me</p>
           </CardContent>
         </Card>
 
@@ -133,7 +137,7 @@ const CaretakerDashboard = ({ activeSection = 'workorders', onSectionChange }: C
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-destructive">{urgentRequests.length}</div>
-            <p className="text-xs text-muted-foreground">Need immediate attention</p>
+            <p className="text-xs text-muted-foreground">High/Emergency priority</p>
           </CardContent>
         </Card>
 
@@ -198,16 +202,18 @@ const CaretakerDashboard = ({ activeSection = 'workorders', onSectionChange }: C
         {/* Today's Work Orders */}
         <Card>
           <CardHeader>
-            <CardTitle>Today's Work Orders</CardTitle>
-            <CardDescription>Your assigned tasks for today</CardDescription>
+            <CardTitle>Urgent Work Orders</CardTitle>
+            <CardDescription>High priority tasks requiring immediate attention</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {requests.slice(0, 4).map((request) => (
+              {urgentRequests.slice(0, 4).map((request) => (
                 <div key={request.id} className="flex items-start justify-between p-3 border rounded-lg">
                   <div className="flex-1">
                     <p className="font-medium text-sm">{request.title}</p>
                     <div className="flex items-center gap-2 mt-1">
+                      <User className="h-3 w-3 text-muted-foreground" />
+                      <p className="text-xs text-muted-foreground">{request.tenant}</p>
                       <MapPin className="h-3 w-3 text-muted-foreground" />
                       <p className="text-xs text-muted-foreground">{request.category}</p>
                     </div>
@@ -216,17 +222,20 @@ const CaretakerDashboard = ({ activeSection = 'workorders', onSectionChange }: C
                         {request.priority}
                       </Badge>
                       <Badge className={getStatusColor(request.status)} variant="secondary">
-                        {request.status}
+                        {request.status.replace('_', ' ')}
                       </Badge>
                     </div>
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-medium">{new Date(request.createdDate).toLocaleDateString()}</p>
+                    {request.assignedTo && (
+                      <p className="text-xs text-muted-foreground">Assigned</p>
+                    )}
                   </div>
                 </div>
               ))}
-              {requests.length === 0 && (
-                <p className="text-center text-muted-foreground py-4">No work orders available</p>
+              {urgentRequests.length === 0 && (
+                <p className="text-center text-muted-foreground py-4">No urgent tasks available</p>
               )}
             </div>
           </CardContent>

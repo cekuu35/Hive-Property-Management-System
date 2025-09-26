@@ -199,7 +199,24 @@ export const useMaintenanceRequests = () => {
 
       if (error) throw error;
       
-      // The trigger will automatically create notifications for caretakers
+      // Create notification for caretakers
+      try {
+        const { error: notificationError } = await supabase
+          .from('notifications')
+          .insert({
+            user_id: 'caretaker', // This would need to be actual caretaker IDs
+            title: 'New Maintenance Request',
+            message: `New ${requestData.priority} priority request: ${requestData.title}`,
+            type: 'maintenance_request',
+            action_url: '/dashboard?section=workorders'
+          });
+        
+        if (notificationError) {
+          console.error('Error creating notification:', notificationError);
+        }
+      } catch (error) {
+        console.error('Error creating notification:', error);
+      }
       
       toast({
         title: "Request Created",
