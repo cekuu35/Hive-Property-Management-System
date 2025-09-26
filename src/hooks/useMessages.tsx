@@ -161,6 +161,26 @@ export const useMessages = () => {
         }
       }
 
+      // For landlords, ensure approved tenants appear in conversations even without messages
+      if (profile.role === 'landlord') {
+        const tenants = await getTenantsForLandlord();
+        tenants.forEach(tenant => {
+          if (!conversationMap.has(tenant.id)) {
+            conversationMap.set(tenant.id, {
+              participant_id: tenant.id,
+              participant_name: `${tenant.first_name} ${tenant.last_name}`,
+              participant_role: tenant.role,
+              participant_avatar: tenant.avatar_url,
+              last_message: 'No messages yet',
+              last_message_time: new Date().toISOString(),
+              unread_count: 0,
+              property_name: tenant.property_name,
+              unit_number: tenant.unit_number,
+            });
+          }
+        });
+      }
+
       // Calculate unread counts
       for (const [participantId, conversation] of conversationMap) {
         const unreadCount = (messagesData || []).filter(
@@ -270,7 +290,50 @@ export const useMessages = () => {
     if (!profile?.id || profile.role !== 'tenant') return null;
 
     try {
-      // Get the landlord from the tenant's active lease
+      // Method 1: Find landlord through approved unit application
+      const { data: applicationData, error: applicationError } = await supabase
+        .from('unit_applications')
+        .select(`
+          id,
+          status,
+          reviewed_by,
+          property_id,
+          unit_id,
+          units!inner(
+            unit_number,
+            properties!inner(
+              name,
+              landlord_id,
+              profiles!properties_landlord_id_fkey (
+                id,
+                first_name,
+                last_name,
+                avatar_url,
+                role
+              )
+            )
+          )
+        `)
+        .eq('tenant_id', profile.id)
+        .eq('status', 'approved')
+        .limit(1);
+
+      if (applicationError) throw applicationError;
+
+      if (applicationData && applicationData.length > 0) {
+        const application = applicationData[0];
+        const landlordProfile = application.units.properties.profiles;
+        const property = application.units.properties;
+        const unit = application.units;
+
+        return {
+          ...landlordProfile,
+          property_name: property?.name,
+          unit_number: unit?.unit_number
+        };
+      }
+
+      // Method 2: Find landlord through active lease
       const { data: leaseData, error: leaseError } = await supabase
         .from('leases')
         .select(`
@@ -297,15 +360,42 @@ export const useMessages = () => {
 
       if (leaseError) throw leaseError;
 
-      const landlordProfile = leaseData?.[0]?.units?.properties?.profiles;
-      const property = leaseData?.[0]?.units?.properties;
-      const unit = leaseData?.[0]?.units;
+      if (leaseData && leaseData.length > 0) {
+        const landlordProfile = leaseData[0].units.properties.profiles;
+        const property = leaseData[0].units.properties;
+        const unit = leaseData[0].units;
 
-      if (landlordProfile) {
         return {
           ...landlordProfile,
           property_name: property?.name,
           unit_number: unit?.unit_number
+        };
+      }
+
+      // Method 3: Find landlord through property ownership (fallback)
+      const { data: propertyData, error: propertyError } = await supabase
+        .from('properties')
+        .select(`
+          id,
+          name,
+          landlord_id,
+          profiles!properties_landlord_id_fkey (
+            id,
+            first_name,
+            last_name,
+            avatar_url,
+            role
+          )
+        `)
+        .limit(1);
+
+      if (propertyError) throw propertyError;
+
+      if (propertyData && propertyData.length > 0) {
+        const landlordProfile = propertyData[0].profiles;
+        return {
+          ...landlordProfile,
+          property_name: propertyData[0].name
         };
       }
 
@@ -320,7 +410,49 @@ export const useMessages = () => {
     if (!profile?.id || profile.role !== 'landlord') return [];
 
     try {
-      // Get tenant IDs from leases for this landlord's properties
+      // Method 1: Get tenants from approved applications
+      const { data: applicationData, error: applicationError } = await supabase
+        .from('unit_applications')
+        .select(`
+          tenant_id,
+          status,
+          units!inner(
+            unit_number,
+            properties!inner(
+              name,
+              landlord_id
+            )
+          ),
+          profiles!unit_applications_tenant_id_fkey (
+            id,
+            first_name,
+            last_name,
+            avatar_url,
+            role
+          )
+        `)
+        .eq('status', 'approved')
+        .eq('units.properties.landlord_id', profile.id);
+
+      if (applicationError) throw applicationError;
+
+      const applicationTenants = (applicationData || []).map(app => {
+        const tenant = app.profiles;
+        const unit = app.units;
+        const property = unit.properties;
+        
+        return {
+          id: tenant.id,
+          first_name: tenant.first_name,
+          last_name: tenant.last_name,
+          avatar_url: tenant.avatar_url,
+          role: tenant.role,
+          property_name: property?.name,
+          unit_number: unit?.unit_number
+        };
+      });
+
+      // Method 2: Get tenants from active leases
       const { data: leaseData, error: leaseError } = await supabase
         .from('leases')
         .select(`
@@ -336,11 +468,9 @@ export const useMessages = () => {
 
       if (leaseError) throw leaseError;
 
-      const tenantIds = (leaseData || []).map(lease => lease.tenant_id);
+      const leaseTenantIds = (leaseData || []).map(lease => lease.tenant_id);
 
-      if (tenantIds.length === 0) return [];
-
-      // Get tenant profiles with property and unit info
+      // Get tenant profiles with property and unit info from leases
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select(`
@@ -359,14 +489,13 @@ export const useMessages = () => {
             )
           )
         `)
-        .in('id', tenantIds)
+        .in('id', leaseTenantIds)
         .eq('leases.status', 'active')
         .eq('leases.units.properties.landlord_id', profile.id);
 
       if (profileError) throw profileError;
 
-      // Flatten the data structure
-      const tenants = (profileData || []).map(tenant => {
+      const leaseTenants = (profileData || []).map(tenant => {
         const lease = tenant.leases?.[0];
         const unit = lease?.units;
         const property = unit?.properties;
@@ -382,7 +511,13 @@ export const useMessages = () => {
         };
       });
 
-      return tenants;
+      // Combine and deduplicate tenants
+      const allTenants = [...applicationTenants, ...leaseTenants];
+      const uniqueTenants = allTenants.filter((tenant, index, self) => 
+        index === self.findIndex(t => t.id === tenant.id)
+      );
+
+      return uniqueTenants;
     } catch (error) {
       console.error('Error fetching tenants:', error);
       return [];
