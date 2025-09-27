@@ -29,7 +29,7 @@ export const MaintenanceRequestModal = ({ isOpen, onClose, onSuccess }: Maintena
     preferredDate: '',
   });
   const { toast } = useToast();
-  const { createMaintenanceRequest } = useMaintenanceRequests();
+  const { createMaintenanceRequest, debugTenantUnitAssignment } = useMaintenanceRequests();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,6 +88,22 @@ export const MaintenanceRequestModal = ({ isOpen, onClose, onSuccess }: Maintena
 
   const removeImage = (index: number) => {
     setUploadedImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleDebugUnitAssignment = async () => {
+    try {
+      await debugTenantUnitAssignment();
+      toast({
+        title: "Debug Info",
+        description: "Check the browser console for detailed unit assignment information.",
+      });
+    } catch (error) {
+      toast({
+        title: "Debug Failed",
+        description: "Failed to retrieve debug information.",
+        variant: "destructive"
+      });
+    }
   };
 
   const categoryOptions = [
@@ -236,6 +252,21 @@ export const MaintenanceRequestModal = ({ isOpen, onClose, onSuccess }: Maintena
               </div>
             )}
           </div>
+
+          {/* Debug Button (only for development) */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="pt-2">
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="sm" 
+                onClick={handleDebugUnitAssignment}
+                className="w-full"
+              >
+                Debug Unit Assignment
+              </Button>
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div className="flex gap-3 pt-4">

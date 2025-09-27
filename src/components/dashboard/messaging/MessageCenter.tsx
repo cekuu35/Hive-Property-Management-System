@@ -190,13 +190,13 @@ export const MessageCenter = () => {
           </p>
         </div>
         {profile?.role === 'landlord' && (
-          <Dialog open={isNewMessageOpen} onOpenChange={setIsNewMessageOpen}>
-            <DialogTrigger asChild>
-              <Button className="gap-2">
-                <Plus className="h-4 w-4" />
-                New Message
-              </Button>
-            </DialogTrigger>
+        <Dialog open={isNewMessageOpen} onOpenChange={setIsNewMessageOpen}>
+          <DialogTrigger asChild>
+            <Button className="gap-2">
+              <Plus className="h-4 w-4" />
+              New Message
+            </Button>
+          </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>New Message</DialogTitle>
