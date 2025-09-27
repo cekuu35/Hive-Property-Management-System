@@ -890,6 +890,28 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      get_landlord_tenants: {
+        Args: { landlord_profile_id: string }
+        Returns: {
+          property_name: string
+          tenant_avatar_url: string
+          tenant_first_name: string
+          tenant_id: string
+          tenant_last_name: string
+          unit_number: string
+        }[]
+      }
+      get_tenant_landlord: {
+        Args: { tenant_profile_id: string }
+        Returns: {
+          landlord_avatar_url: string
+          landlord_first_name: string
+          landlord_id: string
+          landlord_last_name: string
+          property_name: string
+          unit_number: string
+        }[]
+      }
       landlord_can_view_profile: {
         Args: { _target_profile_id: string }
         Returns: boolean

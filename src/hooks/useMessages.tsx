@@ -156,7 +156,7 @@ export const useMessages = () => {
             last_message_time: new Date().toISOString(),
             unread_count: 0,
             property_name: landlord.property_name,
-            unit_number: landlord.unit_number,
+            unit_number: (landlord as any).unit_number,
           });
         }
       }
@@ -175,7 +175,7 @@ export const useMessages = () => {
               last_message_time: new Date().toISOString(),
               unread_count: 0,
               property_name: tenant.property_name,
-              unit_number: tenant.unit_number,
+              unit_number: (tenant as any).unit_number,
             });
           }
         });
@@ -221,12 +221,12 @@ export const useMessages = () => {
           if (propertyData) {
             propertyId = propertyData.id;
             
-            if (landlord.unit_number) {
+            if ((landlord as any).unit_number) {
               const { data: unitData } = await supabase
                 .from('units')
                 .select('id')
                 .eq('property_id', propertyId)
-                .eq('unit_number', landlord.unit_number)
+                .eq('unit_number', (landlord as any).unit_number)
                 .single();
               
               if (unitData) {
@@ -290,43 +290,16 @@ export const useMessages = () => {
     if (!profile?.id || profile.role !== 'tenant') return null;
 
     try {
-      // Method 1: Find landlord through approved unit application
-      const { data: applicationData, error: applicationError } = await supabase
-        .from('unit_applications')
-        .select(`
-          id,
-          status,
-          reviewed_by,
-          property_id,
-          unit_id,
-          units!inner(
-            unit_number,
-            properties!inner(
-              name,
-              landlord_id,
-              profiles!properties_landlord_id_fkey (
-                id,
-                first_name,
-                last_name,
-                avatar_url,
-                role
-              )
-            )
-          )
-        `)
-        .eq('tenant_id', profile.id)
-        .eq('status', 'approved')
-        .limit(1);
+      // Use the new database function to get tenant's landlord
+      const { data: landlordData, error } = await supabase
+        .rpc('get_tenant_landlord', { tenant_profile_id: profile.id });
 
-      if (applicationError) throw applicationError;
+      if (error) throw error;
 
-      if (applicationData && applicationData.length > 0) {
-        const application = applicationData[0];
-        const landlordProfile = application.units.properties.profiles;
-        const property = application.units.properties;
-        const unit = application.units;
-
+      if (landlordData && landlordData.length > 0) {
+        const landlord = landlordData[0];
         return {
+<<<<<<< HEAD
           ...landlordProfile,
           property_name: property?.name,
           unit_number: unit?.unit_number
@@ -396,6 +369,15 @@ export const useMessages = () => {
         return {
           ...landlordProfile,
           property_name: propertyData[0].name
+=======
+          id: landlord.landlord_id,
+          first_name: landlord.landlord_first_name,
+          last_name: landlord.landlord_last_name,
+          avatar_url: landlord.landlord_avatar_url,
+          role: 'landlord',
+          property_name: landlord.property_name,
+          unit_number: landlord.unit_number
+>>>>>>> 76e2746936d6aeb8f99979a7422323c84b05fc14
         };
       }
 
@@ -410,114 +392,21 @@ export const useMessages = () => {
     if (!profile?.id || profile.role !== 'landlord') return [];
 
     try {
-      // Method 1: Get tenants from approved applications
-      const { data: applicationData, error: applicationError } = await supabase
-        .from('unit_applications')
-        .select(`
-          tenant_id,
-          status,
-          units!inner(
-            unit_number,
-            properties!inner(
-              name,
-              landlord_id
-            )
-          ),
-          profiles!unit_applications_tenant_id_fkey (
-            id,
-            first_name,
-            last_name,
-            avatar_url,
-            role
-          )
-        `)
-        .eq('status', 'approved')
-        .eq('units.properties.landlord_id', profile.id);
+      // Use the new database function to get landlord's tenants
+      const { data: tenantsData, error } = await supabase
+        .rpc('get_landlord_tenants', { landlord_profile_id: profile.id });
 
-      if (applicationError) throw applicationError;
+      if (error) throw error;
 
-      const applicationTenants = (applicationData || []).map(app => {
-        const tenant = app.profiles;
-        const unit = app.units;
-        const property = unit.properties;
-        
-        return {
-          id: tenant.id,
-          first_name: tenant.first_name,
-          last_name: tenant.last_name,
-          avatar_url: tenant.avatar_url,
-          role: tenant.role,
-          property_name: property?.name,
-          unit_number: unit?.unit_number
-        };
-      });
-
-      // Method 2: Get tenants from active leases
-      const { data: leaseData, error: leaseError } = await supabase
-        .from('leases')
-        .select(`
-          tenant_id,
-          units!inner(
-            properties!inner(
-              landlord_id
-            )
-          )
-        `)
-        .eq('status', 'active')
-        .eq('units.properties.landlord_id', profile.id);
-
-      if (leaseError) throw leaseError;
-
-      const leaseTenantIds = (leaseData || []).map(lease => lease.tenant_id);
-
-      // Get tenant profiles with property and unit info from leases
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select(`
-          id, 
-          first_name, 
-          last_name, 
-          avatar_url, 
-          role,
-          leases!inner(
-            units!inner(
-              unit_number,
-              properties!inner(
-                name,
-                landlord_id
-              )
-            )
-          )
-        `)
-        .in('id', leaseTenantIds)
-        .eq('leases.status', 'active')
-        .eq('leases.units.properties.landlord_id', profile.id);
-
-      if (profileError) throw profileError;
-
-      const leaseTenants = (profileData || []).map(tenant => {
-        const lease = tenant.leases?.[0];
-        const unit = lease?.units;
-        const property = unit?.properties;
-        
-        return {
-          id: tenant.id,
-          first_name: tenant.first_name,
-          last_name: tenant.last_name,
-          avatar_url: tenant.avatar_url,
-          role: tenant.role,
-          property_name: property?.name,
-          unit_number: unit?.unit_number
-        };
-      });
-
-      // Combine and deduplicate tenants
-      const allTenants = [...applicationTenants, ...leaseTenants];
-      const uniqueTenants = allTenants.filter((tenant, index, self) => 
-        index === self.findIndex(t => t.id === tenant.id)
-      );
-
-      return uniqueTenants;
+      return (tenantsData || []).map(tenant => ({
+        id: tenant.tenant_id,
+        first_name: tenant.tenant_first_name,
+        last_name: tenant.tenant_last_name,
+        avatar_url: tenant.tenant_avatar_url,
+        role: 'tenant',
+        property_name: tenant.property_name,
+        unit_number: tenant.unit_number
+      }));
     } catch (error) {
       console.error('Error fetching tenants:', error);
       return [];

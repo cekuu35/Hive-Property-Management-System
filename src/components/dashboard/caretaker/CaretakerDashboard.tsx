@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Clipboard, Calendar, Package, FileText, Clock, MapPin, Wrench } from 'lucide-react';
+import { Clipboard, Calendar, Package, FileText, Clock, MapPin, Wrench, User } from 'lucide-react';
 import { WorkOrdersSection } from './WorkOrdersSection';
 import { ScheduleSection } from './ScheduleSection';
 import { InventorySection } from './InventorySection';
@@ -11,6 +11,7 @@ import { MaintenanceRequestsSection } from './MaintenanceRequestsSection';
 import { useMaintenanceRequests } from '@/hooks/useMaintenanceRequests';
 import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 
 interface CaretakerDashboardProps {
   activeSection?: string;
@@ -19,6 +20,7 @@ interface CaretakerDashboardProps {
 
 const CaretakerDashboard = ({ activeSection = 'workorders', onSectionChange }: CaretakerDashboardProps) => {
   const { requests, getStats } = useMaintenanceRequests();
+  const { profile } = useAuth();
   const stats = getStats();
 
   // Real-time updates are now handled in useMaintenanceRequests hook

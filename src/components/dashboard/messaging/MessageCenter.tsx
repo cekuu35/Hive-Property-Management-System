@@ -207,7 +207,7 @@ export const MessageCenter = () => {
                 <label className="text-sm font-medium">To</label>
                 <Select value={newMessageReceiver} onValueChange={setNewMessageReceiver}>
                   <SelectTrigger>
-                    <SelectValue placeholder={`Select ${profile?.role === 'tenant' ? 'landlord' : 'tenant'}`} />
+                    <SelectValue placeholder="Select recipient" />
                   </SelectTrigger>
                   <SelectContent>
                     {availableContacts.map((contact) => (

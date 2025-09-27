@@ -57,21 +57,9 @@ export const useMaintenanceRequests = () => {
 
       // Filter based on user role
       if (profile.role === 'caretaker') {
-        // Caretakers see all requests (assigned to them, unassigned, or assigned to others)
-        // This allows them to see all maintenance requests for better management
-        // query = query.or(`assigned_to.eq.${profile.id},assigned_to.is.null`);
-        
-        // For debugging, let's try a simpler query first
-        console.log('Fetching all maintenance requests for caretaker...');
-        
-        // Test: Try to fetch without any joins first
-        const testQuery = supabase
-          .from('maintenance_requests')
-          .select('*')
-          .order('created_at', { ascending: false });
-        
-        const testResult = await testQuery;
-        console.log('Test query result for caretaker:', testResult);
+        // Caretakers can see all maintenance requests due to RLS policy
+        // No additional filtering needed as RLS handles access control
+        console.log('Fetching maintenance requests for caretaker...');
       } else if (profile.role === 'tenant') {
         // Tenants see only their own requests
         query = query.eq('tenant_id', profile.id);
@@ -97,24 +85,6 @@ export const useMaintenanceRequests = () => {
       }
 
       let { data: maintenanceData, error } = await query.order('created_at', { ascending: false });
-
-      // If the complex query fails for caretakers, try a simpler one
-      if (error && profile.role === 'caretaker') {
-        console.log('Complex query failed, trying simpler query for caretaker...');
-        const simpleQuery = supabase
-          .from('maintenance_requests')
-          .select('*')
-          .order('created_at', { ascending: false });
-        
-        const simpleResult = await simpleQuery;
-        if (!simpleResult.error) {
-          maintenanceData = simpleResult.data;
-          error = null;
-          console.log('Simple query succeeded:', maintenanceData);
-        } else {
-          console.error('Simple query also failed:', simpleResult.error);
-        }
-      }
 
       if (error) {
         console.error('Error fetching maintenance requests:', error);
@@ -159,7 +129,26 @@ export const useMaintenanceRequests = () => {
   };
 
   const createMaintenanceRequest = async (requestData: CreateMaintenanceRequest) => {
-    if (!profile?.id) return false;
+    if (!profile?.id) {
+      console.error('No profile ID available');
+      toast({
+        title: "Authentication Error",
+        description: "Please log in to create maintenance requests.",
+        variant: "destructive"
+      });
+      return false;
+    }
+
+    // Validate required fields
+    if (!requestData.title || !requestData.description || !requestData.category || !requestData.priority) {
+      console.error('Missing required fields:', requestData);
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields (title, description, category, priority).",
+        variant: "destructive"
+      });
+      return false;
+    }
 
     try {
       // Get the user's units (if tenant) or first unit from their properties (if landlord)
@@ -215,23 +204,41 @@ export const useMaintenanceRequests = () => {
         
         // If still no unit found, use any available unit as fallback for demo purposes
         if (!unitId) {
-          const { data: fallbackUnits } = await supabase
+          console.log('No unit found through normal process, trying fallback...');
+          const { data: fallbackUnits, error: fallbackError } = await supabase
             .from('units')
             .select('id')
             .limit(1);
           
+          if (fallbackError) {
+            console.error('Error fetching fallback units:', fallbackError);
+          }
+          
           unitId = fallbackUnits?.[0]?.id;
           
           if (!unitId) {
+            console.error('No units available in database');
             toast({
               title: "Setup Required",
               description: "No units are available. Please contact your landlord to set up your unit assignment.",
               variant: "destructive"
             });
             return false;
+          } else {
+            console.log('Using fallback unit:', unitId);
           }
         }
       }
+
+      console.log('Creating maintenance request with data:', {
+        title: requestData.title,
+        description: requestData.description,
+        category: requestData.category,
+        priority: requestData.priority,
+        unit_id: unitId,
+        tenant_id: profile.id,
+        scheduled_date: requestData.preferredDate || null,
+      });
 
       // Create the maintenance request in the database
       const insertData = {
@@ -278,6 +285,7 @@ export const useMaintenanceRequests = () => {
         .single();
 
       if (error) {
+<<<<<<< HEAD
         console.error('Maintenance request creation error:', error);
         console.error('Error details:', {
           message: error.message,
@@ -303,24 +311,46 @@ export const useMaintenanceRequests = () => {
         });
         return false;
       }
+=======
+        console.error('Database error creating maintenance request:', error);
+        throw error;
+      }
+
+      console.log('Maintenance request created successfully:', data);
+>>>>>>> 76e2746936d6aeb8f99979a7422323c84b05fc14
       
-      // Create notification for caretakers
+      // Create notification for caretakers - get actual caretaker IDs
       try {
-        const { error: notificationError } = await supabase
-          .from('notifications')
-          .insert({
-            user_id: 'caretaker', // This would need to be actual caretaker IDs
+        const { data: caretakers, error: caretakerError } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('role', 'caretaker');
+        
+        if (caretakerError) {
+          console.error('Error fetching caretakers:', caretakerError);
+        } else if (caretakers && caretakers.length > 0) {
+          const notifications = caretakers.map(caretaker => ({
+            user_id: caretaker.id,
             title: 'New Maintenance Request',
             message: `New ${requestData.priority} priority request: ${requestData.title}`,
-            type: 'maintenance_request',
+            type: 'maintenance',
             action_url: '/dashboard?section=workorders'
-          });
-        
-        if (notificationError) {
-          console.error('Error creating notification:', notificationError);
+          }));
+
+          const { error: notificationError } = await supabase
+            .from('notifications')
+            .insert(notifications);
+          
+          if (notificationError) {
+            console.error('Error creating notifications:', notificationError);
+          } else {
+            console.log('Notifications created for caretakers');
+          }
+        } else {
+          console.log('No caretakers found to notify');
         }
       } catch (error) {
-        console.error('Error creating notification:', error);
+        console.error('Error creating notifications:', error);
       }
       
       toast({
@@ -336,7 +366,7 @@ export const useMaintenanceRequests = () => {
       console.error('Error creating maintenance request:', error);
       toast({
         title: "Error",
-        description: "Failed to create maintenance request",
+        description: `Failed to create maintenance request: ${error.message || 'Unknown error'}`,
         variant: "destructive"
       });
       return false;
