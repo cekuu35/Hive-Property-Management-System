@@ -170,16 +170,29 @@ export const useMaintenanceRequests = () => {
         let units = null;
         
         if (profile.role === 'tenant') {
-          // For tenants, get units from their active leases
-          const { data } = await supabase
+          // For tenants, get units from their active leases first
+          const { data: leaseData } = await supabase
             .from('leases')
             .select('unit_id')
             .eq('tenant_id', profile.id)
             .eq('status', 'active')
             .limit(1);
           
-          units = data;
-          unitId = units?.[0]?.unit_id;
+          if (leaseData && leaseData.length > 0) {
+            unitId = leaseData[0].unit_id;
+          } else {
+            // If no active lease, try to get unit from approved applications
+            const { data: applicationData } = await supabase
+              .from('unit_applications')
+              .select('unit_id')
+              .eq('tenant_id', profile.id)
+              .eq('status', 'approved')
+              .limit(1);
+            
+            if (applicationData && applicationData.length > 0) {
+              unitId = applicationData[0].unit_id;
+            }
+          }
         } else if (profile.role === 'landlord') {
           // For landlords, get units from their properties
           const { data: properties } = await supabase
@@ -221,23 +234,75 @@ export const useMaintenanceRequests = () => {
       }
 
       // Create the maintenance request in the database
+      const insertData = {
+        title: requestData.title,
+        description: requestData.description,
+        category: requestData.category,
+        priority: requestData.priority,
+        status: 'pending', // Explicitly set status
+        unit_id: unitId,
+        tenant_id: profile.id,
+        scheduled_date: requestData.preferredDate || null,
+        images: [], // Initialize as empty array for now
+      };
+
+      console.log('Creating maintenance request with data:', insertData);
+      console.log('Profile ID:', profile.id);
+      console.log('Unit ID:', unitId);
+
+      // Validate required fields
+      if (!unitId) {
+        console.error('No unit ID found for tenant');
+        toast({
+          title: "Setup Required",
+          description: "No unit assignment found. Please contact your landlord to set up your unit assignment.",
+          variant: "destructive"
+        });
+        return false;
+      }
+
+      if (!profile.id) {
+        console.error('No profile ID found');
+        toast({
+          title: "Authentication Error",
+          description: "Please log in again to submit maintenance requests.",
+          variant: "destructive"
+        });
+        return false;
+      }
+
       const { data, error } = await supabase
         .from('maintenance_requests')
-        .insert({
-          title: requestData.title,
-          description: requestData.description,
-          category: requestData.category,
-          priority: requestData.priority,
-          status: 'pending', // Explicitly set status
-          unit_id: unitId,
-          tenant_id: profile.id,
-          scheduled_date: requestData.preferredDate || null,
-          images: [], // Initialize as empty array for now
-        })
+        .insert(insertData)
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Maintenance request creation error:', error);
+        console.error('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        
+        // Provide more specific error messages
+        let errorMessage = "Failed to create maintenance request";
+        if (error.code === '42501') {
+          errorMessage = "Permission denied. Please ensure you have proper access to create maintenance requests.";
+        } else if (error.code === '23503') {
+          errorMessage = "Invalid unit or tenant reference. Please contact support.";
+        } else if (error.message.includes('RLS')) {
+          errorMessage = "Access denied. Please ensure you're properly assigned to a unit.";
+        }
+        
+        toast({
+          title: "Request Failed",
+          description: errorMessage,
+          variant: "destructive"
+        });
+        return false;
+      }
       
       // Create notification for caretakers
       try {
@@ -320,6 +385,87 @@ export const useMaintenanceRequests = () => {
     return { pending, inProgress, completed, totalCost };
   };
 
+  const debugTenantUnitAssignment = async () => {
+    if (!profile?.id || profile.role !== 'tenant') return null;
+
+    try {
+      console.log('=== DEBUGGING TENANT UNIT ASSIGNMENT ===');
+      console.log('Profile ID:', profile.id);
+      console.log('Profile Role:', profile.role);
+
+      // Check active leases
+      const { data: leaseData, error: leaseError } = await supabase
+        .from('leases')
+        .select(`
+          id,
+          unit_id,
+          status,
+          units!inner(
+            unit_number,
+            properties!inner(
+              name,
+              landlord_id
+            )
+          )
+        `)
+        .eq('tenant_id', profile.id)
+        .eq('status', 'active');
+
+      console.log('Active leases:', leaseData);
+      console.log('Lease error:', leaseError);
+
+      // Check approved applications
+      const { data: applicationData, error: applicationError } = await supabase
+        .from('unit_applications')
+        .select(`
+          id,
+          unit_id,
+          status,
+          units!inner(
+            unit_number,
+            properties!inner(
+              name,
+              landlord_id
+            )
+          )
+        `)
+        .eq('tenant_id', profile.id)
+        .eq('status', 'approved');
+
+      console.log('Approved applications:', applicationData);
+      console.log('Application error:', applicationError);
+
+      // Check if tenant has any unit assignments
+      const { data: allAssignments, error: allError } = await supabase
+        .from('unit_applications')
+        .select(`
+          id,
+          unit_id,
+          status,
+          units!inner(
+            unit_number,
+            properties!inner(
+              name,
+              landlord_id
+            )
+          )
+        `)
+        .eq('tenant_id', profile.id);
+
+      console.log('All applications:', allAssignments);
+      console.log('All applications error:', allError);
+
+      return {
+        activeLeases: leaseData,
+        approvedApplications: applicationData,
+        allApplications: allAssignments
+      };
+    } catch (error) {
+      console.error('Error debugging tenant unit assignment:', error);
+      return null;
+    }
+  };
+
   useEffect(() => {
     fetchMaintenanceRequests();
 
@@ -353,6 +499,7 @@ export const useMaintenanceRequests = () => {
     createMaintenanceRequest,
     updateRequestStatus,
     getStats,
-    refetch: fetchMaintenanceRequests
+    refetch: fetchMaintenanceRequests,
+    debugTenantUnitAssignment
   };
 };

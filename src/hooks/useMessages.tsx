@@ -335,28 +335,28 @@ export const useMessages = () => {
 
       // Method 2: Find landlord through active lease
       const { data: leaseData, error: leaseError } = await supabase
-        .from('leases')
-        .select(`
+            .from('leases')
+            .select(`
           units!inner(
             unit_number,
             properties!inner(
               name,
-              landlord_id,
-              profiles!properties_landlord_id_fkey (
-                id,
-                first_name,
-                last_name,
-                avatar_url,
-                role
+                  landlord_id,
+                  profiles!properties_landlord_id_fkey (
+                    id,
+                    first_name,
+                    last_name,
+                    avatar_url,
+                    role
+                  )
+                )
               )
-            )
-          )
-        `)
+            `)
         .or(`tenant_id.eq.${profile.id},tenant_info_id.in.(
           SELECT id FROM tenant_info WHERE profile_id = '${profile.id}'
         )`)
-        .eq('status', 'active')
-        .limit(1);
+            .eq('status', 'active')
+            .limit(1);
 
       if (leaseError) throw leaseError;
 
