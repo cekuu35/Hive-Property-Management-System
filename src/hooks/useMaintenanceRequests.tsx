@@ -103,7 +103,12 @@ export const useMaintenanceRequests = () => {
         console.log('Complex query failed, trying simpler query for caretaker...');
         const simpleQuery = supabase
           .from('maintenance_requests')
-          .select('*')
+          .select(`
+            *,
+            unit:units(unit_number, property:properties(name)),
+            tenant:profiles!maintenance_requests_tenant_id_fkey(first_name, last_name),
+            assigned:profiles!maintenance_requests_assigned_to_fkey(first_name, last_name)
+          `)
           .order('created_at', { ascending: false });
         
         const simpleResult = await simpleQuery;

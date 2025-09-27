@@ -156,7 +156,7 @@ export const useMessages = () => {
             last_message_time: new Date().toISOString(),
             unread_count: 0,
             property_name: landlord.property_name,
-            unit_number: landlord.unit_number,
+            unit_number: (landlord as any).unit_number,
           });
         }
       }
@@ -175,7 +175,7 @@ export const useMessages = () => {
               last_message_time: new Date().toISOString(),
               unread_count: 0,
               property_name: tenant.property_name,
-              unit_number: tenant.unit_number,
+              unit_number: (tenant as any).unit_number,
             });
           }
         });
@@ -221,12 +221,12 @@ export const useMessages = () => {
           if (propertyData) {
             propertyId = propertyData.id;
             
-            if (landlord.unit_number) {
+            if ((landlord as any).unit_number) {
               const { data: unitData } = await supabase
                 .from('units')
                 .select('id')
                 .eq('property_id', propertyId)
-                .eq('unit_number', landlord.unit_number)
+                .eq('unit_number', (landlord as any).unit_number)
                 .single();
               
               if (unitData) {
@@ -496,9 +496,9 @@ export const useMessages = () => {
       if (profileError) throw profileError;
 
       const leaseTenants = (profileData || []).map(tenant => {
-        const lease = tenant.leases?.[0];
+        const lease = Array.isArray(tenant.leases) ? tenant.leases[0] : tenant.leases;
         const unit = lease?.units;
-        const property = unit?.properties;
+        const property = Array.isArray(unit?.properties) ? unit.properties[0] : unit?.properties;
         
         return {
           id: tenant.id,
