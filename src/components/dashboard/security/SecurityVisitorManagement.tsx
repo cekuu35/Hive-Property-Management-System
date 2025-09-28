@@ -185,180 +185,181 @@ export const SecurityVisitorManagement = () => {
                 Request Visitor Access
               </Button>
             </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Request Visitor Access</DialogTitle>
-              <DialogDescription>
-                Create a visitor request that requires tenant approval before registration.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="tenant_unit" className="text-sm font-medium flex items-center gap-2">
-                  <Building className="h-4 w-4" />
-                  Tenant & Unit Selection
-                </Label>
-                <p className="text-xs text-muted-foreground mb-3">
-                  Search and select from {occupiedUnits.length} occupied units
-                </p>
-                <Popover open={unitSearchOpen} onOpenChange={setUnitSearchOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={unitSearchOpen}
-                      className="w-full justify-between h-auto p-3"
-                    >
-                      {selectedUnitDetails ? (
-                        <div className="flex flex-col items-start text-left">
-                          <span className="font-medium">{selectedUnitDetails.tenant_name}</span>
-                          <span className="text-xs text-muted-foreground">
-                            Unit {selectedUnitDetails.unit_number} • {selectedUnitDetails.property_name}
-                          </span>
-                          {selectedUnitDetails.tenant_phone && (
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Request Visitor Access</DialogTitle>
+                <DialogDescription>
+                  Create a visitor request that requires tenant approval before registration.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="tenant_unit" className="text-sm font-medium flex items-center gap-2">
+                    <Building className="h-4 w-4" />
+                    Tenant & Unit Selection
+                  </Label>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Search and select from {occupiedUnits.length} occupied units
+                  </p>
+                  <Popover open={unitSearchOpen} onOpenChange={setUnitSearchOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={unitSearchOpen}
+                        className="w-full justify-between h-auto p-3"
+                      >
+                        {selectedUnitDetails ? (
+                          <div className="flex flex-col items-start text-left">
+                            <span className="font-medium">{selectedUnitDetails.tenant_name}</span>
                             <span className="text-xs text-muted-foreground">
-                              📞 {selectedUnitDetails.tenant_phone}
+                              Unit {selectedUnitDetails.unit_number} • {selectedUnitDetails.property_name}
                             </span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">Search tenant or unit...</span>
-                      )}
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-full p-0">
-                    <Command>
-                      <CommandInput 
-                        placeholder="Search by tenant name, unit number, or property..." 
-                        value={unitSearchTerm}
-                        onValueChange={setUnitSearchTerm}
-                      />
-                      <CommandList>
-                        <CommandEmpty>No occupied units found.</CommandEmpty>
-                        {Object.entries(groupedUnits).map(([propertyName, units]) => (
-                          <CommandGroup key={propertyName} heading={propertyName}>
-                            {units.map((unit) => (
-                              <CommandItem
-                                key={`${unit.tenant_id}-${unit.unit_id}`}
-                                value={`${unit.tenant_name} ${unit.unit_number} ${unit.property_name}`}
-                                onSelect={() => {
-                                  setSelectedUnit(`${unit.tenant_id}-${unit.unit_id}`);
-                                  setUnitSearchOpen(false);
-                                  setUnitSearchTerm('');
-                                }}
-                                className="flex flex-col items-start p-3 cursor-pointer"
-                              >
-                                <div className="flex items-center justify-between w-full">
-                                  <div className="flex items-center gap-2">
-                                    <Users className="h-4 w-4 text-primary" />
-                                    <span className="font-medium">{unit.tenant_name}</span>
+                            {selectedUnitDetails.tenant_phone && (
+                              <span className="text-xs text-muted-foreground">
+                                📞 {selectedUnitDetails.tenant_phone}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">Search tenant or unit...</span>
+                        )}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full p-0">
+                      <Command>
+                        <CommandInput 
+                          placeholder="Search by tenant name, unit number, or property..." 
+                          value={unitSearchTerm}
+                          onValueChange={setUnitSearchTerm}
+                        />
+                        <CommandList>
+                          <CommandEmpty>No occupied units found.</CommandEmpty>
+                          {Object.entries(groupedUnits).map(([propertyName, units]) => (
+                            <CommandGroup key={propertyName} heading={propertyName}>
+                              {units.map((unit) => (
+                                <CommandItem
+                                  key={`${unit.tenant_id}-${unit.unit_id}`}
+                                  value={`${unit.tenant_name} ${unit.unit_number} ${unit.property_name}`}
+                                  onSelect={() => {
+                                    setSelectedUnit(`${unit.tenant_id}-${unit.unit_id}`);
+                                    setUnitSearchOpen(false);
+                                    setUnitSearchTerm('');
+                                  }}
+                                  className="flex flex-col items-start p-3 cursor-pointer"
+                                >
+                                  <div className="flex items-center justify-between w-full">
+                                    <div className="flex items-center gap-2">
+                                      <Users className="h-4 w-4 text-primary" />
+                                      <span className="font-medium">{unit.tenant_name}</span>
+                                    </div>
+                                    <Check
+                                      className={cn(
+                                        "h-4 w-4",
+                                        selectedUnit === `${unit.tenant_id}-${unit.unit_id}` 
+                                          ? "opacity-100" 
+                                          : "opacity-0"
+                                      )}
+                                    />
                                   </div>
-                                  <Check
-                                    className={cn(
-                                      "h-4 w-4",
-                                      selectedUnit === `${unit.tenant_id}-${unit.unit_id}` 
-                                        ? "opacity-100" 
-                                        : "opacity-0"
-                                    )}
-                                  />
-                                </div>
-                                <div className="text-xs text-muted-foreground mt-1">
-                                  Unit {unit.unit_number} • {unit.property_address}
-                                </div>
-                                {unit.tenant_phone && (
-                                  <div className="text-xs text-muted-foreground">
-                                    📞 {unit.tenant_phone}
+                                  <div className="text-xs text-muted-foreground mt-1">
+                                    Unit {unit.unit_number} • {unit.property_address}
                                   </div>
-                                )}
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        ))}
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-                {occupiedUnits.length === 0 && (
-                  <div className="text-center p-4 text-sm text-muted-foreground border rounded-lg bg-muted/20">
-                    <Building className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    No occupied units found. Ensure tenants have active leases.
-                  </div>
-                )}
+                                  {unit.tenant_phone && (
+                                    <div className="text-xs text-muted-foreground">
+                                      📞 {unit.tenant_phone}
+                                    </div>
+                                  )}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          ))}
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  {occupiedUnits.length === 0 && (
+                    <div className="text-center p-4 text-sm text-muted-foreground border rounded-lg bg-muted/20">
+                      <Building className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      No occupied units found. Ensure tenants have active leases.
+                    </div>
+                  )}
+                </div>
+                
+                <div>
+                  <Label htmlFor="visitor_name">Visitor Name</Label>
+                  <Input
+                    id="visitor_name"
+                    placeholder="Full name of visitor"
+                    value={newRequest.visitor_name}
+                    onChange={(e) => setNewRequest(prev => ({ ...prev, visitor_name: e.target.value }))}
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="visitor_phone">Phone Number (Optional)</Label>
+                  <Input
+                    id="visitor_phone"
+                    placeholder="Visitor's phone number"
+                    value={newRequest.visitor_phone}
+                    onChange={(e) => setNewRequest(prev => ({ ...prev, visitor_phone: e.target.value }))}
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="purpose">Purpose of Visit</Label>
+                  <Input
+                    id="purpose"
+                    placeholder="Reason for the visit"
+                    value={newRequest.purpose}
+                    onChange={(e) => setNewRequest(prev => ({ ...prev, purpose: e.target.value }))}
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="expected_arrival">Expected Arrival</Label>
+                  <Input
+                    id="expected_arrival"
+                    type="datetime-local"
+                    value={newRequest.expected_arrival}
+                    onChange={(e) => setNewRequest(prev => ({ ...prev, expected_arrival: e.target.value }))}
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="expected_duration">Expected Duration (minutes)</Label>
+                  <Input
+                    id="expected_duration"
+                    type="number"
+                    placeholder="How long will the visit take?"
+                    value={newRequest.expected_duration}
+                    onChange={(e) => setNewRequest(prev => ({ ...prev, expected_duration: e.target.value }))}
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="special_instructions">Special Instructions (Optional)</Label>
+                  <Textarea
+                    id="special_instructions"
+                    placeholder="Any special instructions"
+                    value={newRequest.special_instructions}
+                    onChange={(e) => setNewRequest(prev => ({ ...prev, special_instructions: e.target.value }))}
+                  />
+                </div>
+                
+                <Button 
+                  onClick={handleCreateRequest} 
+                  className="w-full"
+                  disabled={!newRequest.visitor_name || !newRequest.purpose || !newRequest.expected_arrival || !selectedUnit}
+                >
+                  <Bell className="h-4 w-4 mr-2" />
+                  Send Request to Tenant
+                </Button>
               </div>
-              
-              <div>
-                <Label htmlFor="visitor_name">Visitor Name</Label>
-                <Input
-                  id="visitor_name"
-                  placeholder="Full name of visitor"
-                  value={newRequest.visitor_name}
-                  onChange={(e) => setNewRequest(prev => ({ ...prev, visitor_name: e.target.value }))}
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="visitor_phone">Phone Number (Optional)</Label>
-                <Input
-                  id="visitor_phone"
-                  placeholder="Visitor's phone number"
-                  value={newRequest.visitor_phone}
-                  onChange={(e) => setNewRequest(prev => ({ ...prev, visitor_phone: e.target.value }))}
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="purpose">Purpose of Visit</Label>
-                <Input
-                  id="purpose"
-                  placeholder="Reason for the visit"
-                  value={newRequest.purpose}
-                  onChange={(e) => setNewRequest(prev => ({ ...prev, purpose: e.target.value }))}
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="expected_arrival">Expected Arrival</Label>
-                <Input
-                  id="expected_arrival"
-                  type="datetime-local"
-                  value={newRequest.expected_arrival}
-                  onChange={(e) => setNewRequest(prev => ({ ...prev, expected_arrival: e.target.value }))}
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="expected_duration">Expected Duration (minutes)</Label>
-                <Input
-                  id="expected_duration"
-                  type="number"
-                  placeholder="How long will the visit take?"
-                  value={newRequest.expected_duration}
-                  onChange={(e) => setNewRequest(prev => ({ ...prev, expected_duration: e.target.value }))}
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="special_instructions">Special Instructions (Optional)</Label>
-                <Textarea
-                  id="special_instructions"
-                  placeholder="Any special instructions"
-                  value={newRequest.special_instructions}
-                  onChange={(e) => setNewRequest(prev => ({ ...prev, special_instructions: e.target.value }))}
-                />
-              </div>
-              
-              <Button 
-                onClick={handleCreateRequest} 
-                className="w-full"
-                disabled={!newRequest.visitor_name || !newRequest.purpose || !newRequest.expected_arrival || !selectedUnit}
-              >
-                <Bell className="h-4 w-4 mr-2" />
-                Send Request to Tenant
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Stats Cards */}
