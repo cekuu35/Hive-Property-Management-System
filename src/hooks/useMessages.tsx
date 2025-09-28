@@ -299,77 +299,6 @@ export const useMessages = () => {
       if (landlordData && landlordData.length > 0) {
         const landlord = landlordData[0];
         return {
-<<<<<<< HEAD
-          ...landlordProfile,
-          property_name: property?.name,
-          unit_number: unit?.unit_number
-        };
-      }
-
-      // Method 2: Find landlord through active lease
-      const { data: leaseData, error: leaseError } = await supabase
-            .from('leases')
-            .select(`
-          units!inner(
-            unit_number,
-            properties!inner(
-              name,
-                  landlord_id,
-                  profiles!properties_landlord_id_fkey (
-                    id,
-                    first_name,
-                    last_name,
-                    avatar_url,
-                    role
-                  )
-                )
-              )
-            `)
-        .or(`tenant_id.eq.${profile.id},tenant_info_id.in.(
-          SELECT id FROM tenant_info WHERE profile_id = '${profile.id}'
-        )`)
-            .eq('status', 'active')
-            .limit(1);
-
-      if (leaseError) throw leaseError;
-
-      if (leaseData && leaseData.length > 0) {
-        const landlordProfile = leaseData[0].units.properties.profiles;
-        const property = leaseData[0].units.properties;
-        const unit = leaseData[0].units;
-
-        return {
-          ...landlordProfile,
-          property_name: property?.name,
-          unit_number: unit?.unit_number
-        };
-      }
-
-      // Method 3: Find landlord through property ownership (fallback)
-      const { data: propertyData, error: propertyError } = await supabase
-        .from('properties')
-        .select(`
-          id,
-          name,
-          landlord_id,
-          profiles!properties_landlord_id_fkey (
-            id,
-            first_name,
-            last_name,
-            avatar_url,
-            role
-          )
-        `)
-        .limit(1);
-
-      if (propertyError) throw propertyError;
-
-      if (propertyData && propertyData.length > 0) {
-        const landlordProfile = propertyData[0].profiles;
-        return {
-          ...landlordProfile,
-          property_name: propertyData[0].name
-=======
           id: landlord.landlord_id,
           first_name: landlord.landlord_first_name,
           last_name: landlord.landlord_last_name,
@@ -377,7 +306,6 @@ export const useMessages = () => {
           role: 'landlord',
           property_name: landlord.property_name,
           unit_number: landlord.unit_number
->>>>>>> 76e2746936d6aeb8f99979a7422323c84b05fc14
         };
       }
 

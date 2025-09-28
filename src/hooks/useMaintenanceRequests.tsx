@@ -285,7 +285,6 @@ export const useMaintenanceRequests = () => {
         .single();
 
       if (error) {
-<<<<<<< HEAD
         console.error('Maintenance request creation error:', error);
         console.error('Error details:', {
           message: error.message,
@@ -311,13 +310,8 @@ export const useMaintenanceRequests = () => {
         });
         return false;
       }
-=======
-        console.error('Database error creating maintenance request:', error);
-        throw error;
-      }
 
       console.log('Maintenance request created successfully:', data);
->>>>>>> 76e2746936d6aeb8f99979a7422323c84b05fc14
       
       // Create notification for caretakers - get actual caretaker IDs
       try {
