@@ -16,7 +16,11 @@ export const getPaystackConfig = (): PaystackConfig => {
   const publicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
 
   if (!publicKey) {
-    throw new Error('Paystack public key is missing. Please check your environment variables.');
+    // Return a placeholder key for development
+    console.warn('Paystack public key is missing. Using placeholder key for development.');
+    return {
+      publicKey: 'pk_test_placeholder_key',
+    };
   }
 
   return {
