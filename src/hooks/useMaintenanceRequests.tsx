@@ -400,6 +400,103 @@ export const useMaintenanceRequests = () => {
     }
   };
 
+  const updateMaintenanceRequest = async (requestId: string, updates: any) => {
+    try {
+      const { error } = await supabase
+        .from('maintenance_requests')
+        .update(updates)
+        .eq('id', requestId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Maintenance request updated successfully",
+      });
+
+      await fetchMaintenanceRequests();
+    } catch (error) {
+      console.error('Error updating maintenance request:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update maintenance request",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const assignContractor = async (requestId: string, contractorId: string, notes?: string, estimatedCost?: number, scheduledDate?: string) => {
+    try {
+      const updates: any = {
+        status: 'in-progress',
+        assigned_to: contractorId,
+        notes: notes || null,
+        estimated_cost: estimatedCost || null,
+        scheduled_date: scheduledDate || null
+      };
+
+      await updateMaintenanceRequest(requestId, updates);
+    } catch (error) {
+      console.error('Error assigning contractor:', error);
+      toast({
+        title: "Error",
+        description: "Failed to assign contractor",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const updateCost = async (requestId: string, actualCost: number, notes?: string) => {
+    try {
+      const updates: any = {
+        actual_cost: actualCost,
+        notes: notes || null
+      };
+
+      await updateMaintenanceRequest(requestId, updates);
+    } catch (error) {
+      console.error('Error updating cost:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update cost",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const scheduleMaintenance = async (requestId: string, scheduledDate: string, estimatedCost?: number, notes?: string) => {
+    try {
+      const updates: any = {
+        scheduled_date: scheduledDate,
+        estimated_cost: estimatedCost || null,
+        notes: notes || null
+      };
+
+      await updateMaintenanceRequest(requestId, updates);
+    } catch (error) {
+      console.error('Error scheduling maintenance:', error);
+      toast({
+        title: "Error",
+        description: "Failed to schedule maintenance",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const updatePriority = async (requestId: string, priority: string) => {
+    try {
+      const updates: any = { priority };
+      await updateMaintenanceRequest(requestId, updates);
+    } catch (error) {
+      console.error('Error updating priority:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update priority",
+        variant: "destructive"
+      });
+    }
+  };
+
   const getStats = () => {
     const pending = requests.filter(r => r.status === 'pending').length;
     const inProgress = requests.filter(r => r.status === 'in-progress').length;
@@ -522,6 +619,11 @@ export const useMaintenanceRequests = () => {
     loading,
     createMaintenanceRequest,
     updateRequestStatus,
+    updateMaintenanceRequest,
+    assignContractor,
+    updateCost,
+    scheduleMaintenance,
+    updatePriority,
     getStats,
     refetch: fetchMaintenanceRequests,
     debugTenantUnitAssignment

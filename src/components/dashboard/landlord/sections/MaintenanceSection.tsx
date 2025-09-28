@@ -7,17 +7,44 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Wrench, Clock, CheckCircle, AlertTriangle, User, Calendar, DollarSign, Search, Filter, Loader2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Wrench, Clock, CheckCircle, AlertTriangle, User, Calendar, DollarSign, Search, Filter, Loader2, Edit, Eye, MoreHorizontal } from 'lucide-react';
 import { useMaintenanceRequests } from '@/hooks/useMaintenanceRequests';
 import { MaintenanceRequestModal } from '@/components/dashboard/maintenance/MaintenanceRequestModal';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 export const MaintenanceSection = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  const [isCostModalOpen, setIsCostModalOpen] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState<any>(null);
+  const [assignmentData, setAssignmentData] = useState({
+    contractorId: '',
+    notes: '',
+    estimatedCost: '',
+    scheduledDate: ''
+  });
 
-  const { requests, loading, createMaintenanceRequest, updateRequestStatus, getStats, refetch } = useMaintenanceRequests();
+  const { 
+    requests, 
+    loading, 
+    createMaintenanceRequest, 
+    updateRequestStatus, 
+    assignContractor,
+    updateCost,
+    scheduleMaintenance,
+    updatePriority,
+    getStats, 
+    refetch 
+  } = useMaintenanceRequests();
+  const { toast } = useToast();
 
   const handleCreateRequest = async (requestData: any) => {
     const success = await createMaintenanceRequest(requestData);
@@ -26,17 +53,126 @@ export const MaintenanceSection = () => {
     }
   };
 
-  const handleAssignContractor = async (requestId: string, contractorId: string) => {
-    await updateRequestStatus(requestId, 'in-progress', contractorId);
+  const handleAssignContractor = async (request: any) => {
+    setSelectedRequest(request);
+    setAssignmentData({
+      contractorId: request.assignedTo || '',
+      notes: '',
+      estimatedCost: request.estimatedCost?.toString() || '',
+      scheduledDate: request.scheduledDate || ''
+    });
+    setIsAssignModalOpen(true);
   };
 
-  const handleScheduleMaintenence = async (requestId: string) => {
-    // For now, just update status to in-progress
-    await updateRequestStatus(requestId, 'in-progress');
+  const handleSubmitAssignment = async () => {
+    if (!selectedRequest || !assignmentData.contractorId) {
+      toast({
+        title: "Error",
+        description: "Please select a contractor",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      await assignContractor(
+        selectedRequest.id,
+        assignmentData.contractorId,
+        assignmentData.notes,
+        assignmentData.estimatedCost ? parseFloat(assignmentData.estimatedCost) : undefined,
+        assignmentData.scheduledDate || undefined
+      );
+
+      setIsAssignModalOpen(false);
+      setSelectedRequest(null);
+      setAssignmentData({ contractorId: '', notes: '', estimatedCost: '', scheduledDate: '' });
+    } catch (error) {
+      console.error('Error assigning contractor:', error);
+    }
+  };
+
+  const handleScheduleMaintenance = async (request: any) => {
+    setSelectedRequest(request);
+    setAssignmentData({
+      contractorId: request.assignedTo || '',
+      notes: '',
+      estimatedCost: request.estimatedCost?.toString() || '',
+      scheduledDate: request.scheduledDate || ''
+    });
+    setIsScheduleModalOpen(true);
+  };
+
+  const handleSubmitSchedule = async () => {
+    if (!selectedRequest) return;
+
+    try {
+      await scheduleMaintenance(
+        selectedRequest.id,
+        assignmentData.scheduledDate,
+        assignmentData.estimatedCost ? parseFloat(assignmentData.estimatedCost) : undefined,
+        assignmentData.notes || undefined
+      );
+
+      setIsScheduleModalOpen(false);
+      setSelectedRequest(null);
+      setAssignmentData({ contractorId: '', notes: '', estimatedCost: '', scheduledDate: '' });
+    } catch (error) {
+      console.error('Error scheduling maintenance:', error);
+    }
+  };
+
+  const handleUpdateCost = async (request: any) => {
+    setSelectedRequest(request);
+    setAssignmentData({
+      contractorId: request.assignedTo || '',
+      notes: '',
+      estimatedCost: request.estimatedCost?.toString() || '',
+      scheduledDate: request.scheduledDate || ''
+    });
+    setIsCostModalOpen(true);
+  };
+
+  const handleSubmitCost = async () => {
+    if (!selectedRequest) return;
+
+    try {
+      await updateCost(
+        selectedRequest.id,
+        parseFloat(assignmentData.estimatedCost),
+        assignmentData.notes || undefined
+      );
+
+      setIsCostModalOpen(false);
+      setSelectedRequest(null);
+      setAssignmentData({ contractorId: '', notes: '', estimatedCost: '', scheduledDate: '' });
+    } catch (error) {
+      console.error('Error updating cost:', error);
+    }
   };
 
   const handleCompleteRequest = async (requestId: string) => {
-    await updateRequestStatus(requestId, 'completed');
+    try {
+      await updateRequestStatus(requestId, 'completed');
+      toast({
+        title: "Success",
+        description: "Maintenance request completed successfully"
+      });
+    } catch (error) {
+      console.error('Error completing request:', error);
+      toast({
+        title: "Error",
+        description: "Failed to complete request",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleUpdatePriority = async (requestId: string, newPriority: string) => {
+    try {
+      await updatePriority(requestId, newPriority);
+    } catch (error) {
+      console.error('Error updating priority:', error);
+    }
   };
 
   if (loading) {
@@ -257,7 +393,7 @@ export const MaintenanceSection = () => {
                             <span className="text-sm">{request.assignedTo}</span>
                           </div>
                         ) : (
-                          <Button variant="outline" size="sm" onClick={() => handleAssignContractor(request.id, 'contractor-1')}>
+                          <Button variant="outline" size="sm" onClick={() => handleAssignContractor(request)}>
                             <User className="h-3 w-3 mr-1" />
                             Assign
                           </Button>
@@ -283,34 +419,60 @@ export const MaintenanceSection = () => {
                       <TableCell>
                         <div className="flex gap-1">
                           {request.status === 'pending' && (
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => handleScheduleMaintenence(request.id)}
-                              title="Schedule Maintenance"
-                            >
-                              <Calendar className="h-4 w-4" />
-                            </Button>
+                            <>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => handleScheduleMaintenance(request)}
+                                title="Schedule Maintenance"
+                              >
+                                <Calendar className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => handleAssignContractor(request)}
+                                title="Assign Contractor"
+                              >
+                                <User className="h-4 w-4" />
+                              </Button>
+                            </>
                           )}
                           {request.status === 'in-progress' && (
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => handleCompleteRequest(request.id)}
-                              title="Mark as Completed"
-                              className="text-success hover:text-success"
-                            >
-                              <CheckCircle className="h-4 w-4" />
-                            </Button>
+                            <>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => handleCompleteRequest(request.id)}
+                                title="Mark as Completed"
+                                className="text-success hover:text-success"
+                              >
+                                <CheckCircle className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => handleUpdateCost(request)}
+                                title="Update Cost"
+                              >
+                                <DollarSign className="h-4 w-4" />
+                              </Button>
+                            </>
                           )}
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => handleAssignContractor(request.id, 'contractor-1')}
-                            title="Manage Request"
+                          <Select 
+                            value={request.priority} 
+                            onValueChange={(value) => handleUpdatePriority(request.id, value)}
                           >
-                            <Wrench className="h-4 w-4" />
-                          </Button>
+                            <SelectTrigger className="w-20 h-8">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="low">Low</SelectItem>
+                              <SelectItem value="medium">Medium</SelectItem>
+                              <SelectItem value="high">High</SelectItem>
+                              <SelectItem value="emergency">Emergency</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -400,6 +562,165 @@ export const MaintenanceSection = () => {
         onClose={() => setIsCreateModalOpen(false)}
         onSuccess={refetch}
       />
+
+      {/* Assignment Modal */}
+      <Dialog open={isAssignModalOpen} onOpenChange={setIsAssignModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign Contractor</DialogTitle>
+            <DialogDescription>
+              Assign a contractor to handle this maintenance request
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="contractor">Contractor</Label>
+              <Select 
+                value={assignmentData.contractorId} 
+                onValueChange={(value) => setAssignmentData(prev => ({ ...prev, contractorId: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select contractor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {mockContractors.map((contractor) => (
+                    <SelectItem key={contractor.id} value={contractor.id}>
+                      {contractor.name} - {contractor.specialty}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="estimatedCost">Estimated Cost (KES)</Label>
+              <Input
+                id="estimatedCost"
+                type="number"
+                value={assignmentData.estimatedCost}
+                onChange={(e) => setAssignmentData(prev => ({ ...prev, estimatedCost: e.target.value }))}
+                placeholder="Enter estimated cost"
+              />
+            </div>
+            <div>
+              <Label htmlFor="scheduledDate">Scheduled Date</Label>
+              <Input
+                id="scheduledDate"
+                type="date"
+                value={assignmentData.scheduledDate}
+                onChange={(e) => setAssignmentData(prev => ({ ...prev, scheduledDate: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label htmlFor="notes">Notes</Label>
+              <Textarea
+                id="notes"
+                value={assignmentData.notes}
+                onChange={(e) => setAssignmentData(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder="Additional notes for the contractor"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsAssignModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSubmitAssignment}>
+                Assign Contractor
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Schedule Modal */}
+      <Dialog open={isScheduleModalOpen} onOpenChange={setIsScheduleModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Schedule Maintenance</DialogTitle>
+            <DialogDescription>
+              Schedule this maintenance request for a specific date
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="scheduleDate">Scheduled Date</Label>
+              <Input
+                id="scheduleDate"
+                type="date"
+                value={assignmentData.scheduledDate}
+                onChange={(e) => setAssignmentData(prev => ({ ...prev, scheduledDate: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label htmlFor="scheduleCost">Estimated Cost (KES)</Label>
+              <Input
+                id="scheduleCost"
+                type="number"
+                value={assignmentData.estimatedCost}
+                onChange={(e) => setAssignmentData(prev => ({ ...prev, estimatedCost: e.target.value }))}
+                placeholder="Enter estimated cost"
+              />
+            </div>
+            <div>
+              <Label htmlFor="scheduleNotes">Notes</Label>
+              <Textarea
+                id="scheduleNotes"
+                value={assignmentData.notes}
+                onChange={(e) => setAssignmentData(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder="Scheduling notes"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsScheduleModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSubmitSchedule}>
+                Schedule
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cost Update Modal */}
+      <Dialog open={isCostModalOpen} onOpenChange={setIsCostModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Update Cost</DialogTitle>
+            <DialogDescription>
+              Update the actual cost for this maintenance request
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="actualCost">Actual Cost (KES)</Label>
+              <Input
+                id="actualCost"
+                type="number"
+                value={assignmentData.estimatedCost}
+                onChange={(e) => setAssignmentData(prev => ({ ...prev, estimatedCost: e.target.value }))}
+                placeholder="Enter actual cost"
+              />
+            </div>
+            <div>
+              <Label htmlFor="costNotes">Notes</Label>
+              <Textarea
+                id="costNotes"
+                value={assignmentData.notes}
+                onChange={(e) => setAssignmentData(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder="Cost breakdown or notes"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsCostModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSubmitCost}>
+                Update Cost
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
