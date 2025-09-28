@@ -12,18 +12,20 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { 
   UserCheck, Plus, Clock, User, Phone, Calendar, MapPin, 
   CheckCircle, XCircle, AlertCircle, Eye, Edit, Trash2, Bell,
-  Search, Check, ChevronsUpDown, Building, Users
+  Search, Check, ChevronsUpDown, Building, Users, QrCode, Camera, FileText
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useVisitorRequests } from '@/hooks/useVisitorRequests';
 import { useVisitors } from '@/hooks/useVisitors';
 import { useSecurityUnits } from '@/hooks/useSecurityUnits';
+import { VisitorRegistrationModal } from './VisitorRegistrationModal';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 export const SecurityVisitorManagement = () => {
   const [isCreateRequestDialogOpen, setIsCreateRequestDialogOpen] = useState(false);
+  const [isVisitorRegistrationOpen, setIsVisitorRegistrationOpen] = useState(false);
   const [selectedUnit, setSelectedUnit] = useState<string>('');
   const [unitSearchOpen, setUnitSearchOpen] = useState(false);
   const [unitSearchTerm, setUnitSearchTerm] = useState('');
@@ -167,13 +169,22 @@ export const SecurityVisitorManagement = () => {
           <p className="text-muted-foreground">Manage visitor requests and registrations</p>
         </div>
         
-        <Dialog open={isCreateRequestDialogOpen} onOpenChange={setIsCreateRequestDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Request Visitor Access
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline"
+            onClick={() => setIsVisitorRegistrationOpen(true)}
+          >
+            <QrCode className="h-4 w-4 mr-2" />
+            Quick Register
+          </Button>
+          
+          <Dialog open={isCreateRequestDialogOpen} onOpenChange={setIsCreateRequestDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Request Visitor Access
+              </Button>
+            </DialogTrigger>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Request Visitor Access</DialogTitle>
@@ -587,6 +598,16 @@ export const SecurityVisitorManagement = () => {
           </CardContent>
         </Card>
       )}
+
+      {/* Visitor Registration Modal */}
+      <VisitorRegistrationModal
+        isOpen={isVisitorRegistrationOpen}
+        onClose={() => setIsVisitorRegistrationOpen(false)}
+        onSuccess={() => {
+          // Refresh data after successful registration
+          // The hooks will automatically update due to real-time subscriptions
+        }}
+      />
     </div>
   );
 };

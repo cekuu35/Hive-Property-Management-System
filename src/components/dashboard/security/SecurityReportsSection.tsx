@@ -3,49 +3,163 @@ import { Button } from '@/components/ui/button';
 import { DatePickerWithRange } from '@/components/ui/date-range-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
-import { FileText, Download, TrendingUp, AlertTriangle, UserCheck, MapPin } from 'lucide-react';
-import { useState } from 'react';
+import { FileText, Download, TrendingUp, AlertTriangle, UserCheck, MapPin, Activity, Clock } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { DateRange } from 'react-day-picker';
+import { useVisitors } from '@/hooks/useVisitors';
+import { useVisitorRequests } from '@/hooks/useVisitorRequests';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { format, subDays, startOfMonth, endOfMonth } from 'date-fns';
 
 const SecurityReportsSection = () => {
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [reportType, setReportType] = useState('all');
+  const [reportData, setReportData] = useState({
+    incidentsByType: [],
+    incidentsTrend: [],
+    patrolMetrics: [],
+    visitorStats: [],
+    totalIncidents: 0,
+    patrolsCompleted: 0,
+    totalVisitors: 0,
+    responseTime: 0
+  });
+  const [loading, setLoading] = useState(true);
 
-  // Mock data for charts
-  const incidentsByType = [
-    { type: 'Unauthorized Access', count: 5, color: '#ef4444' },
-    { type: 'Suspicious Activity', count: 8, color: '#f97316' },
-    { type: 'Noise Complaints', count: 12, color: '#eab308' },
-    { type: 'Equipment Issues', count: 3, color: '#3b82f6' },
-    { type: 'Emergency', count: 2, color: '#dc2626' }
-  ];
+  const { visitors, getStats: getVisitorStats } = useVisitors();
+  const { requests } = useVisitorRequests();
+  const { profile } = useAuth();
 
-  const incidentsTrend = [
-    { month: 'Jan', incidents: 15, resolved: 14 },
-    { month: 'Feb', incidents: 18, resolved: 17 },
-    { month: 'Mar', incidents: 12, resolved: 12 },
-    { month: 'Apr', incidents: 22, resolved: 20 },
-    { month: 'May', incidents: 16, resolved: 16 },
-    { month: 'Jun', incidents: 20, resolved: 19 }
-  ];
+  // Fetch real data
+  const fetchReportData = async () => {
+    if (!profile?.id) return;
 
-  const patrolMetrics = [
-    { location: 'Building A', completed: 28, scheduled: 30 },
-    { location: 'Building B', completed: 25, scheduled: 30 },
-    { location: 'Parking Lot', completed: 22, scheduled: 25 },
-    { location: 'Common Areas', completed: 20, scheduled: 20 },
-    { location: 'Perimeter', completed: 18, scheduled: 20 }
-  ];
+    try {
+      setLoading(true);
 
-  const visitorStats = [
-    { day: 'Mon', visitors: 25 },
-    { day: 'Tue', visitors: 30 },
-    { day: 'Wed', visitors: 22 },
-    { day: 'Thu', visitors: 28 },
-    { day: 'Fri', visitors: 35 },
-    { day: 'Sat', visitors: 15 },
-    { day: 'Sun', visitors: 12 }
-  ];
+      // Set default date range to current month if not set
+      const startDate = dateRange?.from || startOfMonth(new Date());
+      const endDate = dateRange?.to || endOfMonth(new Date());
+
+      // Fetch incidents
+      const { data: incidents } = await supabase
+        .from('security_logs')
+        .select('*')
+        .gte('created_at', startDate.toISOString())
+        .lte('created_at', endDate.toISOString());
+
+      // Process incidents by type
+      const incidentsByType = incidents?.reduce((acc: any[], incident: any) => {
+        const existing = acc.find(item => item.type === incident.incident_type);
+        if (existing) {
+          existing.count += 1;
+        } else {
+          acc.push({
+            type: incident.incident_type?.replace('_', ' ') || 'Unknown',
+            count: 1,
+            color: getIncidentColor(incident.incident_type)
+          });
+        }
+        return acc;
+      }, []) || [];
+
+      // Process incidents trend (last 6 months)
+      const incidentsTrend = [];
+      for (let i = 5; i >= 0; i--) {
+        const monthStart = startOfMonth(subDays(new Date(), i * 30));
+        const monthEnd = endOfMonth(monthStart);
+        
+        const monthIncidents = incidents?.filter(incident => {
+          const incidentDate = new Date(incident.created_at);
+          return incidentDate >= monthStart && incidentDate <= monthEnd;
+        }) || [];
+
+        const resolved = monthIncidents.filter(incident => incident.status === 'resolved').length;
+
+        incidentsTrend.push({
+          month: format(monthStart, 'MMM'),
+          incidents: monthIncidents.length,
+          resolved
+        });
+      }
+
+      // Mock patrol data (you can implement patrols table)
+      const patrolMetrics = [
+        { location: 'Building A', completed: 28, scheduled: 30 },
+        { location: 'Building B', completed: 25, scheduled: 30 },
+        { location: 'Parking Lot', completed: 22, scheduled: 25 },
+        { location: 'Common Areas', completed: 20, scheduled: 20 },
+        { location: 'Perimeter', completed: 18, scheduled: 20 }
+      ];
+
+      // Process visitor stats (last 7 days)
+      const visitorStats = [];
+      for (let i = 6; i >= 0; i--) {
+        const day = subDays(new Date(), i);
+        const dayVisitors = visitors.filter(visitor => {
+          const visitorDate = new Date(visitor.time_in);
+          return visitorDate.toDateString() === day.toDateString();
+        }).length;
+
+        visitorStats.push({
+          day: format(day, 'EEE'),
+          visitors: dayVisitors
+        });
+      }
+
+      // Calculate metrics
+      const totalIncidents = incidents?.length || 0;
+      const patrolsCompleted = patrolMetrics.reduce((sum, patrol) => sum + patrol.completed, 0);
+      const visitorStatsData = getVisitorStats();
+      const totalVisitors = visitorStatsData.todaysVisitors;
+
+      // Calculate average response time
+      const resolvedIncidents = incidents?.filter(incident => 
+        incident.status === 'resolved' && incident.resolved_date
+      ) || [];
+      
+      const responseTime = resolvedIncidents.length > 0 ? 
+        resolvedIncidents.reduce((sum, incident) => {
+          const created = new Date(incident.created_at);
+          const resolved = new Date(incident.resolved_date);
+          const hours = (resolved.getTime() - created.getTime()) / (1000 * 60 * 60);
+          return sum + hours;
+        }, 0) / resolvedIncidents.length : 0;
+
+      setReportData({
+        incidentsByType,
+        incidentsTrend,
+        patrolMetrics,
+        visitorStats,
+        totalIncidents,
+        patrolsCompleted,
+        totalVisitors,
+        responseTime: Math.round(responseTime * 10) / 10
+      });
+    } catch (error) {
+      console.error('Error fetching report data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getIncidentColor = (type: string) => {
+    const colors: { [key: string]: string } = {
+      'unauthorized_access': '#ef4444',
+      'suspicious_activity': '#f97316',
+      'noise_complaint': '#eab308',
+      'equipment_failure': '#3b82f6',
+      'emergency': '#dc2626',
+      'vandalism': '#8b5cf6',
+      'other': '#6b7280'
+    };
+    return colors[type] || '#6b7280';
+  };
+
+  useEffect(() => {
+    fetchReportData();
+  }, [profile?.id, dateRange, visitors, requests]);
 
   const exportReport = () => {
     // Simulate report export
@@ -103,8 +217,10 @@ const SecurityReportsSection = () => {
             <AlertTriangle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">30</div>
-            <p className="text-xs text-muted-foreground">This month</p>
+            <div className="text-2xl font-bold">{loading ? '...' : reportData.totalIncidents}</div>
+            <p className="text-xs text-muted-foreground">
+              {dateRange ? 'Selected period' : 'This month'}
+            </p>
           </CardContent>
         </Card>
 
@@ -114,7 +230,7 @@ const SecurityReportsSection = () => {
             <MapPin className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">113</div>
+            <div className="text-2xl font-bold">{loading ? '...' : reportData.patrolsCompleted}</div>
             <p className="text-xs text-muted-foreground">of 125 scheduled</p>
           </CardContent>
         </Card>
@@ -125,18 +241,20 @@ const SecurityReportsSection = () => {
             <UserCheck className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">167</div>
-            <p className="text-xs text-muted-foreground">This month</p>
+            <div className="text-2xl font-bold">{loading ? '...' : reportData.totalVisitors}</div>
+            <p className="text-xs text-muted-foreground">Today</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Response Time</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">12m</div>
+            <div className="text-2xl font-bold">
+              {loading ? '...' : `${reportData.responseTime}h`}
+            </div>
             <p className="text-xs text-muted-foreground">Average response</p>
           </CardContent>
         </Card>
@@ -151,24 +269,34 @@ const SecurityReportsSection = () => {
             <CardDescription>Distribution of security incidents</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={incidentsByType}
-                  dataKey="count"
-                  nameKey="type"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={80}
-                  label={({ type, count }) => `${type}: ${count}`}
-                >
-                  {incidentsByType.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+            {loading ? (
+              <div className="flex items-center justify-center h-[300px]">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            ) : reportData.incidentsByType.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={reportData.incidentsByType}
+                    dataKey="count"
+                    nameKey="type"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={80}
+                    label={({ type, count }) => `${type}: ${count}`}
+                  >
+                    {reportData.incidentsByType.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                No incidents data available
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -179,16 +307,22 @@ const SecurityReportsSection = () => {
             <CardDescription>Monthly incident reporting and resolution</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={incidentsTrend}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip />
-                <Line type="monotone" dataKey="incidents" stroke="#ef4444" strokeWidth={2} />
-                <Line type="monotone" dataKey="resolved" stroke="#22c55e" strokeWidth={2} />
-              </LineChart>
-            </ResponsiveContainer>
+            {loading ? (
+              <div className="flex items-center justify-center h-[300px]">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={reportData.incidentsTrend}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" />
+                  <YAxis />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="incidents" stroke="#ef4444" strokeWidth={2} />
+                  <Line type="monotone" dataKey="resolved" stroke="#22c55e" strokeWidth={2} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
 
@@ -200,7 +334,7 @@ const SecurityReportsSection = () => {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={patrolMetrics}>
+              <BarChart data={reportData.patrolMetrics}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="location" />
                 <YAxis />
@@ -216,18 +350,24 @@ const SecurityReportsSection = () => {
         <Card>
           <CardHeader>
             <CardTitle>Weekly Visitor Traffic</CardTitle>
-            <CardDescription>Daily visitor counts</CardDescription>
+            <CardDescription>Daily visitor counts for the past 7 days</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={visitorStats}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="day" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="visitors" fill="#3b82f6" />
-              </BarChart>
-            </ResponsiveContainer>
+            {loading ? (
+              <div className="flex items-center justify-center h-[300px]">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={reportData.visitorStats}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="day" />
+                  <YAxis />
+                  <Tooltip />
+                  <Bar dataKey="visitors" fill="#3b82f6" />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
       </div>

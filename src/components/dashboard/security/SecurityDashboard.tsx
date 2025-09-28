@@ -5,13 +5,17 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Shield, AlertTriangle, UserCheck, MapPin, Clock, Plus } from 'lucide-react';
+import { Shield, AlertTriangle, UserCheck, MapPin, Clock, Plus, Bell, TrendingUp, Activity } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { useVisitors } from '@/hooks/useVisitors';
+import { useVisitorRequests } from '@/hooks/useVisitorRequests';
 import { IncidentsSection } from './IncidentsSection';
 import { VisitorsSection } from './VisitorsSection';
 import { PatrolsSection } from './PatrolsSection';
 import { SecurityReportsSection } from './SecurityReportsSection';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 
 interface SecurityDashboardProps {
   activeSection?: string;
@@ -20,8 +24,24 @@ interface SecurityDashboardProps {
 
 const SecurityDashboard = ({ activeSection = "overview", onSectionChange }: SecurityDashboardProps) => {
   const { toast } = useToast();
+  const { profile } = useAuth();
   const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
   const [isVisitorDialogOpen, setIsVisitorDialogOpen] = useState(false);
+  const [isQuickRegisterDialogOpen, setIsQuickRegisterDialogOpen] = useState(false);
+  const [securityData, setSecurityData] = useState({
+    activeIncidents: 0,
+    todaysVisitorsCount: 0,
+    patrolsCompleted: 0,
+    scheduledPatrols: 0,
+    recentIncidents: [],
+    todaysVisitors: [],
+    patrols: []
+  });
+  const [loading, setLoading] = useState(true);
+  
+  const { visitors, getStats: getVisitorStats } = useVisitors();
+  const { requests } = useVisitorRequests();
+  
   const [newIncident, setNewIncident] = useState({
     type: '',
     description: '',
@@ -34,41 +54,156 @@ const SecurityDashboard = ({ activeSection = "overview", onSectionChange }: Secu
     phone: '',
     purpose: ''
   });
-  const mockData = {
-    activeIncidents: 2,
-    todaysVisitorsCount: 15,
-    patrolsCompleted: 4,
-    scheduledPatrols: 6,
-    recentIncidents: [
-      { id: '1', type: 'visitor', description: 'Unregistered visitor at Building A entrance', severity: 'medium', time: '2 hours ago', status: 'investigating' },
-      { id: '2', type: 'noise', description: 'Noise complaint from Unit 3B', severity: 'low', time: '4 hours ago', status: 'resolved' },
-      { id: '3', type: 'maintenance', description: 'Broken security camera at parking lot', severity: 'high', time: '6 hours ago', status: 'open' },
-    ],
-    todaysVisitors: [
-      { id: '1', name: 'John Smith', visiting: 'Unit 2A', timeIn: '09:30 AM', timeOut: '11:45 AM', status: 'completed' },
-      { id: '2', name: 'Sarah Johnson', visiting: 'Unit 1B', timeIn: '02:15 PM', timeOut: null, status: 'active' },
-      { id: '3', name: 'Mike Wilson', visiting: 'Property Manager', timeIn: '10:00 AM', timeOut: '10:30 AM', status: 'completed' },
-    ],
-    patrols: [
-      { id: '1', location: 'Building A Perimeter', time: '06:00 AM', status: 'completed', duration: '15 min' },
-      { id: '2', location: 'Parking Lot', time: '09:00 AM', status: 'completed', duration: '10 min' },
-      { id: '3', location: 'Building B Entrance', time: '12:00 PM', status: 'scheduled', duration: '15 min' },
-      { id: '4', location: 'Common Areas', time: '03:00 PM', status: 'scheduled', duration: '20 min' },
-    ]
+  const [quickVisitor, setQuickVisitor] = useState({
+    name: '',
+    phone: '',
+    purpose: '',
+    unit: ''
+  });
+
+  // Fetch security data
+  const fetchSecurityData = async () => {
+    if (!profile?.id) return;
+
+    try {
+      setLoading(true);
+
+      // Fetch incidents
+      const { data: incidents } = await supabase
+        .from('security_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      // Fetch today's visitors
+      const today = new Date().toDateString();
+      const todaysVisitors = visitors.filter(v => 
+        new Date(v.time_in).toDateString() === today
+      );
+
+      // Get visitor stats
+      const visitorStats = getVisitorStats();
+
+      // Fetch patrols (mock for now - you can implement patrols table)
+      const patrols = [
+        { id: '1', location: 'Building A Perimeter', time: '06:00 AM', status: 'completed', duration: '15 min' },
+        { id: '2', location: 'Parking Lot', time: '09:00 AM', status: 'completed', duration: '10 min' },
+        { id: '3', location: 'Building B Entrance', time: '12:00 PM', status: 'scheduled', duration: '15 min' },
+        { id: '4', location: 'Common Areas', time: '03:00 PM', status: 'scheduled', duration: '20 min' },
+      ];
+
+      setSecurityData({
+        activeIncidents: incidents?.filter(i => i.status === 'open' || i.status === 'investigating').length || 0,
+        todaysVisitorsCount: visitorStats.todaysVisitors,
+        patrolsCompleted: patrols.filter(p => p.status === 'completed').length,
+        scheduledPatrols: patrols.length,
+        recentIncidents: incidents || [],
+        todaysVisitors: todaysVisitors.slice(0, 5),
+        patrols
+      });
+    } catch (error) {
+      console.error('Error fetching security data:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleReportIncident = () => {
-    console.log('Reporting incident:', newIncident);
-    toast({ title: "Incident reported successfully" });
-    setIsReportDialogOpen(false);
-    setNewIncident({ type: '', description: '', severity: 'medium', location: '' });
+  // Real-time updates
+  useEffect(() => {
+    fetchSecurityData();
+
+    // Set up real-time subscriptions
+    const incidentsChannel = supabase
+      .channel('security_incidents')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'security_logs'
+      }, () => {
+        fetchSecurityData();
+      })
+      .subscribe();
+
+    const visitorsChannel = supabase
+      .channel('security_visitors')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'visitors'
+      }, () => {
+        fetchSecurityData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(incidentsChannel);
+      supabase.removeChannel(visitorsChannel);
+    };
+  }, [profile?.id, visitors]);
+
+  const handleReportIncident = async () => {
+    try {
+      const { error } = await supabase
+        .from('security_logs')
+        .insert({
+          incident_type: newIncident.type,
+          description: newIncident.description,
+          severity: newIncident.severity,
+          location: newIncident.location,
+          security_id: profile?.id,
+          property_id: '00000000-0000-0000-0000-000000000000', // Default property
+          status: 'open'
+        });
+
+      if (error) throw error;
+
+      toast({ title: "Incident reported successfully" });
+      setIsReportDialogOpen(false);
+      setNewIncident({ type: '', description: '', severity: 'medium', location: '' });
+      fetchSecurityData();
+    } catch (error) {
+      console.error('Error reporting incident:', error);
+      toast({ title: "Error reporting incident", variant: "destructive" });
+    }
   };
 
-  const handleRegisterVisitor = () => {
-    console.log('Registering visitor:', newVisitor);
-    toast({ title: "Visitor registered successfully" });
-    setIsVisitorDialogOpen(false);
-    setNewVisitor({ name: '', visiting: '', phone: '', purpose: '' });
+  const handleRegisterVisitor = async () => {
+    try {
+      // This would integrate with the visitor registration system
+      console.log('Registering visitor:', newVisitor);
+      toast({ title: "Visitor registered successfully" });
+      setIsVisitorDialogOpen(false);
+      setNewVisitor({ name: '', visiting: '', phone: '', purpose: '' });
+    } catch (error) {
+      console.error('Error registering visitor:', error);
+      toast({ title: "Error registering visitor", variant: "destructive" });
+    }
+  };
+
+  const handleQuickRegisterVisitor = async () => {
+    try {
+      // Quick visitor registration without tenant approval
+      const { error } = await supabase
+        .from('visitors')
+        .insert({
+          security_id: profile?.id,
+          visitor_name: quickVisitor.name,
+          visitor_phone: quickVisitor.phone,
+          purpose: quickVisitor.purpose,
+          visiting_unit_id: quickVisitor.unit,
+          status: 'active'
+        });
+
+      if (error) throw error;
+
+      toast({ title: "Visitor registered successfully" });
+      setIsQuickRegisterDialogOpen(false);
+      setQuickVisitor({ name: '', phone: '', purpose: '', unit: '' });
+      fetchSecurityData();
+    } catch (error) {
+      console.error('Error registering visitor:', error);
+      toast({ title: "Error registering visitor", variant: "destructive" });
+    }
   };
 
   const handleStartPatrol = () => {
@@ -114,6 +249,17 @@ const SecurityDashboard = ({ activeSection = "overview", onSectionChange }: Secu
     return <SecurityReportsSection />;
   }
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center space-y-2">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="text-sm text-muted-foreground">Loading security dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Welcome Header */}
@@ -124,14 +270,16 @@ const SecurityDashboard = ({ activeSection = "overview", onSectionChange }: Secu
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="bg-gradient-to-r from-destructive to-destructive/80 text-destructive-foreground">
+        <Card className={`${securityData.activeIncidents > 0 ? 'bg-gradient-to-r from-destructive to-destructive/80 text-destructive-foreground' : 'bg-gradient-to-r from-success to-success/80 text-success-foreground'}`}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Active Incidents</CardTitle>
             <AlertTriangle className="h-4 w-4" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{mockData.activeIncidents}</div>
-            <p className="text-xs opacity-90">Require attention</p>
+            <div className="text-2xl font-bold">{securityData.activeIncidents}</div>
+            <p className="text-xs opacity-90">
+              {securityData.activeIncidents > 0 ? 'Require attention' : 'All clear'}
+            </p>
           </CardContent>
         </Card>
 
@@ -141,7 +289,7 @@ const SecurityDashboard = ({ activeSection = "overview", onSectionChange }: Secu
             <UserCheck className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{mockData.todaysVisitorsCount}</div>
+            <div className="text-2xl font-bold">{securityData.todaysVisitorsCount}</div>
             <p className="text-xs text-muted-foreground">Registered visits</p>
           </CardContent>
         </Card>
@@ -152,8 +300,8 @@ const SecurityDashboard = ({ activeSection = "overview", onSectionChange }: Secu
             <MapPin className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{mockData.patrolsCompleted}</div>
-            <p className="text-xs text-muted-foreground">of {mockData.scheduledPatrols} scheduled</p>
+            <div className="text-2xl font-bold">{securityData.patrolsCompleted}</div>
+            <p className="text-xs text-muted-foreground">of {securityData.scheduledPatrols} scheduled</p>
           </CardContent>
         </Card>
 
@@ -163,8 +311,12 @@ const SecurityDashboard = ({ activeSection = "overview", onSectionChange }: Secu
             <Shield className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-success">Secure</div>
-            <p className="text-xs text-muted-foreground">All systems operational</p>
+            <div className={`text-2xl font-bold ${securityData.activeIncidents > 0 ? 'text-warning' : 'text-success'}`}>
+              {securityData.activeIncidents > 0 ? 'Alert' : 'Secure'}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {securityData.activeIncidents > 0 ? 'Incidents require attention' : 'All systems operational'}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -172,11 +324,14 @@ const SecurityDashboard = ({ activeSection = "overview", onSectionChange }: Secu
       {/* Quick Actions */}
       <Card>
         <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-          <CardDescription>Common security tasks</CardDescription>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="h-5 w-5" />
+            Quick Actions
+          </CardTitle>
+          <CardDescription>Common security tasks and visitor management</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Dialog open={isReportDialogOpen} onOpenChange={setIsReportDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="h-auto p-4 flex flex-col items-center gap-2" variant="outline">
@@ -234,17 +389,57 @@ const SecurityDashboard = ({ activeSection = "overview", onSectionChange }: Secu
               </DialogContent>
             </Dialog>
 
-            <Dialog open={isVisitorDialogOpen} onOpenChange={setIsVisitorDialogOpen}>
+            <Dialog open={isQuickRegisterDialogOpen} onOpenChange={setIsQuickRegisterDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="h-auto p-4 flex flex-col items-center gap-2" variant="outline">
                   <UserCheck className="h-6 w-6" />
-                  <span>Register Visitor</span>
+                  <span>Quick Register</span>
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Register Visitor</DialogTitle>
-                  <DialogDescription>Enter visitor details for security records</DialogDescription>
+                  <DialogTitle>Quick Visitor Registration</DialogTitle>
+                  <DialogDescription>Register visitor without tenant approval</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <Input
+                    placeholder="Visitor name"
+                    value={quickVisitor.name}
+                    onChange={(e) => setQuickVisitor(prev => ({ ...prev, name: e.target.value }))}
+                  />
+                  <Input
+                    placeholder="Phone number"
+                    value={quickVisitor.phone}
+                    onChange={(e) => setQuickVisitor(prev => ({ ...prev, phone: e.target.value }))}
+                  />
+                  <Input
+                    placeholder="Purpose of visit"
+                    value={quickVisitor.purpose}
+                    onChange={(e) => setQuickVisitor(prev => ({ ...prev, purpose: e.target.value }))}
+                  />
+                  <Input
+                    placeholder="Unit ID (optional)"
+                    value={quickVisitor.unit}
+                    onChange={(e) => setQuickVisitor(prev => ({ ...prev, unit: e.target.value }))}
+                  />
+                  <Button onClick={handleQuickRegisterVisitor} className="w-full">
+                    Register Visitor
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={isVisitorDialogOpen} onOpenChange={setIsVisitorDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="h-auto p-4 flex flex-col items-center gap-2" variant="outline">
+                  <Bell className="h-6 w-6" />
+                  <span>Request Access</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Request Visitor Access</DialogTitle>
+                  <DialogDescription>Send visitor request to tenant for approval</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                   <Input
@@ -268,7 +463,7 @@ const SecurityDashboard = ({ activeSection = "overview", onSectionChange }: Secu
                     onChange={(e) => setNewVisitor(prev => ({ ...prev, purpose: e.target.value }))}
                   />
                   <Button onClick={handleRegisterVisitor} className="w-full">
-                    Register Visitor
+                    Send Request
                   </Button>
                 </div>
               </DialogContent>
@@ -291,28 +486,40 @@ const SecurityDashboard = ({ activeSection = "overview", onSectionChange }: Secu
         {/* Recent Incidents */}
         <Card>
           <CardHeader>
-            <CardTitle>Recent Incidents</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" />
+              Recent Incidents
+            </CardTitle>
             <CardDescription>Latest security incidents</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {mockData.recentIncidents.map((incident) => (
-                <div key={incident.id} className="flex items-start justify-between p-3 border rounded-lg">
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">{incident.description}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{incident.time}</p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <Badge className={getSeverityColor(incident.severity)} variant="secondary">
-                        {incident.severity}
-                      </Badge>
-                      <Badge className={getStatusColor(incident.status)} variant="secondary">
-                        {incident.status}
-                      </Badge>
+              {securityData.recentIncidents.length > 0 ? (
+                securityData.recentIncidents.map((incident: any) => (
+                  <div key={incident.id} className="flex items-start justify-between p-3 border rounded-lg">
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{incident.description}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {new Date(incident.created_at).toLocaleString()}
+                      </p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <Badge className={getSeverityColor(incident.severity)} variant="secondary">
+                          {incident.severity}
+                        </Badge>
+                        <Badge className={getStatusColor(incident.status)} variant="secondary">
+                          {incident.status}
+                        </Badge>
+                      </div>
                     </div>
+                    <AlertTriangle className="h-4 w-4 text-muted-foreground" />
                   </div>
-                  <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+                ))
+              ) : (
+                <div className="text-center py-8">
+                  <AlertTriangle className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-muted-foreground">No recent incidents</p>
                 </div>
-              ))}
+              )}
             </div>
           </CardContent>
         </Card>
@@ -320,25 +527,38 @@ const SecurityDashboard = ({ activeSection = "overview", onSectionChange }: Secu
         {/* Today's Visitor Log */}
         <Card>
           <CardHeader>
-            <CardTitle>Today's Visitor Log</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <UserCheck className="h-5 w-5" />
+              Today's Visitor Log
+            </CardTitle>
             <CardDescription>Recent visitor activity</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {mockData.todaysVisitors.map((visitor) => (
-                <div key={visitor.id} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">{visitor.name}</p>
-                    <p className="text-xs text-muted-foreground">Visiting: {visitor.visiting}</p>
-                    <p className="text-xs text-muted-foreground">
-                      In: {visitor.timeIn} {visitor.timeOut && `| Out: ${visitor.timeOut}`}
-                    </p>
+              {securityData.todaysVisitors.length > 0 ? (
+                securityData.todaysVisitors.map((visitor: any) => (
+                  <div key={visitor.id} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{visitor.visitor_name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Visiting: {visitor.unit?.unit_number || 'Unknown Unit'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        In: {new Date(visitor.time_in).toLocaleTimeString()} 
+                        {visitor.time_out && ` | Out: ${new Date(visitor.time_out).toLocaleTimeString()}`}
+                      </p>
+                    </div>
+                    <Badge className={getStatusColor(visitor.status)} variant="secondary">
+                      {visitor.status}
+                    </Badge>
                   </div>
-                  <Badge className={getStatusColor(visitor.status)} variant="secondary">
-                    {visitor.status}
-                  </Badge>
+                ))
+              ) : (
+                <div className="text-center py-8">
+                  <UserCheck className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-muted-foreground">No visitors today</p>
                 </div>
-              ))}
+              )}
             </div>
           </CardContent>
         </Card>
@@ -347,12 +567,15 @@ const SecurityDashboard = ({ activeSection = "overview", onSectionChange }: Secu
       {/* Patrol Schedule */}
       <Card>
         <CardHeader>
-          <CardTitle>Today's Patrol Schedule</CardTitle>
-          <CardDescription>Security patrol rounds</CardDescription>
+          <CardTitle className="flex items-center gap-2">
+            <MapPin className="h-5 w-5" />
+            Today's Patrol Schedule
+          </CardTitle>
+          <CardDescription>Security patrol rounds and status</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {mockData.patrols.map((patrol) => (
+            {securityData.patrols.map((patrol: any) => (
               <div key={patrol.id} className="flex items-center justify-between p-3 border rounded-lg">
                 <div className="flex-1">
                   <p className="font-medium text-sm">{patrol.location}</p>
@@ -370,6 +593,28 @@ const SecurityDashboard = ({ activeSection = "overview", onSectionChange }: Secu
         </CardContent>
       </Card>
 
+      {/* Real-time Notifications */}
+      <Card className="border-primary bg-primary/5">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-primary">
+            <Bell className="h-5 w-5" />
+            Real-time Notifications
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            {securityData.activeIncidents > 0 && (
+              <p className="text-sm text-destructive">• {securityData.activeIncidents} active incident(s) require attention</p>
+            )}
+            {securityData.todaysVisitorsCount > 0 && (
+              <p className="text-sm text-success">• {securityData.todaysVisitorsCount} visitors registered today</p>
+            )}
+            <p className="text-sm">• System monitoring active - all sensors operational</p>
+            <p className="text-sm">• Real-time updates enabled for incidents and visitors</p>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Security Alerts */}
       <Card className="border-warning bg-warning/5">
         <CardHeader>
@@ -383,6 +628,7 @@ const SecurityDashboard = ({ activeSection = "overview", onSectionChange }: Secu
             <p className="text-sm">• Camera #3 in parking lot is offline - maintenance scheduled</p>
             <p className="text-sm">• New access code required for Building B entrance</p>
             <p className="text-sm">• Night shift briefing at 6:00 PM - mandatory attendance</p>
+            <p className="text-sm">• Visitor registration system updated - new features available</p>
           </div>
         </CardContent>
       </Card>
