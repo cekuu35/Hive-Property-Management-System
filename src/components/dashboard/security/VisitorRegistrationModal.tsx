@@ -39,7 +39,7 @@ export const VisitorRegistrationModal = ({
 }: VisitorRegistrationModalProps) => {
   const { toast } = useToast();
   const { profile } = useAuth();
-  const { registerVisitor } = useVisitors();
+  const { registerVisitor, testVisitorInsert } = useVisitors();
   const { occupiedUnits, getGroupedUnits } = useSecurityUnits();
   
   const [formData, setFormData] = useState({
@@ -367,23 +367,40 @@ export const VisitorRegistrationModal = ({
           )}
 
           {/* Action Buttons */}
-          <div className="flex justify-end gap-3">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
+          <div className="flex justify-between">
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={async () => {
+                const success = await testVisitorInsert();
+                toast({
+                  title: success ? "Test Passed" : "Test Failed",
+                  description: success ? "Visitor insert test successful" : "Visitor insert test failed - check console",
+                  variant: success ? "default" : "destructive"
+                });
+              }}
+            >
+              Test Insert
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Registering...
-                </>
-              ) : (
-                <>
-                  <UserCheck className="h-4 w-4 mr-2" />
-                  Register Visitor
-                </>
-              )}
-            </Button>
+            
+            <div className="flex gap-3">
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Registering...
+                  </>
+                ) : (
+                  <>
+                    <UserCheck className="h-4 w-4 mr-2" />
+                    Register Visitor
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </form>
       </DialogContent>

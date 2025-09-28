@@ -135,23 +135,62 @@ export const useVisitors = () => {
   };
 
   const registerVisitor = async (visitorData: CreateVisitor) => {
-    if (!profile?.id || profile.role !== 'security') return false;
+    console.log('Profile data:', profile);
+    
+    if (!profile?.id || profile.role !== 'security') {
+      console.error('User not authorized to register visitors:', { 
+        profileId: profile?.id, 
+        role: profile?.role,
+        hasProfile: !!profile,
+        profileKeys: profile ? Object.keys(profile) : []
+      });
+      return false;
+    }
+
+    console.log('Registering visitor with data:', {
+      security_id: profile.id,
+      visitorData,
+      timestamp: new Date().toISOString()
+    });
 
     try {
+      const insertData = {
+        security_id: profile.id,
+        visitor_name: visitorData.visitor_name,
+        visitor_phone: visitorData.visitor_phone || null,
+        visiting_unit_id: visitorData.visiting_unit_id || null,
+        visiting_tenant_id: visitorData.visiting_tenant_id || null,
+        purpose: visitorData.purpose,
+        security_notes: visitorData.security_notes || null,
+        emergency_contact: visitorData.emergency_contact || null,
+        visitor_request_id: visitorData.visitor_request_id || null,
+        status: 'active',
+        time_in: new Date().toISOString(),
+      };
+
+      console.log('Insert data:', insertData);
+
       const { data, error } = await supabase
         .from('visitors')
-        .insert({
-          security_id: profile.id,
-          ...visitorData,
-        })
+        .insert(insertData)
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        throw error;
+      }
+
+      console.log('Visitor registered successfully:', data);
 
       toast({
         title: "Visitor Registered",
-        description: "Visitor has been successfully registered.",
+        description: "Visitor has been successfully registered and checked in.",
       });
 
       await fetchVisitors();
@@ -160,7 +199,7 @@ export const useVisitors = () => {
       console.error('Error registering visitor:', error);
       toast({
         title: "Error",
-        description: "Failed to register visitor",
+        description: `Failed to register visitor: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: "destructive"
       });
       return false;
@@ -200,16 +239,22 @@ export const useVisitors = () => {
           security_id: profile.id,
           visitor_request_id: visitorRequestId,
           visitor_name: request.visitor_name,
-          visitor_phone: request.visitor_phone,
-          visiting_unit_id: lease?.unit_id,
+          visitor_phone: request.visitor_phone || null,
+          visiting_unit_id: lease?.unit_id || null,
           visiting_tenant_id: request.tenant_id,
           purpose: request.purpose,
-          security_notes: request.security_notes,
+          security_notes: request.security_notes || null,
+          emergency_contact: null,
+          status: 'active',
+          time_in: new Date().toISOString(),
         })
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error in registerVisitorFromApprovedRequest:', error);
+        throw error;
+      }
 
       toast({
         title: "Visitor Registered",
@@ -222,7 +267,7 @@ export const useVisitors = () => {
       console.error('Error registering visitor from approved request:', error);
       toast({
         title: "Error",
-        description: "Failed to register visitor",
+        description: `Failed to register visitor: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: "destructive"
       });
       return false;
@@ -281,6 +326,46 @@ export const useVisitors = () => {
     return { active, todaysVisitors, checkedOut };
   };
 
+  const testVisitorInsert = async () => {
+    if (!profile?.id || profile.role !== 'security') {
+      console.error('User not authorized for test');
+      return false;
+    }
+
+    try {
+      console.log('Testing visitor insert with minimal data...');
+      const { data, error } = await supabase
+        .from('visitors')
+        .insert({
+          security_id: profile.id,
+          visitor_name: 'Test Visitor',
+          purpose: 'Test Purpose',
+          status: 'active',
+          time_in: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Test insert failed:', error);
+        return false;
+      }
+
+      console.log('Test insert successful:', data);
+      
+      // Clean up test data
+      await supabase
+        .from('visitors')
+        .delete()
+        .eq('id', data.id);
+      
+      return true;
+    } catch (error) {
+      console.error('Test insert error:', error);
+      return false;
+    }
+  };
+
   useEffect(() => {
     fetchVisitors();
   }, [profile?.id]);
@@ -292,6 +377,7 @@ export const useVisitors = () => {
     registerVisitorFromApprovedRequest,
     checkOutVisitor,
     getStats,
+    testVisitorInsert,
     refetch: fetchVisitors
   };
 };
