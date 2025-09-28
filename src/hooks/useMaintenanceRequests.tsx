@@ -313,21 +313,21 @@ export const useMaintenanceRequests = () => {
 
       console.log('Maintenance request created successfully:', data);
       
-      // Create notification for caretakers - get actual caretaker IDs
+      // Create notification for caretakers - get actual caretaker user IDs
       try {
         const { data: caretakers, error: caretakerError } = await supabase
           .from('profiles')
-          .select('id')
+          .select('user_id')
           .eq('role', 'caretaker');
         
         if (caretakerError) {
           console.error('Error fetching caretakers:', caretakerError);
         } else if (caretakers && caretakers.length > 0) {
           const notifications = caretakers.map(caretaker => ({
-            user_id: caretaker.id,
+            user_id: caretaker.user_id,
             title: 'New Maintenance Request',
             message: `New ${requestData.priority} priority request: ${requestData.title}`,
-            type: 'maintenance',
+            type: 'maintenance_request',
             action_url: '/dashboard?section=workorders'
           }));
 

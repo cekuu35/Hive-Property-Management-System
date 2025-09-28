@@ -314,15 +314,7 @@ export type Database = {
           type?: string
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "notifications_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -890,6 +882,16 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      debug_tenant_units: {
+        Args: { tenant_profile_id: string }
+        Returns: {
+          assignment_type: string
+          property_name: string
+          status: string
+          unit_id: string
+          unit_number: string
+        }[]
+      }
       get_landlord_tenants: {
         Args: { landlord_profile_id: string }
         Returns: {
@@ -911,6 +913,10 @@ export type Database = {
           property_name: string
           unit_number: string
         }[]
+      }
+      get_tenant_primary_unit: {
+        Args: { tenant_profile_id: string }
+        Returns: string
       }
       landlord_can_view_profile: {
         Args: { _target_profile_id: string }
