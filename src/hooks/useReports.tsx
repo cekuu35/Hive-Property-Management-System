@@ -57,14 +57,14 @@ export const useReports = () => {
     try {
       setLoading(true);
 
-      // Fetch properties with units and current leases
+      // Fetch properties with units and all leases (including units without leases)
       const { data: properties, error: propertiesError } = await supabase
         .from('properties')
         .select(`
           *,
           units (
             *,
-            leases!inner (
+            leases (
               id,
               status,
               rent_amount,
@@ -132,18 +132,40 @@ export const useReports = () => {
       const allUnits = properties?.flatMap(prop => prop.units || []) || [];
       const totalUnits = allUnits.length;
       
+      // Debug logging
+      console.log('Total units found:', totalUnits);
+      console.log('Sample unit data:', allUnits.slice(0, 2));
+      
       // Get all active leases across all units
       const activeLeases = allUnits.flatMap(unit => 
-        unit.leases?.filter((lease: any) => 
-          lease.status === 'active' && 
-          new Date(lease.start_date) <= new Date() && 
-          new Date(lease.end_date) >= new Date()
-        ) || []
+        unit.leases?.filter((lease: any) => {
+          const now = new Date();
+          const startDate = new Date(lease.start_date);
+          const endDate = new Date(lease.end_date);
+          
+          // Debug individual lease
+          console.log('Checking lease:', {
+            status: lease.status,
+            start_date: lease.start_date,
+            end_date: lease.end_date,
+            isActive: lease.status === 'active',
+            isCurrent: startDate <= now && endDate >= now
+          });
+          
+          return lease.status === 'active' && 
+                 startDate <= now && 
+                 endDate >= now;
+        }) || []
       );
+      
+      console.log('Active leases found:', activeLeases.length);
+      console.log('Sample active lease:', activeLeases[0]);
       
       const occupiedUnits = activeLeases.length;
       const vacantUnits = totalUnits - occupiedUnits;
       const occupancyRate = totalUnits > 0 ? Math.round((occupiedUnits / totalUnits) * 100) : 0;
+      
+      console.log('Occupancy calculation:', { totalUnits, occupiedUnits, vacantUnits, occupancyRate });
 
       // Calculate financial metrics
       const currentYear = new Date().getFullYear();
@@ -216,15 +238,21 @@ export const useReports = () => {
         
         // Count units with active leases
         const occupied = units.filter((unit: any) => {
-          const activeLeases = unit.leases?.filter((lease: any) => 
-            lease.status === 'active' && 
-            new Date(lease.start_date) <= new Date() && 
-            new Date(lease.end_date) >= new Date()
-          ) || [];
+          const activeLeases = unit.leases?.filter((lease: any) => {
+            const now = new Date();
+            const startDate = new Date(lease.start_date);
+            const endDate = new Date(lease.end_date);
+            
+            return lease.status === 'active' && 
+                   startDate <= now && 
+                   endDate >= now;
+          }) || [];
           return activeLeases.length > 0;
         }).length;
         
         const rate = total > 0 ? Math.round((occupied / total) * 100) : 0;
+        
+        console.log(`Property ${property.name}:`, { total, occupied, rate });
         
         return {
           property: property.name,
@@ -264,11 +292,15 @@ export const useReports = () => {
 
       // Calculate average vacancy duration based on lease end dates
       const vacantUnitsData = allUnits.filter(unit => {
-        const activeLeases = unit.leases?.filter((lease: any) => 
-          lease.status === 'active' && 
-          new Date(lease.start_date) <= new Date() && 
-          new Date(lease.end_date) >= new Date()
-        ) || [];
+        const activeLeases = unit.leases?.filter((lease: any) => {
+          const now = new Date();
+          const startDate = new Date(lease.start_date);
+          const endDate = new Date(lease.end_date);
+          
+          return lease.status === 'active' && 
+                 startDate <= now && 
+                 endDate >= now;
+        }) || [];
         return activeLeases.length === 0; // No active leases = vacant
       });
       
