@@ -1,7 +1,6 @@
 // Paystack configuration and utilities
 export interface PaystackConfig {
   publicKey: string;
-  secretKey: string;
 }
 
 export interface PaymentData {
@@ -10,29 +9,18 @@ export interface PaymentData {
   currency: string;
   reference: string;
   metadata?: Record<string, any>;
-  callback?: (response: any) => void;
-  onClose?: () => void;
-}
-
-export interface PaymentResponse {
-  status: 'success' | 'error';
-  message: string;
-  reference?: string;
-  transaction?: any;
 }
 
 // Get Paystack configuration from environment variables
 export const getPaystackConfig = (): PaystackConfig => {
   const publicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
-  const secretKey = import.meta.env.VITE_PAYSTACK_SECRET_KEY;
 
-  if (!publicKey || !secretKey) {
-    throw new Error('Paystack configuration is missing. Please check your environment variables.');
+  if (!publicKey) {
+    throw new Error('Paystack public key is missing. Please check your environment variables.');
   }
 
   return {
     publicKey,
-    secretKey,
   };
 };
 
