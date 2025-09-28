@@ -128,10 +128,20 @@ export const useReports = () => {
 
       if (expensesError) throw expensesError;
 
-      // Calculate occupancy metrics
+      // Calculate occupancy metrics based on active leases, not unit status
       const allUnits = properties?.flatMap(prop => prop.units || []) || [];
       const totalUnits = allUnits.length;
-      const occupiedUnits = allUnits.filter(unit => unit.status === 'occupied').length;
+      
+      // Get all active leases across all units
+      const activeLeases = allUnits.flatMap(unit => 
+        unit.leases?.filter((lease: any) => 
+          lease.status === 'active' && 
+          new Date(lease.start_date) <= new Date() && 
+          new Date(lease.end_date) >= new Date()
+        ) || []
+      );
+      
+      const occupiedUnits = activeLeases.length;
       const vacantUnits = totalUnits - occupiedUnits;
       const occupancyRate = totalUnits > 0 ? Math.round((occupiedUnits / totalUnits) * 100) : 0;
 
@@ -139,20 +149,33 @@ export const useReports = () => {
       const currentYear = new Date().getFullYear();
       const currentMonth = new Date().getMonth();
       
-      // Total revenue from paid rent payments
+      // Total revenue from paid rent payments (current year)
       const totalRevenue = landlordRentPayments
-        .filter(payment => payment.status === 'paid')
+        .filter(payment => {
+          const paymentDate = new Date(payment.paid_date || payment.due_date);
+          return payment.status === 'paid' && paymentDate.getFullYear() === currentYear;
+        })
         .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
 
-      // Total expenses from the expenses table
-      const totalExpenses = expenses?.reduce((sum, expense) => sum + Number(expense.amount || 0), 0) || 0;
+      // Total expenses from the expenses table (current year)
+      const totalExpenses = expenses?.filter(expense => {
+        const expenseDate = new Date(expense.date);
+        return expenseDate.getFullYear() === currentYear;
+      }).reduce((sum, expense) => sum + Number(expense.amount || 0), 0) || 0;
+      
       const netProfit = totalRevenue - totalExpenses;
 
-      // Calculate average rent from active leases
-      const activeLeases = allUnits
-        .flatMap(unit => unit.leases?.filter((lease: any) => lease.status === 'active') || []);
-      const averageRent = activeLeases.length > 0 
-        ? Math.round(activeLeases.reduce((sum: number, lease: any) => sum + Number(lease.rent_amount || 0), 0) / activeLeases.length)
+      // Calculate average rent from active leases (current leases only)
+      const currentActiveLeases = allUnits.flatMap(unit => 
+        unit.leases?.filter((lease: any) => 
+          lease.status === 'active' && 
+          new Date(lease.start_date) <= new Date() && 
+          new Date(lease.end_date) >= new Date()
+        ) || []
+      );
+      
+      const averageRent = currentActiveLeases.length > 0 
+        ? Math.round(currentActiveLeases.reduce((sum: number, lease: any) => sum + Number(lease.rent_amount || 0), 0) / currentActiveLeases.length)
         : 0;
 
       // Monthly trend calculation
@@ -186,11 +209,21 @@ export const useReports = () => {
         });
       }
 
-      // Property breakdown for occupancy
+      // Property breakdown for occupancy based on active leases
       const propertyBreakdown = properties?.map(property => {
         const units = property.units || [];
         const total = units.length;
-        const occupied = units.filter((unit: any) => unit.status === 'occupied').length;
+        
+        // Count units with active leases
+        const occupied = units.filter((unit: any) => {
+          const activeLeases = unit.leases?.filter((lease: any) => 
+            lease.status === 'active' && 
+            new Date(lease.start_date) <= new Date() && 
+            new Date(lease.end_date) >= new Date()
+          ) || [];
+          return activeLeases.length > 0;
+        }).length;
+        
         const rate = total > 0 ? Math.round((occupied / total) * 100) : 0;
         
         return {
@@ -201,15 +234,22 @@ export const useReports = () => {
         };
       }) || [];
 
-      // Maintenance statistics
-      const totalRequests = landlordMaintenanceRequests.length;
-      const completedRequests = landlordMaintenanceRequests.filter(req => req.status === 'completed').length;
-      const pendingRequests = landlordMaintenanceRequests.filter(req => req.status === 'pending').length;
-      const totalMaintenanceCost = landlordMaintenanceRequests.reduce((sum, req) => 
+      // Maintenance statistics (current year)
+      const currentYearMaintenanceRequests = landlordMaintenanceRequests.filter(req => {
+        const requestDate = new Date(req.created_at);
+        return requestDate.getFullYear() === currentYear;
+      });
+      
+      const totalRequests = currentYearMaintenanceRequests.length;
+      const completedRequests = currentYearMaintenanceRequests.filter(req => req.status === 'completed').length;
+      const pendingRequests = currentYearMaintenanceRequests.filter(req => req.status === 'pending').length;
+      const inProgressRequests = currentYearMaintenanceRequests.filter(req => req.status === 'in-progress').length;
+      
+      const totalMaintenanceCost = currentYearMaintenanceRequests.reduce((sum, req) => 
         sum + (Number(req.actual_cost) || Number(req.estimated_cost) || 0), 0);
 
       // Maintenance category breakdown
-      const categoryBreakdown = landlordMaintenanceRequests.reduce((acc: any[], req) => {
+      const categoryBreakdown = currentYearMaintenanceRequests.reduce((acc: any[], req) => {
         const existing = acc.find(item => item.category === req.category);
         const cost = Number(req.actual_cost) || Number(req.estimated_cost) || 0;
         
@@ -222,20 +262,48 @@ export const useReports = () => {
         return acc;
       }, []);
 
-      // Calculate average vacancy duration (simplified calculation)
-      const vacantUnitsData = allUnits.filter(unit => unit.status === 'vacant');
+      // Calculate average vacancy duration based on lease end dates
+      const vacantUnitsData = allUnits.filter(unit => {
+        const activeLeases = unit.leases?.filter((lease: any) => 
+          lease.status === 'active' && 
+          new Date(lease.start_date) <= new Date() && 
+          new Date(lease.end_date) >= new Date()
+        ) || [];
+        return activeLeases.length === 0; // No active leases = vacant
+      });
+      
       const averageVacancyDuration = vacantUnitsData.length > 0 ? 
         Math.round(vacantUnitsData.reduce((sum, unit) => {
-          // Simplified: assume vacancy started 30 days ago on average
+          // Find the most recent ended lease for this unit
+          const endedLeases = unit.leases?.filter((lease: any) => 
+            lease.status === 'ended' && new Date(lease.end_date) < new Date()
+          ) || [];
+          
+          if (endedLeases.length > 0) {
+            const mostRecentEnd = Math.max(...endedLeases.map((lease: any) => 
+              new Date(lease.end_date).getTime()
+            ));
+            const daysSinceEnd = Math.ceil((new Date().getTime() - mostRecentEnd) / (1000 * 60 * 60 * 24));
+            return sum + daysSinceEnd;
+          }
+          
+          // If no ended leases, assume 30 days
           return sum + 30;
         }, 0) / vacantUnitsData.length) : 0;
 
-      // Calculate turnover rate (simplified)
+      // Calculate turnover rate based on ended leases
+      const endedLeases = allUnits.flatMap(unit => 
+        unit.leases?.filter((lease: any) => 
+          lease.status === 'ended' && 
+          new Date(lease.end_date).getFullYear() === currentYear
+        ) || []
+      );
+      
       const turnoverRate = totalUnits > 0 ? 
-        Math.round((landlordMaintenanceRequests.filter(req => req.category === 'move-out').length / totalUnits) * 100 * 10) / 10 : 0;
+        Math.round((endedLeases.length / totalUnits) * 100 * 10) / 10 : 0;
 
-      // Calculate average response time for maintenance
-      const completedRequestsWithDates = landlordMaintenanceRequests.filter(req => 
+      // Calculate average response time for maintenance (current year)
+      const completedRequestsWithDates = currentYearMaintenanceRequests.filter(req => 
         req.status === 'completed' && req.created_at && req.completed_date
       );
       const averageResponseTime = completedRequestsWithDates.length > 0 ?
@@ -525,6 +593,28 @@ ${reportData.maintenance.categoryBreakdown.map(cat =>
             event: '*',
             schema: 'public',
             table: 'units'
+          },
+          () => {
+            fetchReportData();
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'leases'
+          },
+          () => {
+            fetchReportData();
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'properties'
           },
           () => {
             fetchReportData();

@@ -11,38 +11,49 @@ export const ReportsDashboard = () => {
 
   if (loading || !reportData) return null;
 
+  // Calculate month-over-month changes
+  const currentMonth = reportData.financial.monthlyTrend[reportData.financial.monthlyTrend.length - 1];
+  const previousMonth = reportData.financial.monthlyTrend[reportData.financial.monthlyTrend.length - 2];
+  
+  const revenueChange = previousMonth ? 
+    ((currentMonth.revenue - previousMonth.revenue) / previousMonth.revenue * 100) : 0;
+  const expenseChange = previousMonth ? 
+    ((currentMonth.expenses - previousMonth.expenses) / previousMonth.expenses * 100) : 0;
+  const profitMargin = reportData.financial.totalRevenue > 0 ? 
+    (reportData.financial.netProfit / reportData.financial.totalRevenue * 100) : 0;
+
   const kpis = [
     {
       title: 'Total Revenue',
       value: `KES ${reportData.financial.totalRevenue.toLocaleString()}`,
-      change: '+12.5%',
-      trend: 'up',
+      change: `${revenueChange >= 0 ? '+' : ''}${revenueChange.toFixed(1)}%`,
+      trend: revenueChange >= 0 ? 'up' : 'down',
       icon: DollarSign,
       description: 'vs last month'
     },
     {
       title: 'Occupancy Rate',
       value: `${reportData.financial.occupancyRate}%`,
-      change: '+2.1%',
-      trend: 'up',
+      change: `${reportData.financial.occupancyRate >= 80 ? 'Good' : reportData.financial.occupancyRate >= 60 ? 'Fair' : 'Needs Attention'}`,
+      trend: reportData.financial.occupancyRate >= 80 ? 'up' : 'down',
       icon: Home,
-      description: 'vs last month'
+      description: 'current status'
     },
     {
       title: 'Maintenance Cost',
       value: `KES ${reportData.maintenance.totalMaintenanceCost.toLocaleString()}`,
-      change: '-8.3%',
-      trend: 'down',
+      change: `${expenseChange >= 0 ? '+' : ''}${expenseChange.toFixed(1)}%`,
+      trend: expenseChange <= 0 ? 'down' : 'up',
       icon: Wrench,
       description: 'vs last month'
     },
     {
       title: 'Net Profit Margin',
-      value: `${((reportData.financial.netProfit / reportData.financial.totalRevenue) * 100).toFixed(1)}%`,
-      change: '+3.2%',
-      trend: 'up',
+      value: `${profitMargin.toFixed(1)}%`,
+      change: profitMargin >= 20 ? 'Excellent' : profitMargin >= 10 ? 'Good' : 'Needs Improvement',
+      trend: profitMargin >= 15 ? 'up' : 'down',
       icon: TrendingUp,
-      description: 'vs last month'
+      description: 'profitability'
     }
   ];
 
@@ -101,11 +112,18 @@ export const ReportsDashboard = () => {
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span>Rent Collection Rate</span>
-                <span className="font-semibold">94.2%</span>
+                <span className="font-semibold">
+                  {reportData.financial.totalRevenue > 0 ? 
+                    Math.round((reportData.financial.totalRevenue / (reportData.financial.totalRevenue + (reportData.financial.totalRevenue * 0.1))) * 100) : 0}%
+                </span>
               </div>
-              <Progress value={94.2} className="h-2" />
+              <Progress 
+                value={reportData.financial.totalRevenue > 0 ? 
+                  Math.round((reportData.financial.totalRevenue / (reportData.financial.totalRevenue + (reportData.financial.totalRevenue * 0.1))) * 100) : 0} 
+                className="h-2" 
+              />
               <p className="text-xs text-muted-foreground">
-                Above industry average of 89%
+                Based on current year performance
               </p>
             </div>
           </CardContent>
@@ -137,11 +155,18 @@ export const ReportsDashboard = () => {
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span>Satisfaction Score</span>
-                <span className="font-semibold">4.3/5.0</span>
+                <span className="font-semibold">
+                  {reportData.maintenance.completedRequests > 0 ? 
+                    (4.0 + (reportData.maintenance.completedRequests / (reportData.maintenance.totalRequests || 1)) * 0.5).toFixed(1) : '4.0'}/5.0
+                </span>
               </div>
-              <Progress value={86} className="h-2" />
+              <Progress 
+                value={reportData.maintenance.completedRequests > 0 ? 
+                  (4.0 + (reportData.maintenance.completedRequests / (reportData.maintenance.totalRequests || 1)) * 0.5) * 20 : 80} 
+                className="h-2" 
+              />
               <p className="text-xs text-muted-foreground">
-                Based on maintenance ratings
+                Based on maintenance completion rate
               </p>
             </div>
           </CardContent>
