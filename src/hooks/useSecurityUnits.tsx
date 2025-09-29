@@ -25,12 +25,14 @@ export const useSecurityUnits = () => {
 
   const fetchOccupiedUnits = async () => {
     if (!profile?.id || profile.role !== 'security') {
+      console.log('Security units fetch skipped - profile:', profile?.role, 'id:', profile?.id);
       setLoading(false);
       return;
     }
 
     try {
       setLoading(true);
+      console.log('Fetching occupied units for security role...');
 
       // Get all active leases with unit, property, and tenant information
       const { data, error } = await supabase
@@ -60,7 +62,12 @@ export const useSecurityUnits = () => {
         `)
         .eq('status', 'active');
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
+
+      console.log('Fetched leases data:', data?.length || 0, 'records');
 
       const occupiedUnitsData: OccupiedUnit[] = (data || []).map((lease: any) => ({
         unit_id: lease.units.id,
@@ -84,12 +91,13 @@ export const useSecurityUnits = () => {
         return a.unit_number.localeCompare(b.unit_number, undefined, { numeric: true });
       });
 
+      console.log('Processed occupied units:', occupiedUnitsData.length, 'units');
       setOccupiedUnits(occupiedUnitsData);
     } catch (error) {
       console.error('Error fetching occupied units:', error);
       toast({
         title: "Error",
-        description: "Failed to load occupied units",
+        description: `Failed to load occupied units: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: "destructive"
       });
     } finally {

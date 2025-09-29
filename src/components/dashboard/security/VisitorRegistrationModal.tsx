@@ -40,7 +40,7 @@ export const VisitorRegistrationModal = ({
   const { toast } = useToast();
   const { profile } = useAuth();
   const { registerVisitor, testVisitorInsert } = useVisitors();
-  const { occupiedUnits, getGroupedUnits } = useSecurityUnits();
+  const { occupiedUnits, getGroupedUnits, loading: unitsLoading } = useSecurityUnits();
   
   const [formData, setFormData] = useState({
     visitor_name: prefillData.name || '',
@@ -60,6 +60,13 @@ export const VisitorRegistrationModal = ({
   const [qrCode, setQrCode] = useState<string>('');
 
   const groupedUnits = getGroupedUnits();
+
+  // Debug logging
+  useEffect(() => {
+    console.log('VisitorRegistrationModal - occupiedUnits:', occupiedUnits.length);
+    console.log('VisitorRegistrationModal - groupedUnits:', Object.keys(groupedUnits).length, 'properties');
+    console.log('VisitorRegistrationModal - profile role:', profile?.role);
+  }, [occupiedUnits, groupedUnits, profile?.role]);
 
   // Generate QR code for visitor
   const generateQRCode = () => {
@@ -235,26 +242,36 @@ export const VisitorRegistrationModal = ({
                 <Label htmlFor="visiting_unit">Visiting Unit *</Label>
                 <Select value={formData.visiting_unit_id} onValueChange={(value) => handleInputChange('visiting_unit_id', value)}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select unit" />
+                    <SelectValue placeholder={unitsLoading ? "Loading units..." : "Select unit"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(groupedUnits).map(([propertyName, units]) => (
-                      <div key={propertyName}>
-                        <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground">
-                          {propertyName}
-                        </div>
-                        {units.map((unit) => (
-                          <SelectItem key={unit.unit_id} value={unit.unit_id}>
-                            <div className="flex flex-col">
-                              <span>Unit {unit.unit_number}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {unit.tenant_name}
-                              </span>
-                            </div>
-                          </SelectItem>
-                        ))}
+                    {unitsLoading ? (
+                      <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                        Loading units...
                       </div>
-                    ))}
+                    ) : Object.keys(groupedUnits).length === 0 ? (
+                      <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                        No occupied units found
+                      </div>
+                    ) : (
+                      Object.entries(groupedUnits).map(([propertyName, units]) => (
+                        <div key={propertyName}>
+                          <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground">
+                            {propertyName}
+                          </div>
+                          {units.map((unit) => (
+                            <SelectItem key={unit.unit_id} value={unit.unit_id}>
+                              <div className="flex flex-col">
+                                <span>Unit {unit.unit_number}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  {unit.tenant_name}
+                                </span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </div>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
                 {selectedUnit && (
