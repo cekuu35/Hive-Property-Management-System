@@ -22,6 +22,7 @@ import { useSecurityUnits } from '@/hooks/useSecurityUnits';
 import { VisitorRegistrationModal } from './VisitorRegistrationModal';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 
 export const SecurityVisitorManagement = () => {
   const [isCreateRequestDialogOpen, setIsCreateRequestDialogOpen] = useState(false);
@@ -72,6 +73,46 @@ export const SecurityVisitorManagement = () => {
   );
 
   const stats = getStats();
+
+  // Set up real-time subscriptions for automatic updates
+  useEffect(() => {
+    const requestsChannel = supabase
+      .channel('visitor_requests_security')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'visitor_requests'
+        },
+        () => {
+          console.log('Visitor request changed, refetching...');
+          // This will trigger a refetch in the useVisitorRequests hook
+        }
+      )
+      .subscribe();
+
+    const visitorsChannel = supabase
+      .channel('visitors_security')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'visitors'
+        },
+        () => {
+          console.log('Visitor changed, refetching...');
+          // This will trigger a refetch in the useVisitors hook
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(requestsChannel);
+      supabase.removeChannel(visitorsChannel);
+    };
+  }, []);
 
   const handleCreateRequest = async () => {
     if (!selectedUnit) {

@@ -918,6 +918,10 @@ export type Database = {
         Args: { tenant_profile_id: string }
         Returns: string
       }
+      is_security_user: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
       landlord_can_view_profile: {
         Args: { _target_profile_id: string }
         Returns: boolean

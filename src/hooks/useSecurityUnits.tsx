@@ -34,54 +34,88 @@ export const useSecurityUnits = () => {
       setLoading(true);
       console.log('Fetching occupied units for security role...');
 
-      // Get all active leases with unit, property, and tenant information
-      const { data, error } = await supabase
+      // Get all active leases and then fetch related data separately to avoid foreign key issues
+      const { data: leasesData, error: leasesError } = await supabase
         .from('leases')
         .select(`
           id,
           start_date,
           end_date,
           tenant_id,
-          unit_id,
-          units!inner (
-            id,
-            unit_number,
-            property_id,
-            properties!inner (
-              id,
-              name,
-              address
-            )
-          ),
-          profiles!inner (
-            id,
-            first_name,
-            last_name,
-            phone
-          )
+          unit_id
         `)
         .eq('status', 'active');
 
+<<<<<<< HEAD
       if (error) {
         console.error('Supabase error:', error);
         throw error;
       }
 
       console.log('Fetched leases data:', data?.length || 0, 'records');
+=======
+      if (leasesError) throw leasesError;
+>>>>>>> 4453c64c2507ef7905cb781f221364059762c8f8
 
-      const occupiedUnitsData: OccupiedUnit[] = (data || []).map((lease: any) => ({
-        unit_id: lease.units.id,
-        unit_number: lease.units.unit_number,
-        property_id: lease.units.properties.id,
-        property_name: lease.units.properties.name,
-        property_address: lease.units.properties.address,
-        tenant_id: lease.profiles.id,
-        tenant_name: `${lease.profiles.first_name} ${lease.profiles.last_name}`.trim(),
-        tenant_phone: lease.profiles.phone,
-        lease_id: lease.id,
-        lease_start: lease.start_date,
-        lease_end: lease.end_date
-      }));
+      if (!leasesData || leasesData.length === 0) {
+        setOccupiedUnits([]);
+        return;
+      }
+
+      // Get unique unit IDs and tenant IDs
+      const unitIds = [...new Set(leasesData.map(lease => lease.unit_id))];
+      const tenantIds = [...new Set(leasesData.map(lease => lease.tenant_id))];
+
+      // Fetch units and properties
+      const { data: unitsData, error: unitsError } = await supabase
+        .from('units')
+        .select(`
+          id,
+          unit_number,
+          property_id,
+          properties (
+            id,
+            name,
+            address
+          )
+        `)
+        .in('id', unitIds);
+
+      if (unitsError) throw unitsError;
+
+      // Fetch tenant profiles
+      const { data: tenantsData, error: tenantsError } = await supabase
+        .from('profiles')
+        .select(`
+          id,
+          first_name,
+          last_name,
+          phone
+        `)
+        .in('id', tenantIds);
+
+      if (tenantsError) throw tenantsError;
+
+      // Combine the data
+      const occupiedUnitsData: OccupiedUnit[] = leasesData.map((lease: any) => {
+        const unit = unitsData?.find(u => u.id === lease.unit_id);
+        const tenant = tenantsData?.find(t => t.id === lease.tenant_id);
+        const property = unit?.properties;
+
+        return {
+          unit_id: unit?.id || '',
+          unit_number: unit?.unit_number || '',
+          property_id: property?.id || '',
+          property_name: property?.name || '',
+          property_address: property?.address || '',
+          tenant_id: tenant?.id || '',
+          tenant_name: tenant ? `${tenant.first_name} ${tenant.last_name}`.trim() : '',
+          tenant_phone: tenant?.phone,
+          lease_id: lease.id,
+          lease_start: lease.start_date,
+          lease_end: lease.end_date
+        };
+      }).filter(unit => unit.unit_id && unit.tenant_id); // Filter out incomplete data
 
       // Sort by property name then unit number
       occupiedUnitsData.sort((a, b) => {
@@ -107,6 +141,27 @@ export const useSecurityUnits = () => {
 
   useEffect(() => {
     fetchOccupiedUnits();
+
+    // Set up real-time subscription for lease changes
+    const channel = supabase
+      .channel('occupied_units_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'leases'
+        },
+        () => {
+          console.log('Lease changed, refetching occupied units...');
+          fetchOccupiedUnits();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [profile?.id, profile?.role]);
 
   // Group units by property for better organization

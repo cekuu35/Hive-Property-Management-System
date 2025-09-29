@@ -179,7 +179,15 @@ export const usePaystackPayment = () => {
         text: "Pay Rent (Demo Mode)",
         onSuccess: () => console.log('Demo payment success'),
         onClose: () => console.log('Demo payment closed'),
-        metadata: {}
+        metadata: {
+          custom_fields: [
+            {
+              display_name: "Payment Type",
+              variable_name: "payment_type",
+              value: "rent_demo"
+            }
+          ]
+        }
       };
     }
   }, [config.publicKey, handlePaymentSuccess, handlePaymentClose]);
