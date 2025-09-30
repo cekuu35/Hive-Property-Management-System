@@ -46,16 +46,7 @@ export const useSecurityUnits = () => {
         `)
         .eq('status', 'active');
 
-<<<<<<< HEAD
-      if (error) {
-        console.error('Supabase error:', error);
-        throw error;
-      }
-
-      console.log('Fetched leases data:', data?.length || 0, 'records');
-=======
       if (leasesError) throw leasesError;
->>>>>>> 4453c64c2507ef7905cb781f221364059762c8f8
 
       if (!leasesData || leasesData.length === 0) {
         setOccupiedUnits([]);
