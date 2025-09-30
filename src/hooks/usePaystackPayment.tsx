@@ -93,28 +93,45 @@ export const usePaystackPayment = () => {
     }
   };
 
-  const handlePaymentSuccess = useCallback(async (reference: string, paymentData: RentPaymentData) => {
+  const handlePaymentSuccess = useCallback(async (reference: any, paymentData: RentPaymentData) => {
     try {
       setLoading(true);
       
-      // Record payment in database
-      await recordPayment({
-        ...paymentData,
-        reference,
-        transactionId: reference, // Use reference as transaction ID for now
-        status: 'paid',
-        paymentMethod: 'paystack'
+      // Extract reference string from Paystack response
+      const referenceString = typeof reference === 'object' ? reference.reference : reference;
+      
+      console.log('Verifying payment with reference:', referenceString);
+
+      // Verify payment with edge function
+      const { data: verifyResult, error: verifyError } = await supabase.functions.invoke('verify-payment', {
+        body: {
+          reference: referenceString,
+          leaseId: paymentData.leaseId,
+          amount: paymentData.amount,
+          dueDate: paymentData.dueDate
+        }
       });
+
+      if (verifyError) {
+        console.error('Payment verification error:', verifyError);
+        throw new Error(verifyError.message || 'Payment verification failed');
+      }
+
+      if (!verifyResult.success) {
+        throw new Error(verifyResult.error || 'Payment verification failed');
+      }
+
+      console.log('Payment verified successfully:', verifyResult);
 
       toast({
         title: "Payment Successful!",
-        description: `Your rent payment of KES ${paymentData.amount.toLocaleString()} has been processed successfully.`,
+        description: `Your rent payment of KES ${paymentData.amount.toLocaleString()} has been processed and verified.`,
       });
     } catch (error) {
       console.error('Payment success handler error:', error);
       toast({
-        title: "Payment Error",
-        description: "There was an issue recording your payment. Please contact support.",
+        title: "Payment Verification Failed",
+        description: error instanceof Error ? error.message : "There was an issue verifying your payment. Please contact support.",
         variant: "destructive",
       });
     } finally {
@@ -142,7 +159,8 @@ export const usePaystackPayment = () => {
         amount: amountInKobo,
         publicKey: config.publicKey,
         text: "Pay Rent",
-        onSuccess: (reference: string) => handlePaymentSuccess(reference, paymentData),
+        reference: reference,
+        onSuccess: (reference: any) => handlePaymentSuccess(reference, paymentData),
         onClose: handlePaymentClose,
         metadata: {
           custom_fields: [
@@ -160,6 +178,11 @@ export const usePaystackPayment = () => {
               display_name: "Due Date",
               variable_name: "due_date",
               value: paymentData.dueDate
+            },
+            {
+              display_name: "Lease ID",
+              variable_name: "lease_id",
+              value: paymentData.leaseId || ''
             },
             {
               display_name: "Payment Type",
