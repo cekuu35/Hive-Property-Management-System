@@ -316,6 +316,51 @@ export type Database = {
         }
         Relationships: []
       }
+      payments: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          landlord_id: string
+          lease_id: string | null
+          paid_at: string | null
+          payment_method: string | null
+          paystack_reference: string | null
+          reference: string
+          status: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          landlord_id: string
+          lease_id?: string | null
+          paid_at?: string | null
+          payment_method?: string | null
+          paystack_reference?: string | null
+          reference: string
+          status?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          landlord_id?: string
+          lease_id?: string | null
+          paid_at?: string | null
+          payment_method?: string | null
+          paystack_reference?: string | null
+          reference?: string
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -936,6 +981,14 @@ export type Database = {
       }
       user_can_view_lease: {
         Args: { _lease_id: string }
+        Returns: boolean
+      }
+      user_can_view_profile: {
+        Args: { _profile_id: string }
+        Returns: boolean
+      }
+      user_can_view_property: {
+        Args: { _property_id: string }
         Returns: boolean
       }
       user_can_view_unit: {
