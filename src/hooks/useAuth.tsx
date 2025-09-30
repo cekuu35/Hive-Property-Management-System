@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
+import { useState, useEffect, createContext, useContext, ReactNode, useRef } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -40,11 +40,20 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const isLoggingOut = useRef(false);
 
   useEffect(() => {
     // Listen for auth changes FIRST (critical for preventing deadlocks)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        console.log('Auth state changed:', event, session?.user?.id);
+        
+        // If we're logging out, don't process any auth changes
+        if (isLoggingOut.current) {
+          console.log('Logout in progress, ignoring auth state change');
+          return;
+        }
+
         // Only synchronous state updates here
         setUser(session?.user ?? null);
         
@@ -138,26 +147,40 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const signOut = async () => {
     try {
-      // Clear local state first
+      console.log('Starting logout process...');
+      
+      // Set logout flag to prevent auth state changes from interfering
+      isLoggingOut.current = true;
+      
+      // Clear local state immediately
       setUser(null);
       setProfile(null);
+      setLoading(false);
       
-      // Attempt to sign out from Supabase
+      // Sign out from Supabase
       const { error } = await supabase.auth.signOut();
       
-      // Only log error if it's not a session missing error (user already logged out)
       if (error && error.message !== 'Auth session missing!') {
         console.error('Error signing out:', error);
       }
       
-      // Force redirect to login page
-      window.location.href = '/';
+      console.log('Logout successful, redirecting to login...');
+      
+      // Use a small delay to ensure state is cleared
+      setTimeout(() => {
+        isLoggingOut.current = false;
+        // Force a full page reload to login page to clear all state
+        window.location.replace('/');
+      }, 100);
+      
     } catch (error) {
       console.error('Unexpected error during sign out:', error);
       // Still clear state and redirect even if there's an error
+      isLoggingOut.current = false;
       setUser(null);
       setProfile(null);
-      window.location.href = '/';
+      setLoading(false);
+      window.location.replace('/');
     }
   };
 
