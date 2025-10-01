@@ -288,3 +288,19 @@
     opacity: 0;
   }
 }
+
+/* Background animation for login page */
+@keyframes backgroundShift {
+  0%, 100% {
+    background-position: center center, center center;
+  }
+  25% {
+    background-position: 20% 20%, center center;
+  }
+  50% {
+    background-position: 80% 80%, center center;
+  }
+  75% {
+    background-position: 20% 80%, center center;
+  }
+}

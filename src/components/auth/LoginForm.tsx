@@ -144,10 +144,22 @@ export const LoginForm = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-auth-background">
+    <div 
+      className="min-h-screen flex items-center justify-center relative overflow-hidden bg-auth-background"
+      style={{
+        backgroundImage: `url('https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1973&q=80'), linear-gradient(135deg, #667eea 0%, #764ba2 100%)`,
+        backgroundSize: 'cover, cover',
+        backgroundPosition: 'center, center',
+        backgroundRepeat: 'no-repeat, no-repeat',
+        backgroundAttachment: 'fixed, fixed',
+        animation: 'backgroundShift 20s ease-in-out infinite'
+      }}
+    >
+      {/* Dark overlay for better text readability */}
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-[0.5px] z-10"></div>
       <AnimatedBackground />
       
-      <div className="relative z-10 w-full max-w-md px-6">
+      <div className="relative z-20 w-full max-w-md px-6">
         {/* Logo */}
         <div className="text-center mb-8 animate-fade-in">
           <div className="w-16 h-16 mx-auto mb-4 bg-gradient-logo-blue rounded-2xl flex items-center justify-center shadow-glow">

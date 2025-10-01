@@ -54,10 +54,10 @@ export const AnimatedBackground = () => {
     const animate = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Create dark gradient background
+      // Create subtle overlay instead of solid background to work with image
       const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-      gradient.addColorStop(0, "hsl(215, 25%, 6%)");
-      gradient.addColorStop(1, "hsl(215, 25%, 8%)");
+      gradient.addColorStop(0, "rgba(0, 0, 0, 0.1)");
+      gradient.addColorStop(1, "rgba(0, 0, 0, 0.2)");
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -73,10 +73,10 @@ export const AnimatedBackground = () => {
         if (particle.y < 0) particle.y = canvas.height;
         if (particle.y > canvas.height) particle.y = 0;
 
-        // Draw particle with blue glow
+        // Draw particle with subtle blue glow
         ctx.beginPath();
         ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
-        ctx.fillStyle = `hsl(224, 86%, 70%, ${particle.opacity})`;
+        ctx.fillStyle = `hsl(224, 86%, 80%, ${particle.opacity * 0.6})`;
         ctx.fill();
 
         // Draw connections to nearby particles
@@ -89,8 +89,8 @@ export const AnimatedBackground = () => {
             ctx.beginPath();
             ctx.moveTo(particle.x, particle.y);
             ctx.lineTo(otherParticle.x, otherParticle.y);
-            ctx.strokeStyle = `hsl(224, 86%, 70%, ${0.15 * (1 - distance / 100)})`;
-            ctx.lineWidth = 0.8;
+            ctx.strokeStyle = `hsl(224, 86%, 80%, ${0.08 * (1 - distance / 100)})`;
+            ctx.lineWidth = 0.5;
             ctx.stroke();
           }
         });
@@ -113,7 +113,7 @@ export const AnimatedBackground = () => {
     <canvas
       ref={canvasRef}
       className="absolute inset-0 w-full h-full pointer-events-none"
-      style={{ zIndex: 0 }}
+      style={{ zIndex: 1 }}
     />
   );
 };
