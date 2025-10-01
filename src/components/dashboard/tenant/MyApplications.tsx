@@ -9,16 +9,23 @@ import {
 import { useUnitApplications } from '@/hooks/useUnitApplications';
 import { format } from 'date-fns';
 import { DepositPaymentModal } from './DepositPaymentModal';
+import { ApplicationDetailsModal } from './ApplicationDetailsModal';
 import { useState } from 'react';
 
 export const MyApplications = () => {
   const { applications, loading, withdrawApplication, paySecurityDeposit } = useUnitApplications();
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [selectedApplication, setSelectedApplication] = useState<any>(null);
 
   const handlePayDeposit = (application: any) => {
     setSelectedApplication(application);
     setPaymentModalOpen(true);
+  };
+
+  const handleViewDetails = (application: any) => {
+    setSelectedApplication(application);
+    setDetailsModalOpen(true);
   };
 
   const handlePaymentComplete = async (applicationId: string, paymentReference: string) => {
@@ -231,7 +238,11 @@ export const MyApplications = () => {
 
               {/* Actions */}
               <div className="flex gap-2 pt-2">
-                <Button variant="outline" size="sm">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleViewDetails(application)}
+                >
                   <Eye className="h-4 w-4 mr-2" />
                   View Details
                 </Button>
@@ -268,6 +279,13 @@ export const MyApplications = () => {
         onClose={() => setPaymentModalOpen(false)}
         application={selectedApplication}
         onPaymentComplete={handlePaymentComplete}
+      />
+
+      {/* Application Details Modal */}
+      <ApplicationDetailsModal
+        isOpen={detailsModalOpen}
+        onClose={() => setDetailsModalOpen(false)}
+        application={selectedApplication}
       />
     </div>
   );
