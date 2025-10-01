@@ -330,7 +330,7 @@ export const useUnitApplications = () => {
       const { error: leaseError } = await supabase
         .from('leases')
         .insert({
-          tenant_id: tenantInfo.id,
+          tenant_id: application.tenant_id, // Use the applicant's profile ID
           tenant_info_id: tenantInfo.id,
           unit_id: application.unit_id,
           start_date: startDate,
