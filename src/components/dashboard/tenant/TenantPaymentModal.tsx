@@ -1,11 +1,17 @@
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Loader2, CreditCard, Check, Zap } from 'lucide-react';
+import { Loader2, CreditCard, Zap } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { usePaystackPayment } from '@/hooks/usePaystackPayment';
 import { useAuth } from '@/hooks/useAuth';
-import { PaystackButton } from 'react-paystack';
+import { supabase } from '@/integrations/supabase/client';
+
+// Declare Paystack type for TypeScript
+declare global {
+  interface Window {
+    PaystackPop: any;
+  }
+}
 
 interface TenantPaymentModalProps {
   open: boolean;
@@ -16,35 +22,103 @@ interface TenantPaymentModalProps {
 }
 
 export const TenantPaymentModal = ({ open, onOpenChange, rentAmount, dueDate, onPaymentSuccess }: TenantPaymentModalProps) => {
-  const { profile } = useAuth();
-  const { getPaystackProps, loading, setPaymentInProgress } = usePaystackPayment();
-  const [step, setStep] = useState<'payment' | 'success'>('payment');
+  const { profile, user } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [scriptLoaded, setScriptLoaded] = useState(false);
 
+  // Load Paystack inline script
   useEffect(() => {
-    if (open) {
-      setStep('payment');
+    if (open && !scriptLoaded) {
+      const script = document.createElement('script');
+      script.src = 'https://js.paystack.co/v1/inline.js';
+      script.async = true;
+      script.onload = () => setScriptLoaded(true);
+      document.body.appendChild(script);
+      
+      return () => {
+        if (script.parentNode) {
+          script.parentNode.removeChild(script);
+        }
+      };
     }
-  }, [open]);
+  }, [open, scriptLoaded]);
 
-  const handlePaymentSuccess = () => {
-    setStep('success');
-    setPaymentInProgress(false);
-    
-    // Simulate real-time balance update
-    setTimeout(() => {
-      onPaymentSuccess();
-      onOpenChange(false);
-      setStep('payment');
-    }, 2000);
+  const handlePayment = async () => {
+    if (!scriptLoaded || !window.PaystackPop) {
+      toast({
+        title: "Error",
+        description: "Payment system is still loading. Please try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Get user's active lease to include in metadata
+      const { data: lease } = await supabase
+        .from('leases')
+        .select('id')
+        .eq('tenant_id', profile?.id)
+        .eq('status', 'active')
+        .single();
+
+      const reference = `rent_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+      const publicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || 'pk_test_9f2c94cce8c01d4403373ce6f4bf8f1a7d142668';
+      
+      const handler = window.PaystackPop.setup({
+        key: publicKey,
+        email: user?.email || 'tenant@example.com',
+        amount: Math.round(rentAmount * 100), // Convert to kobo
+        currency: 'KES',
+        ref: reference,
+        metadata: {
+          custom_fields: [
+            {
+              display_name: "Tenant Name",
+              variable_name: "tenant_name",
+              value: `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || 'Tenant'
+            },
+            {
+              display_name: "Lease ID",
+              variable_name: "lease_id",
+              value: lease?.id || ''
+            },
+            {
+              display_name: "Due Date",
+              variable_name: "due_date",
+              value: dueDate
+            }
+          ]
+        },
+        callback: function(response: any) {
+          // Redirect to callback URL with reference
+          window.location.href = `https://lovly-prop-ai-33-ten.vercel.app/payment/callback?reference=${response.reference}`;
+        },
+        onClose: function() {
+          setLoading(false);
+          toast({
+            title: "Payment Cancelled",
+            description: "You closed the payment window. Your payment was not completed.",
+            variant: "destructive",
+          });
+        }
+      });
+
+      handler.openIframe();
+    } catch (error) {
+      console.error('Payment error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to initialize payment. Please try again.",
+        variant: "destructive",
+      });
+      setLoading(false);
+    }
   };
 
-  const handlePaymentClose = () => {
-    setPaymentInProgress(false);
-    onOpenChange(false);
-  };
-
-  // For now, we'll use a placeholder email. In a real app, you'd get this from the user object
-  const userEmail = 'tenant@example.com'; // This should come from the user object
+  const userEmail = user?.email || 'tenant@example.com';
   
   if (!userEmail) {
     return (
@@ -71,70 +145,51 @@ export const TenantPaymentModal = ({ open, onOpenChange, rentAmount, dueDate, on
   }
 
 
-  const renderPayment = () => {
-    const paymentData = {
-      amount: rentAmount,
-      email: userEmail,
-      tenantName: `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || 'Tenant',
-      unitInfo: 'Rent Payment',
-      dueDate: dueDate,
-    };
+  const renderPayment = () => (
+    <div className="flex flex-col items-center justify-center py-8 space-y-6">
+      <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+        <Zap className="h-8 w-8 text-blue-600" />
+      </div>
+      
+      <div className="text-center">
+        <h3 className="text-lg font-semibold mb-2">Pay Rent</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Amount: KES {rentAmount.toLocaleString()} • Due: {dueDate}
+        </p>
+      </div>
 
-    const paystackProps = {
-      ...getPaystackProps(paymentData),
-      onSuccess: (reference: string) => {
-        handlePaymentSuccess();
-      },
-      onClose: handlePaymentClose,
-    };
-
-    return (
-      <div className="flex flex-col items-center justify-center py-8 space-y-6">
-        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
-          <Zap className="h-8 w-8 text-blue-600" />
-        </div>
-        
-        <div className="text-center">
-          <h3 className="text-lg font-semibold mb-2">Pay Rent</h3>
-          <p className="text-sm text-muted-foreground mb-4">
-            Amount: KES {rentAmount.toLocaleString()} • Due: {dueDate}
-          </p>
-        </div>
-
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-sm">
-          <div className="flex items-start gap-3">
-            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-              <CreditCard className="h-4 w-4 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-blue-900">Paystack Payment Gateway</p>
-              <p className="text-xs text-blue-700 mt-1">
-                Choose from multiple payment options including cards, bank transfers, and mobile money.
-              </p>
-            </div>
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-sm">
+        <div className="flex items-start gap-3">
+          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+            <CreditCard className="h-4 w-4 text-blue-600" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-blue-900">Paystack Payment Gateway</p>
+            <p className="text-xs text-blue-700 mt-1">
+              Choose from multiple payment options including cards, bank transfers, and mobile money.
+            </p>
           </div>
         </div>
-
-        <div className="w-full max-w-xs">
-          <PaystackButton {...paystackProps} />
-        </div>
       </div>
-    );
-  };
 
-  const renderSuccess = () => (
-    <div className="flex flex-col items-center justify-center py-8 space-y-4">
-      <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
-        <Check className="h-8 w-8 text-green-600" />
-      </div>
-      <h3 className="text-lg font-semibold text-green-800">Payment Successful!</h3>
-      <p className="text-sm text-muted-foreground text-center">
-        Your rent payment of KES {rentAmount.toLocaleString()} has been processed successfully.
-      </p>
-      <div className="bg-green-50 border border-green-200 rounded-lg p-3 mt-4">
-        <p className="text-sm text-green-800">
-          ✅ A receipt has been sent to your email and SMS.
-        </p>
+      <div className="w-full max-w-xs">
+        <Button 
+          onClick={handlePayment} 
+          className="w-full"
+          disabled={loading || !scriptLoaded}
+        >
+          {loading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Processing...
+            </>
+          ) : (
+            <>
+              <CreditCard className="mr-2 h-4 w-4" />
+              Pay KES {rentAmount.toLocaleString()}
+            </>
+          )}
+        </Button>
       </div>
     </div>
   );
@@ -151,8 +206,7 @@ export const TenantPaymentModal = ({ open, onOpenChange, rentAmount, dueDate, on
         </DialogHeader>
 
         <div className="space-y-4">
-          {step === 'payment' && renderPayment()}
-          {step === 'success' && renderSuccess()}
+          {renderPayment()}
         </div>
       </DialogContent>
     </Dialog>
