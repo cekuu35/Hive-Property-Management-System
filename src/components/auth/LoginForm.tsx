@@ -155,9 +155,9 @@ export const LoginForm = () => {
         animation: 'backgroundShift 20s ease-in-out infinite'
       }}
     >
-      {/* Dark overlay for better text readability */}
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-[0.5px] z-10"></div>
       <AnimatedBackground />
+      {/* Dark overlay for better text readability */}
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-[0.5px] z-10"></div>
       
       <div className="relative z-20 w-full max-w-md px-6">
         {/* Logo */}

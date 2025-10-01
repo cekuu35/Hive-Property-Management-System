@@ -40,8 +40,8 @@ export const AnimatedBackground = () => {
           y: Math.random() * canvas.height,
           vx: (Math.random() - 0.5) * 0.5,
           vy: (Math.random() - 0.5) * 0.5,
-          size: Math.random() * 4 + 2,
-          opacity: Math.random() * 0.5 + 0.1,
+          size: Math.random() * 3 + 3,
+          opacity: Math.random() * 0.7 + 0.3,
         });
       }
 
@@ -73,11 +73,14 @@ export const AnimatedBackground = () => {
         if (particle.y < 0) particle.y = canvas.height;
         if (particle.y > canvas.height) particle.y = 0;
 
-        // Draw particle with subtle blue glow
+        // Draw particle with visible blue glow and shadow
+        ctx.shadowColor = `hsl(224, 86%, 70%)`;
+        ctx.shadowBlur = 8;
         ctx.beginPath();
         ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
-        ctx.fillStyle = `hsl(224, 86%, 80%, ${particle.opacity * 0.6})`;
+        ctx.fillStyle = `hsl(224, 86%, 85%, ${particle.opacity * 0.8})`;
         ctx.fill();
+        ctx.shadowBlur = 0;
 
         // Draw connections to nearby particles
         particlesRef.current.forEach((otherParticle) => {
@@ -86,12 +89,15 @@ export const AnimatedBackground = () => {
           );
 
           if (distance < 100) {
+            ctx.shadowColor = `hsl(224, 86%, 70%)`;
+            ctx.shadowBlur = 4;
             ctx.beginPath();
             ctx.moveTo(particle.x, particle.y);
             ctx.lineTo(otherParticle.x, otherParticle.y);
-            ctx.strokeStyle = `hsl(224, 86%, 80%, ${0.08 * (1 - distance / 100)})`;
-            ctx.lineWidth = 0.5;
+            ctx.strokeStyle = `hsl(224, 86%, 85%, ${0.15 * (1 - distance / 100)})`;
+            ctx.lineWidth = 0.8;
             ctx.stroke();
+            ctx.shadowBlur = 0;
           }
         });
       });
