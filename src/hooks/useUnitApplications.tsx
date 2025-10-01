@@ -104,11 +104,13 @@ export const useUnitApplications = () => {
             type,
             rent_amount,
             deposit_amount,
-            images
+            images,
+            property_id
           ),
           properties (
             name,
-            address
+            address,
+            landlord_id
           ),
           profiles!unit_applications_tenant_id_fkey (
             first_name,
@@ -117,11 +119,16 @@ export const useUnitApplications = () => {
             avatar_url
           )
         `)
-        .eq('properties.landlord_id', profile?.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setApplications((data || []) as UnitApplication[]);
+      
+      // Filter applications for this landlord's properties
+      const landlordApplications = (data || []).filter((app: any) => 
+        app.properties?.landlord_id === profile?.id
+      );
+      
+      setApplications(landlordApplications as UnitApplication[]);
     } catch (error) {
       console.error('Error fetching applications:', error);
       toast.error('Failed to load applications');
@@ -226,15 +233,22 @@ export const useUnitApplications = () => {
 
   const updateApplicationStatus = async (applicationId: string, status: 'approved' | 'rejected') => {
     try {
+      console.log(`Updating application ${applicationId} to status: ${status}`);
+      
       // Check if deposit is paid before approving
       if (status === 'approved') {
         const { data: applicationData, error: checkError } = await supabase
           .from('unit_applications')
-          .select('deposit_paid')
+          .select('deposit_paid, tenant_id, unit_id, property_id')
           .eq('id', applicationId)
           .single();
 
-        if (checkError) throw checkError;
+        if (checkError) {
+          console.error('Error checking application:', checkError);
+          throw checkError;
+        }
+        
+        console.log('Application data:', applicationData);
         
         if (!applicationData?.deposit_paid) {
           toast.error('Cannot approve application: Security deposit has not been paid');
@@ -266,14 +280,29 @@ export const useUnitApplications = () => {
         `)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error updating application status:', error);
+        throw error;
+      }
+      
+      console.log('Application updated successfully:', data);
       
       // If application is approved, create tenant and lease
       if (status === 'approved' && data) {
+        console.log('Creating tenant from application...');
         await createTenantFromApplication(data);
+        console.log('Tenant created successfully');
       }
       
       setApplications(prev => prev.map(app => app.id === applicationId ? data as UnitApplication : app));
+      
+      // Refresh applications list to ensure consistency
+      if (profile?.role === 'landlord') {
+        await fetchLandlordApplications();
+      } else if (profile?.role === 'tenant') {
+        await fetchTenantApplications();
+      }
+      
       toast.success(`Application ${status} successfully!`);
       return data;
     } catch (error) {
@@ -285,24 +314,16 @@ export const useUnitApplications = () => {
 
   const createTenantFromApplication = async (application: any) => {
     try {
-      // Get the current authenticated user's profile ID
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) throw new Error('Not authenticated');
-      
-      const { data: myProfile, error: myProfileError } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('user_id', authUser.id)
-        .single();
-        
-      if (myProfileError || !myProfile) {
-        throw new Error('Your profile was not found. Please contact support.');
+      // Get the property's landlord ID from the application data
+      const landlordId = application.properties?.landlord_id;
+      if (!landlordId) {
+        throw new Error('Property landlord not found');
       }
 
       // Get applicant's profile information
       const { data: applicantProfile, error: applicantError } = await supabase
         .from('profiles')
-        .select('first_name, last_name, phone')
+        .select('first_name, last_name, phone, email')
         .eq('id', application.tenant_id)
         .single();
 
@@ -312,10 +333,10 @@ export const useUnitApplications = () => {
       const { data: tenantInfo, error: tenantError } = await supabase
         .from('tenant_info')
         .insert({
-          landlord_id: myProfile.id,
+          landlord_id: landlordId,
           first_name: applicantProfile?.first_name || 'N/A',
           last_name: applicantProfile?.last_name || 'N/A',
-          email: `tenant-${application.tenant_id}@temp.com`, // Temporary email
+          email: applicantProfile?.email || `tenant-${application.tenant_id}@temp.com`,
           phone: applicantProfile?.phone || null,
           profile_id: application.tenant_id
         })

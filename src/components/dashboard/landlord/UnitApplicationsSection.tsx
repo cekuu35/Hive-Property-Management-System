@@ -58,7 +58,13 @@ export const UnitApplicationsSection = () => {
   };
 
   const handleStatusUpdate = async (applicationId: string, status: 'approved' | 'rejected') => {
-    await updateApplicationStatus(applicationId, status);
+    try {
+      console.log(`Landlord updating application ${applicationId} to ${status}`);
+      await updateApplicationStatus(applicationId, status);
+      console.log('Status update completed successfully');
+    } catch (error) {
+      console.error('Error updating application status:', error);
+    }
   };
 
   if (loading) {
