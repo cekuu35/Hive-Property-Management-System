@@ -1,13 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CreditCard, Smartphone, Building2, Wallet, CheckCircle, Copy } from 'lucide-react';
+import { CreditCard, Loader2, Zap } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '@/hooks/useAuth';
+
+// Declare Paystack type for TypeScript
+declare global {
+  interface Window {
+    PaystackPop: any;
+  }
+}
 
 interface DepositPaymentModalProps {
   isOpen: boolean;
@@ -22,111 +26,137 @@ export const DepositPaymentModal = ({
   application, 
   onPaymentComplete 
 }: DepositPaymentModalProps) => {
-  const [paymentMethod, setPaymentMethod] = useState('mpesa');
-  const [paymentReference, setPaymentReference] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [accountNumber, setAccountNumber] = useState('');
-  const [cardNumber, setCardNumber] = useState('');
-  const [expiryDate, setExpiryDate] = useState('');
-  const [cvv, setCvv] = useState('');
-  const [bankCode, setBankCode] = useState('');
+  const { profile, user } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [scriptLoaded, setScriptLoaded] = useState(false);
 
   // Get the correct deposit amount from the unit (fallback to unit rent if missing)
   const depositAmount = (application?.units?.deposit_amount ?? application?.deposit_amount ?? application?.units?.rent_amount ?? 0);
 
+  // Load Paystack inline script
+  useEffect(() => {
+    if (isOpen && !scriptLoaded) {
+      const script = document.createElement('script');
+      script.src = 'https://js.paystack.co/v1/inline.js';
+      script.async = true;
+      script.onload = () => setScriptLoaded(true);
+      document.body.appendChild(script);
+      
+      return () => {
+        if (script.parentNode) {
+          script.parentNode.removeChild(script);
+        }
+      };
+    }
+  }, [isOpen, scriptLoaded]);
+
   const handlePayment = async () => {
-    // Validate based on payment method
-    let isValid = false;
-    let reference = '';
-
-    switch (paymentMethod) {
-      case 'mpesa':
-        if (!phoneNumber.trim()) {
-          toast.error('Please enter your M-Pesa phone number');
-          return;
-        }
-        reference = `MPESA-${phoneNumber}-${Date.now()}`;
-        isValid = true;
-        break;
-      case 'bank':
-        if (!accountNumber.trim() || !bankCode.trim()) {
-          toast.error('Please fill in all bank details');
-          return;
-        }
-        reference = `BANK-${bankCode}-${accountNumber}-${Date.now()}`;
-        isValid = true;
-        break;
-      case 'card':
-        if (!cardNumber.trim() || !expiryDate.trim() || !cvv.trim()) {
-          toast.error('Please fill in all card details');
-          return;
-        }
-        reference = `CARD-****${cardNumber.slice(-4)}-${Date.now()}`;
-        isValid = true;
-        break;
-      default:
-        if (!paymentReference.trim()) {
-          toast.error('Please enter a payment reference');
-          return;
-        }
-        reference = paymentReference;
-        isValid = true;
+    if (!scriptLoaded || !window.PaystackPop) {
+      toast.error('Payment system is still loading. Please try again.');
+      return;
     }
 
-    if (!isValid) return;
+    setLoading(true);
 
-    setIsProcessing(true);
     try {
-      // Simulate processing time
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const reference = `deposit_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+      const publicKey = 'pk_test_9f2c94cce8c01d4403373ce6f4bf8f1a7d142668';
       
-      await onPaymentComplete(application.id, reference);
-      
-      // Success message with payment method
-      const methodName = paymentMethod === 'mpesa' ? 'M-Pesa' : 
-                        paymentMethod === 'bank' ? 'Bank Transfer' :
-                        paymentMethod === 'card' ? 'Card Payment' : 'Manual Payment';
-      
-      toast.success(`Payment successful via ${methodName}!`, {
-        description: `Reference: ${reference}`
+      const handler = window.PaystackPop.setup({
+        key: publicKey,
+        email: user?.email || 'tenant@example.com',
+        amount: Math.round(depositAmount * 100), // Convert to kobo
+        currency: 'KES',
+        ref: reference,
+        metadata: {
+          custom_fields: [
+            {
+              display_name: "Tenant Name",
+              variable_name: "tenant_name",
+              value: `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || 'Tenant'
+            },
+            {
+              display_name: "Application ID",
+              variable_name: "application_id",
+              value: application?.id || ''
+            },
+            {
+              display_name: "Property",
+              variable_name: "property",
+              value: application?.properties?.name || ''
+            },
+            {
+              display_name: "Unit",
+              variable_name: "unit",
+              value: application?.units?.unit_number || ''
+            },
+            {
+              display_name: "Payment Type",
+              variable_name: "payment_type",
+              value: "Security Deposit"
+            }
+          ]
+        },
+        callback: function(response: any) {
+          // Call the completion handler and then redirect
+          onPaymentComplete(application.id, response.reference).then(() => {
+            window.location.href = `https://lovly-prop-ai-33-ten.vercel.app/payment/callback?reference=${response.reference}`;
+          });
+        },
+        onClose: function() {
+          setLoading(false);
+          toast.error('Payment Cancelled', {
+            description: 'You closed the payment window. Your payment was not completed.'
+          });
+        }
       });
-      
-      onClose();
-      
-      // Reset form
-      setPaymentReference('');
-      setPhoneNumber('');
-      setAccountNumber('');
-      setCardNumber('');
-      setExpiryDate('');
-      setCvv('');
-      setBankCode('');
+
+      handler.openIframe();
     } catch (error) {
-      console.error('Payment failed:', error);
-      toast.error('Payment failed. Please try again.');
-    } finally {
-      setIsProcessing(false);
+      console.error('Payment error:', error);
+      toast.error('Failed to initialize payment. Please try again.');
+      setLoading(false);
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success('Copied to clipboard');
-  };
+  const userEmail = user?.email || 'tenant@example.com';
+  
+  if (!userEmail) {
+    return (
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Zap className="h-5 w-5" />
+              Payment Error
+            </DialogTitle>
+            <DialogDescription>Email is required for payment processing.</DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-muted-foreground mb-4">
+              Please ensure your email is set in your profile to process payments.
+            </p>
+            <Button onClick={onClose} className="w-full">
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <CreditCard className="h-5 w-5" />
+            <Zap className="h-5 w-5" />
             Pay Security Deposit
           </DialogTitle>
-          <DialogDescription>Securely pay your refundable security deposit.</DialogDescription>
+          <DialogDescription>Secure payment processing powered by Paystack.</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* Application Details */}
           <Card>
             <CardHeader className="pb-3">
@@ -143,257 +173,61 @@ export const DepositPaymentModal = ({
             </CardContent>
           </Card>
 
-          {/* Payment Methods */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Choose Payment Method</CardTitle>
-              <CardDescription>Select your preferred payment method</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Tabs value={paymentMethod} onValueChange={setPaymentMethod} className="w-full">
-                <TabsList className="grid w-full grid-cols-4 bg-muted p-1 h-auto">
-                  <TabsTrigger 
-                    value="mpesa" 
-                    className="flex items-center gap-2 data-[state=active]:bg-success data-[state=active]:text-success-foreground font-medium py-3"
-                  >
-                    <Smartphone className="h-4 w-4" />
-                    M-Pesa
-                  </TabsTrigger>
-                  <TabsTrigger 
-                    value="bank" 
-                    className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-medium py-3"
-                  >
-                    <Building2 className="h-4 w-4" />
-                    Bank
-                  </TabsTrigger>
-                  <TabsTrigger 
-                    value="card" 
-                    className="flex items-center gap-2 data-[state=active]:bg-accent data-[state=active]:text-accent-foreground font-medium py-3"
-                  >
-                    <CreditCard className="h-4 w-4" />
-                    Card
-                  </TabsTrigger>
-                  <TabsTrigger 
-                    value="other" 
-                    className="flex items-center gap-2 data-[state=active]:bg-secondary data-[state=active]:text-secondary-foreground font-medium py-3"
-                  >
-                    <Wallet className="h-4 w-4" />
-                    Other
-                  </TabsTrigger>
-                </TabsList>
+          {/* Payment Section */}
+          <div className="flex flex-col items-center justify-center py-6 space-y-6">
+            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
+              <Zap className="h-8 w-8 text-blue-600" />
+            </div>
+            
+            <div className="text-center">
+              <h3 className="text-lg font-semibold mb-2">Pay Security Deposit</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Amount: KES {depositAmount?.toLocaleString()}
+              </p>
+            </div>
 
-                {/* M-Pesa Payment */}
-                <TabsContent value="mpesa" className="space-y-4 mt-6">
-                  <div className="bg-success/10 border border-success/30 rounded-lg p-6 shadow-sm">
-                    <div className="flex items-center gap-2 text-success mb-4">
-                      <Smartphone className="h-5 w-5" />
-                      <span className="font-semibold text-lg">M-Pesa Payment</span>
-                    </div>
-                    <div className="space-y-3">
-                      <div>
-                        <Label htmlFor="phone">Your M-Pesa Phone Number</Label>
-                        <Input
-                          id="phone"
-                          value={phoneNumber}
-                          onChange={(e) => setPhoneNumber(e.target.value)}
-                          placeholder="e.g., 0712345678"
-                          className="mt-1"
-                        />
-                      </div>
-                      <div className="bg-card/50 rounded-md p-4 border border-border/50">
-                        <p className="text-sm font-semibold mb-3 text-foreground">Payment Instructions:</p>
-                        <ol className="text-sm space-y-2 text-muted-foreground">
-                          <li>1. Go to M-Pesa menu</li>
-                          <li>2. Select "Lipa na M-Pesa"</li>
-                          <li>3. Select "Buy Goods and Services"</li>
-                          <li>4. Enter Till Number: <span className="font-mono font-bold">247247</span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-auto p-1 ml-1"
-                              onClick={() => copyToClipboard('247247')}
-                            >
-                              <Copy className="h-3 w-3" />
-                            </Button>
-                          </li>
-                          <li>5. Enter Amount: KES {depositAmount?.toLocaleString()}</li>
-                          <li>6. Enter your PIN and confirm</li>
-                        </ol>
-                      </div>
-                    </div>
-                  </div>
-                </TabsContent>
-
-                {/* Bank Transfer */}
-                <TabsContent value="bank" className="space-y-4 mt-6">
-                  <div className="bg-primary/10 border border-primary/30 rounded-lg p-6 shadow-sm">
-                    <div className="flex items-center gap-2 text-primary mb-4">
-                      <Building2 className="h-5 w-5" />
-                      <span className="font-semibold text-lg">Bank Transfer</span>
-                    </div>
-                    <div className="space-y-3">
-                      <div>
-                        <Label htmlFor="bank">Select Bank</Label>
-                        <Select value={bankCode} onValueChange={setBankCode}>
-                          <SelectTrigger className="mt-1">
-                            <SelectValue placeholder="Choose your bank" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="KCB">KCB Bank</SelectItem>
-                            <SelectItem value="EQUITY">Equity Bank</SelectItem>
-                            <SelectItem value="COOP">Co-operative Bank</SelectItem>
-                            <SelectItem value="ABSA">Absa Bank</SelectItem>
-                            <SelectItem value="STANBIC">Stanbic Bank</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label htmlFor="account">Account Number</Label>
-                        <Input
-                          id="account"
-                          value={accountNumber}
-                          onChange={(e) => setAccountNumber(e.target.value)}
-                          placeholder="Enter your account number"
-                          className="mt-1"
-                        />
-                      </div>
-                      <div className="bg-card/50 rounded-md p-4 border border-border/50">
-                        <p className="text-sm font-semibold mb-3 text-foreground">Company Bank Details:</p>
-                        <div className="text-sm space-y-2">
-                          <p>Account Name: <span className="font-semibold">Property Management Pro Ltd</span></p>
-                          <p>Account Number: <span className="font-mono">1234567890</span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-auto p-1 ml-1"
-                              onClick={() => copyToClipboard('1234567890')}
-                            >
-                              <Copy className="h-3 w-3" />
-                            </Button>
-                          </p>
-                          <p>Bank: <span className="font-semibold">KCB Bank</span></p>
-                          <p>Branch: <span className="font-semibold">Westlands</span></p>
-                          <p>Amount: <span className="font-semibold">KES {depositAmount?.toLocaleString()}</span></p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </TabsContent>
-
-                {/* Card Payment */}
-                <TabsContent value="card" className="space-y-4 mt-6">
-                  <div className="bg-accent/10 border border-accent/30 rounded-lg p-6 shadow-sm">
-                    <div className="flex items-center gap-2 text-accent mb-4">
-                      <CreditCard className="h-5 w-5" />
-                      <span className="font-semibold text-lg">Card Payment</span>
-                    </div>
-                    <div className="space-y-3">
-                      <div>
-                        <Label htmlFor="card-number">Card Number</Label>
-                        <Input
-                          id="card-number"
-                          value={cardNumber}
-                          onChange={(e) => setCardNumber(e.target.value)}
-                          placeholder="1234 5678 9012 3456"
-                          maxLength={19}
-                          className="mt-1"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <Label htmlFor="expiry">Expiry Date</Label>
-                          <Input
-                            id="expiry"
-                            value={expiryDate}
-                            onChange={(e) => setExpiryDate(e.target.value)}
-                            placeholder="MM/YY"
-                            maxLength={5}
-                            className="mt-1"
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="cvv">CVV</Label>
-                          <Input
-                            id="cvv"
-                            value={cvv}
-                            onChange={(e) => setCvv(e.target.value)}
-                            placeholder="123"
-                            maxLength={3}
-                            className="mt-1"
-                          />
-                        </div>
-                      </div>
-                      <div className="bg-card/50 rounded-md p-4 border border-border/50">
-                        <div className="flex items-center gap-2 text-success">
-                          <CheckCircle className="h-4 w-4" />
-                          <span className="text-sm font-semibold">Secure Payment</span>
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-2">
-                          Your card details are encrypted and secure
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </TabsContent>
-
-                {/* Other Payment Methods */}
-                <TabsContent value="other" className="space-y-4 mt-6">
-                  <div className="bg-secondary/10 border border-secondary/30 rounded-lg p-6 shadow-sm">
-                    <div className="flex items-center gap-2 text-secondary mb-4">
-                      <Wallet className="h-5 w-5" />
-                      <span className="font-semibold text-lg">Other Payment Methods</span>
-                    </div>
-                    <div className="space-y-3">
-                      <div>
-                        <Label htmlFor="payment-reference">Payment Reference/Transaction ID</Label>
-                        <Input
-                          id="payment-reference"
-                          value={paymentReference}
-                          onChange={(e) => setPaymentReference(e.target.value)}
-                          placeholder="Enter transaction reference"
-                          className="mt-1"
-                        />
-                      </div>
-                      <div className="bg-card/50 rounded-md p-4 border border-border/50">
-                        <p className="text-sm font-semibold mb-3 text-foreground">Alternative Options:</p>
-                        <ul className="text-sm space-y-2 text-muted-foreground">
-                          <li>• Cash deposit at any KCB branch</li>
-                          <li>• Cheque payment</li>
-                          <li>• Mobile money (Airtel Money, T-Kash)</li>
-                          <li>• PayPal transfer</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-
-          {/* Action Buttons */}
-          <div className="flex gap-3 pt-4">
-            <Button
-              variant="outline"
-              onClick={onClose}
-              className="flex-1"
-              disabled={isProcessing}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handlePayment}
-              className="flex-1"
-              disabled={isProcessing}
-            >
-              {isProcessing ? (
-                <div className="flex items-center gap-2">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  Processing...
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-sm w-full">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <CreditCard className="h-4 w-4 text-blue-600" />
                 </div>
-              ) : (
-                `Pay KES ${depositAmount?.toLocaleString()}`
-              )}
-            </Button>
+                <div>
+                  <p className="text-sm font-medium text-blue-900">Paystack Payment Gateway</p>
+                  <p className="text-xs text-blue-700 mt-1">
+                    Choose from multiple payment options including cards, bank transfers, and mobile money.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="w-full max-w-xs space-y-3">
+              <Button 
+                onClick={handlePayment} 
+                className="w-full"
+                disabled={loading || !scriptLoaded}
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    Pay KES {depositAmount?.toLocaleString()}
+                  </>
+                )}
+              </Button>
+              
+              <Button 
+                variant="outline" 
+                onClick={onClose} 
+                className="w-full"
+                disabled={loading}
+              >
+                Cancel
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>
