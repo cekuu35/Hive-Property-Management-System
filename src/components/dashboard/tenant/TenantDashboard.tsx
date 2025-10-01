@@ -30,6 +30,7 @@ import { useMaintenanceRequests } from '@/hooks/useMaintenanceRequests';
 import { useApprovedLease } from '@/hooks/useApprovedLease';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenantPayments } from '@/hooks/useTenantPayments';
+import { useRentFlow } from '@/hooks/useRentFlow';
 import { useMessages } from '@/hooks/useMessages';
 
 interface TenantDashboardProps {
@@ -48,7 +49,22 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
   
   const { requests: maintenanceRequests, loading: maintenanceLoading, refetch } = useMaintenanceRequests();
   const { approvedLease, hasApprovedLease, loading: leaseLoading } = useApprovedLease();
-  const { recentPayments, rentBalance: tenantRentBalance, nextPaymentDue } = useTenantPayments();
+  const { 
+    recentPayments, 
+    rentBalance: tenantRentBalance, 
+    nextPaymentDue,
+    currentRentDue,
+    isOverdue,
+    daysUntilDue,
+    lateFee
+  } = useTenantPayments();
+  
+  const { 
+    hasActiveLease, 
+    securityDepositPaid, 
+    monthlyRentDue, 
+    loading: rentFlowLoading 
+  } = useRentFlow();
   const { conversations } = useMessages();
   const pendingRequestsCount = maintenanceRequests.filter(r => r.status === 'pending').length;
   const unreadCount = conversations.reduce((sum, c) => sum + (c.unread_count || 0), 0);
@@ -411,23 +427,65 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Current Balance */}
-            <Card className="bg-gradient-to-r from-primary to-primary-glow text-primary-foreground">
+            <Card className={`bg-gradient-to-r ${isOverdue ? 'from-red-500 to-red-600' : 'from-primary to-primary-glow'} text-primary-foreground`}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <CreditCard className="h-5 w-5" />
-                  Current Balance
+                  {isOverdue ? 'Overdue Balance' : 'Current Balance'}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold mb-2">KES {(tenantRentBalance ?? 0).toLocaleString()}</div>
-                <p className="text-sm opacity-90 mb-2">Due: {nextPaymentDue || '-'}</p>
-                <p className="text-xs opacity-75 mb-4">Late fee: KES 2,500 after due date</p>
+                
+                {/* Rent Flow Status */}
+                {hasActiveLease && (
+                  <div className="mb-4 p-3 bg-white/10 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className={`w-2 h-2 rounded-full ${securityDepositPaid ? 'bg-green-400' : 'bg-yellow-400'}`}></div>
+                      <span className="text-sm font-medium">
+                        {securityDepositPaid ? 'Security Deposit Paid ✓' : 'Security Deposit Pending'}
+                      </span>
+                    </div>
+                    {securityDepositPaid && monthlyRentDue > 0 && (
+                      <p className="text-xs opacity-90">
+                        Monthly rent of KES {monthlyRentDue.toLocaleString()} is now due
+                      </p>
+                    )}
+                  </div>
+                )}
+                
+                <div className="space-y-1 mb-4">
+                  <p className="text-sm opacity-90">
+                    Due: {nextPaymentDue ? new Date(nextPaymentDue).toLocaleDateString() : '-'}
+                  </p>
+                  {currentRentDue > 0 && (
+                    <p className="text-xs opacity-75">
+                      Monthly Rent: KES {currentRentDue.toLocaleString()}
+                    </p>
+                  )}
+                  {lateFee > 0 && (
+                    <p className="text-xs opacity-75 text-red-200">
+                      Late Fee: KES {lateFee.toLocaleString()}
+                    </p>
+                  )}
+                  {daysUntilDue !== 0 && (
+                    <p className="text-xs opacity-75">
+                      {isOverdue 
+                        ? `${Math.abs(daysUntilDue)} days overdue` 
+                        : `${daysUntilDue} days until due`
+                      }
+                    </p>
+                  )}
+                </div>
                 <Button 
                   variant="secondary" 
                   onClick={() => setShowPaymentModal(true)}
                   className="w-full"
+                  disabled={!hasActiveLease || !securityDepositPaid}
                 >
-                  Pay Now
+                  {!hasActiveLease ? 'No Active Lease' : 
+                   !securityDepositPaid ? 'Security Deposit Required' :
+                   isOverdue ? 'Pay Overdue Amount' : 'Pay Now'}
                 </Button>
               </CardContent>
             </Card>

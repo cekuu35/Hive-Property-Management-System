@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
+import { useMonthlyRent } from './useMonthlyRent';
 
 export interface TenantPayment {
   id: string;
@@ -17,6 +18,16 @@ export const useTenantPayments = () => {
   const [rentBalance, setRentBalance] = useState<number>(0);
   const [nextPaymentDue, setNextPaymentDue] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
+  
+  // Use monthly rent calculation
+  const { 
+    currentRentDue, 
+    nextDueDate, 
+    isOverdue, 
+    daysUntilDue, 
+    lateFee,
+    loading: monthlyRentLoading 
+  } = useMonthlyRent();
 
   const fetchPayments = async () => {
     if (!profile?.id) return;
@@ -82,19 +93,10 @@ export const useTenantPayments = () => {
 
       setRecentPayments(mapped.slice(0, 10));
 
-      const outstanding = (payments || [])
-        .filter((p: any) => p.status !== 'paid')
-        .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
-      setRentBalance(outstanding);
-
-      const today = new Date();
-      const upcoming = (payments || [])
-        .filter((p: any) => p.status !== 'paid')
-        .map((p: any) => ({ due: new Date(p.due_date), str: p.due_date as string }))
-        .filter((x: any) => !isNaN(x.due.getTime()) && x.due >= new Date(today.toDateString()))
-        .sort((a: any, b: any) => a.due.getTime() - b.due.getTime());
-
-      setNextPaymentDue(upcoming[0]?.str || '');
+      // Use monthly rent calculation for current balance
+      const totalOutstanding = currentRentDue + lateFee;
+      setRentBalance(totalOutstanding);
+      setNextPaymentDue(nextDueDate);
     } catch (error) {
       console.error('Error fetching tenant payments:', error);
     } finally {
@@ -106,5 +108,16 @@ export const useTenantPayments = () => {
     fetchPayments();
   }, [profile?.id]);
 
-  return { recentPayments, rentBalance, nextPaymentDue, loading, refetch: fetchPayments };
+  return { 
+    recentPayments, 
+    rentBalance, 
+    nextPaymentDue, 
+    loading: loading || monthlyRentLoading, 
+    refetch: fetchPayments,
+    // Additional monthly rent data
+    currentRentDue,
+    isOverdue,
+    daysUntilDue,
+    lateFee
+  };
 }
