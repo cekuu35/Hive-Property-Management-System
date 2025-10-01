@@ -87,6 +87,14 @@ export const UnitBrowsing = ({ onBack }: UnitBrowsingProps) => {
           </CardHeader>
         </Card>
 
+        {/* Available Units Header */}
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold">Available Units</h3>
+          <div className="text-sm text-muted-foreground">
+            Sorted by unit number
+          </div>
+        </div>
+
         {/* Available Units */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {propertyUnits.map((unit) => {

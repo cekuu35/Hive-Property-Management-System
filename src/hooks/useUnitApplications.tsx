@@ -152,7 +152,12 @@ export const useUnitApplications = () => {
       if (propertiesResponse.error) throw propertiesResponse.error;
       if (unitsResponse.error) throw unitsResponse.error;
 
-      setProperties((propertiesResponse.data || []) as Property[]);
+      // Sort properties by name for better organization
+      const sortedProperties = (propertiesResponse.data || []).sort((a: any, b: any) => 
+        a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+      );
+      
+      setProperties(sortedProperties as Property[]);
       setVacantUnits((unitsResponse.data || []) as Unit[]);
     } catch (error) {
       console.error('Error fetching properties and units:', error);
@@ -388,7 +393,47 @@ export const useUnitApplications = () => {
   };
 
   const getUnitsForProperty = (propertyId: string) => {
-    return vacantUnits.filter(unit => unit.property_id === propertyId);
+    const propertyUnits = vacantUnits.filter(unit => unit.property_id === propertyId);
+    
+    // Sort units by unit number (natural sort for proper numerical ordering)
+    return propertyUnits.sort((a, b) => {
+      const aNum = a.unit_number;
+      const bNum = b.unit_number;
+      
+      // Handle pure numeric unit numbers
+      const aIsNumeric = /^\d+$/.test(aNum);
+      const bIsNumeric = /^\d+$/.test(bNum);
+      
+      if (aIsNumeric && bIsNumeric) {
+        return parseInt(aNum, 10) - parseInt(bNum, 10);
+      }
+      
+      // Handle alphanumeric unit numbers (e.g., A1, B2, etc.)
+      const aMatch = aNum.match(/^([A-Za-z]*)(\d+)(.*)$/);
+      const bMatch = bNum.match(/^([A-Za-z]*)(\d+)(.*)$/);
+      
+      if (aMatch && bMatch) {
+        const [, aPrefix, aNumber, aSuffix] = aMatch;
+        const [, bPrefix, bNumber, bSuffix] = bMatch;
+        
+        // First compare prefix (A, B, C, etc.)
+        if (aPrefix !== bPrefix) {
+          return aPrefix.localeCompare(bPrefix);
+        }
+        
+        // Then compare numbers
+        const numDiff = parseInt(aNumber, 10) - parseInt(bNumber, 10);
+        if (numDiff !== 0) {
+          return numDiff;
+        }
+        
+        // Finally compare suffix
+        return aSuffix.localeCompare(bSuffix);
+      }
+      
+      // Fallback to string comparison
+      return aNum.localeCompare(bNum, undefined, { numeric: true, sensitivity: 'base' });
+    });
   };
 
   const hasAppliedToUnit = (unitId: string) => {
