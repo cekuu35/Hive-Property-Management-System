@@ -10,9 +10,11 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Wrench, Clock, CheckCircle, AlertTriangle, User, Calendar, DollarSign, Search, Filter, Loader2, Edit, Eye, MoreHorizontal } from 'lucide-react';
+import { Wrench, Clock, CheckCircle, AlertTriangle, User, Calendar, DollarSign, Search, Filter, Loader2, Edit, Eye, MoreHorizontal, Plus, Phone, Mail, MapPin, Star, Trash2 } from 'lucide-react';
 import { useMaintenanceRequests } from '@/hooks/useMaintenanceRequests';
+import { useContractors } from '@/hooks/useContractors';
 import { MaintenanceRequestModal } from '@/components/dashboard/maintenance/MaintenanceRequestModal';
+import { ContractorModal } from '@/components/dashboard/maintenance/ContractorModal';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -21,6 +23,7 @@ export const MaintenanceSection = () => {
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isContractorModalOpen, setIsContractorModalOpen] = useState(false);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [isCostModalOpen, setIsCostModalOpen] = useState(false);
@@ -44,6 +47,17 @@ export const MaintenanceSection = () => {
     getStats, 
     refetch 
   } = useMaintenanceRequests();
+  
+  const {
+    contractors,
+    loading: contractorsLoading,
+    createContractor,
+    updateContractor,
+    deleteContractor,
+    toggleContractorStatus,
+    getActiveContractors
+  } = useContractors();
+  
   const { toast } = useToast();
 
   const handleCreateRequest = async (requestData: any) => {
@@ -201,11 +215,23 @@ export const MaintenanceSection = () => {
     }
   };
 
-  const mockContractors = [
-    { id: '1', name: 'Mike Johnson', specialty: 'Plumbing', phone: '+254 712 123 456', rating: 4.8 },
-    { id: '2', name: 'Sarah Wilson', specialty: 'General Repairs', phone: '+254 723 234 567', rating: 4.9 },
-    { id: '3', name: 'David Kim', specialty: 'HVAC', phone: '+254 734 345 678', rating: 4.7 }
-  ];
+  const handleCreateContractor = async (contractorData: any) => {
+    const success = await createContractor(contractorData);
+    if (success) {
+      setIsContractorModalOpen(false);
+    }
+    return success;
+  };
+
+  const handleDeleteContractor = async (contractorId: string) => {
+    if (window.confirm('Are you sure you want to delete this contractor?')) {
+      await deleteContractor(contractorId);
+    }
+  };
+
+  const handleToggleContractorStatus = async (contractorId: string, isActive: boolean) => {
+    await toggleContractorStatus(contractorId, !isActive);
+  };
 
   const statsData = getStats();
 
@@ -484,31 +510,132 @@ export const MaintenanceSection = () => {
         </TabsContent>
 
         <TabsContent value="contractors" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {mockContractors.map((contractor) => (
-              <Card key={contractor.id}>
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
-                    <Avatar>
-                      <AvatarFallback>{contractor.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <h3 className="font-semibold">{contractor.name}</h3>
-                      <p className="text-sm text-muted-foreground">{contractor.specialty}</p>
-                      <p className="text-sm text-muted-foreground">{contractor.phone}</p>
-                      <div className="flex items-center gap-1 mt-2">
-                        <span className="text-sm font-medium">Rating: {contractor.rating}</span>
-                        <span className="text-warning">★</span>
-                      </div>
-                      <Button variant="outline" size="sm" className="mt-2 w-full">
-                        View Profile
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+          <div className="flex justify-between items-center">
+            <div>
+              <h3 className="text-lg font-semibold">Contractors</h3>
+              <p className="text-sm text-muted-foreground">Manage your network of contractors</p>
+            </div>
+            <Button onClick={() => setIsContractorModalOpen(true)} className="gap-2">
+              <Plus className="h-4 w-4" />
+              Add Contractor
+            </Button>
           </div>
+
+          {contractorsLoading ? (
+            <div className="flex items-center justify-center h-32">
+              <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+          ) : contractors.length === 0 ? (
+            <Card>
+              <CardContent className="p-8 text-center">
+                <User className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Contractors Added</h3>
+                <p className="text-muted-foreground mb-4">
+                  Start building your contractor network to manage maintenance requests efficiently.
+                </p>
+                <Button onClick={() => setIsContractorModalOpen(true)} className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  Add Your First Contractor
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {contractors.map((contractor) => (
+                <Card key={contractor.id} className={!contractor.is_active ? 'opacity-60' : ''}>
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <Avatar>
+                        <AvatarFallback>{contractor.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h3 className="font-semibold">{contractor.name}</h3>
+                            <p className="text-sm text-muted-foreground">{contractor.specialty}</p>
+                          </div>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleToggleContractorStatus(contractor.id, contractor.is_active)}
+                              title={contractor.is_active ? "Deactivate" : "Activate"}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteContractor(contractor.id)}
+                              title="Delete contractor"
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        
+                        {contractor.phone && (
+                          <div className="flex items-center gap-1 mt-1">
+                            <Phone className="h-3 w-3 text-muted-foreground" />
+                            <p className="text-sm text-muted-foreground">{contractor.phone}</p>
+                          </div>
+                        )}
+                        
+                        {contractor.email && (
+                          <div className="flex items-center gap-1 mt-1">
+                            <Mail className="h-3 w-3 text-muted-foreground" />
+                            <p className="text-sm text-muted-foreground">{contractor.email}</p>
+                          </div>
+                        )}
+                        
+                        {contractor.address && (
+                          <div className="flex items-center gap-1 mt-1">
+                            <MapPin className="h-3 w-3 text-muted-foreground" />
+                            <p className="text-sm text-muted-foreground">{contractor.address}</p>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-1 mt-2">
+                          <Star className="h-3 w-3 text-warning fill-current" />
+                          <span className="text-sm font-medium">
+                            {contractor.rating > 0 ? contractor.rating.toFixed(1) : 'Not rated'}
+                          </span>
+                          {contractor.rating_count > 0 && (
+                            <span className="text-xs text-muted-foreground">
+                              ({contractor.rating_count} review{contractor.rating_count !== 1 ? 's' : ''})
+                            </span>
+                          )}
+                        </div>
+
+                        {contractor.hourly_rate && (
+                          <div className="mt-2">
+                            <span className="text-sm font-medium">KES {contractor.hourly_rate.toLocaleString()}/hr</span>
+                          </div>
+                        )}
+
+                        {contractor.description && (
+                          <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
+                            {contractor.description}
+                          </p>
+                        )}
+
+                        <div className="mt-3 flex gap-2">
+                          <Button variant="outline" size="sm" className="flex-1">
+                            <Phone className="h-3 w-3 mr-1" />
+                            Contact
+                          </Button>
+                          <Badge variant={contractor.is_active ? "default" : "secondary"}>
+                            {contractor.is_active ? 'Active' : 'Inactive'}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="history" className="space-y-4">
@@ -563,6 +690,12 @@ export const MaintenanceSection = () => {
         onSuccess={refetch}
       />
 
+      <ContractorModal
+        isOpen={isContractorModalOpen}
+        onClose={() => setIsContractorModalOpen(false)}
+        onSubmit={handleCreateContractor}
+      />
+
       {/* Assignment Modal */}
       <Dialog open={isAssignModalOpen} onOpenChange={setIsAssignModalOpen}>
         <DialogContent>
@@ -583,7 +716,7 @@ export const MaintenanceSection = () => {
                   <SelectValue placeholder="Select contractor" />
                 </SelectTrigger>
                 <SelectContent>
-                  {mockContractors.map((contractor) => (
+                  {getActiveContractors().map((contractor) => (
                     <SelectItem key={contractor.id} value={contractor.id}>
                       {contractor.name} - {contractor.specialty}
                     </SelectItem>

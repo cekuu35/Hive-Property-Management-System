@@ -127,3 +127,53 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.leases (id, tenant_id, unit_id, status, start_date, end_date, rent_amount) VALUES
 ('550e8400-e29b-41d4-a716-446655440006', '550e8400-e29b-41d4-a716-446655440002', '550e8400-e29b-41d4-a716-446655440004', 'active', '2024-01-01', '2024-12-31', 1200.00)
 ON CONFLICT (id) DO NOTHING;
+
+-- 9. Create contractors table for landlord contractor management
+CREATE TABLE IF NOT EXISTS public.contractors (
+  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  landlord_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  specialty TEXT NOT NULL,
+  phone TEXT,
+  email TEXT,
+  address TEXT,
+  rating DECIMAL(2,1) DEFAULT 0.0,
+  rating_count INTEGER DEFAULT 0,
+  hourly_rate DECIMAL(10,2),
+  description TEXT,
+  is_active BOOLEAN DEFAULT true,
+  avatar_url TEXT,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+);
+
+-- Enable Row Level Security for contractors
+ALTER TABLE public.contractors ENABLE ROW LEVEL SECURITY;
+
+-- Create policies for contractors
+DROP POLICY IF EXISTS "Landlords can manage their contractors" ON public.contractors;
+CREATE POLICY "Landlords can manage their contractors" 
+ON public.contractors 
+FOR ALL 
+USING (landlord_id IN (
+  SELECT id FROM public.profiles WHERE user_id = auth.uid()
+));
+
+-- Add trigger for updated_at on contractors
+DROP TRIGGER IF EXISTS update_contractors_updated_at ON public.contractors;
+CREATE TRIGGER update_contractors_updated_at
+  BEFORE UPDATE ON public.contractors
+  FOR EACH ROW
+  EXECUTE FUNCTION public.update_updated_at_column();
+
+-- Create indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_contractors_landlord_id ON public.contractors(landlord_id);
+CREATE INDEX IF NOT EXISTS idx_contractors_specialty ON public.contractors(specialty);
+CREATE INDEX IF NOT EXISTS idx_contractors_active ON public.contractors(is_active);
+
+-- Insert test contractors data
+INSERT INTO public.contractors (id, landlord_id, name, specialty, phone, email, rating, rating_count, hourly_rate, description, is_active) VALUES
+('550e8400-e29b-41d4-a716-446655440007', '550e8400-e29b-41d4-a716-446655440001', 'Mike Johnson', 'Plumbing', '+254 712 123 456', 'mike@example.com', 4.8, 15, 800.00, 'Experienced plumber with 10+ years in residential maintenance', true),
+('550e8400-e29b-41d4-a716-446655440008', '550e8400-e29b-41d4-a716-446655440001', 'Sarah Wilson', 'General Repairs', '+254 723 234 567', 'sarah@example.com', 4.9, 22, 600.00, 'General handyperson specializing in quick repairs and maintenance', true),
+('550e8400-e29b-41d4-a716-446655440009', '550e8400-e29b-41d4-a716-446655440001', 'David Kim', 'HVAC', '+254 734 345 678', 'david@example.com', 4.7, 18, 1200.00, 'HVAC specialist with certification in modern cooling systems', true)
+ON CONFLICT (id) DO NOTHING;
