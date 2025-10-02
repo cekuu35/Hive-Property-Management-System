@@ -45,7 +45,19 @@ export const useTenants = () => {
     try {
       setLoading(true);
       
+      // Get current user's profile ID
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+      
+      if (!profile) {
+        throw new Error('Profile not found');
+      }
+      
       // Get tenants through leases joined with tenant_info, units, and properties
+      // Filter by landlord's properties
       const { data, error } = await supabase
         .from('leases')
         .select(`
@@ -73,7 +85,8 @@ export const useTenants = () => {
               landlord_id
             )
           )
-        `);
+        `)
+        .eq('units.properties.landlord_id', profile.id);
 
       if (error) throw error;
 

@@ -124,35 +124,9 @@ export const MessageCenter = () => {
   };
 
   const createMessageNotification = async (receiverId: string, messageText: string) => {
-    try {
-      // Get the receiver's user_id from their profile
-      const { data: receiverProfile, error: profileError } = await supabase
-        .from('profiles')
-        .select('user_id')
-        .eq('id', receiverId)
-        .single();
-
-      if (profileError || !receiverProfile) {
-        console.error('Error fetching receiver profile:', profileError);
-        return;
-      }
-
-      const { error } = await supabase
-        .from('notifications')
-        .insert({
-          user_id: receiverProfile.user_id,
-          title: 'New Message',
-          message: `You have a new message: "${messageText.length > 50 ? messageText.substring(0, 50) + '...' : messageText}"`,
-          type: 'message',
-          action_url: `/dashboard?tab=messages`
-        });
-
-      if (error) {
-        console.error('Error creating notification:', error);
-      }
-    } catch (error) {
-      console.error('Error creating notification:', error);
-    }
+    // Don't create notifications - let the database trigger handle it
+    // The trigger will create the notification automatically when a message is inserted
+    return;
   };
 
   const getInitials = (name: string) => {
