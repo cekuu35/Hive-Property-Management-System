@@ -937,6 +937,10 @@ export type Database = {
           unit_number: string
         }[]
       }
+      generate_rent_payments: {
+        Args: { p_lease_id: string }
+        Returns: undefined
+      }
       get_landlord_tenants: {
         Args: { landlord_profile_id: string }
         Returns: {
