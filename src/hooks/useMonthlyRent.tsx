@@ -71,6 +71,7 @@ export const useMonthlyRent = () => {
       let isOverdue = false;
       let daysUntilDue = 0;
       let lateFee = 0;
+      let nextDueDate = dueDate;
 
       if (existingPayment) {
         // Payment exists for this month

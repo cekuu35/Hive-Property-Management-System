@@ -125,10 +125,22 @@ export const MessageCenter = () => {
 
   const createMessageNotification = async (receiverId: string, messageText: string) => {
     try {
+      // Get the receiver's user_id from their profile
+      const { data: receiverProfile, error: profileError } = await supabase
+        .from('profiles')
+        .select('user_id')
+        .eq('id', receiverId)
+        .single();
+
+      if (profileError || !receiverProfile) {
+        console.error('Error fetching receiver profile:', profileError);
+        return;
+      }
+
       const { error } = await supabase
         .from('notifications')
         .insert({
-          user_id: receiverId,
+          user_id: receiverProfile.user_id,
           title: 'New Message',
           message: `You have a new message: "${messageText.length > 50 ? messageText.substring(0, 50) + '...' : messageText}"`,
           type: 'message',

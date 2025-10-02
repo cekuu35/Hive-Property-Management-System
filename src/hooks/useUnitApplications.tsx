@@ -314,45 +314,88 @@ export const useUnitApplications = () => {
 
   const createTenantFromApplication = async (application: any) => {
     try {
+      console.log('Creating tenant from application:', application.id);
+      
       // Get the property's landlord ID from the application data
       const landlordId = application.properties?.landlord_id;
       if (!landlordId) {
         throw new Error('Property landlord not found');
       }
 
-      // Get applicant's profile information
+      console.log('Landlord ID:', landlordId);
+
+      // Get applicant's profile information with email from auth.users
       const { data: applicantProfile, error: applicantError } = await supabase
         .from('profiles')
-        .select('first_name, last_name, phone, email')
+        .select('id, user_id, first_name, last_name, phone')
         .eq('id', application.tenant_id)
         .single();
 
-      if (applicantError) throw applicantError;
+      if (applicantError) {
+        console.error('Error fetching applicant profile:', applicantError);
+        throw applicantError;
+      }
 
-      // Create tenant info record
-      const { data: tenantInfo, error: tenantError } = await supabase
+      console.log('Applicant profile:', applicantProfile);
+
+      // Get email from auth.users
+      const { data: authUser, error: authError } = await supabase.auth.admin.getUserById(
+        applicantProfile.user_id
+      );
+
+      if (authError) {
+        console.error('Error fetching auth user:', authError);
+      }
+
+      const userEmail = authUser?.user?.email || `tenant-${application.tenant_id}@temp.com`;
+      console.log('User email:', userEmail);
+
+      // Check if tenant_info already exists for this profile
+      const { data: existingTenantInfo } = await supabase
         .from('tenant_info')
-        .insert({
-          landlord_id: landlordId,
-          first_name: applicantProfile?.first_name || 'N/A',
-          last_name: applicantProfile?.last_name || 'N/A',
-          email: applicantProfile?.email || `tenant-${application.tenant_id}@temp.com`,
-          phone: applicantProfile?.phone || null,
-          profile_id: application.tenant_id
-        })
-        .select()
+        .select('id')
+        .eq('profile_id', application.tenant_id)
+        .eq('landlord_id', landlordId)
         .single();
 
-      if (tenantError) throw tenantError;
+      let tenantInfo;
+      if (existingTenantInfo) {
+        console.log('Using existing tenant_info:', existingTenantInfo.id);
+        tenantInfo = existingTenantInfo;
+      } else {
+        // Create tenant info record
+        console.log('Creating new tenant_info record');
+        const { data: newTenantInfo, error: tenantError } = await supabase
+          .from('tenant_info')
+          .insert({
+            landlord_id: landlordId,
+            first_name: applicantProfile?.first_name || 'N/A',
+            last_name: applicantProfile?.last_name || 'N/A',
+            email: userEmail,
+            phone: applicantProfile?.phone || null,
+            profile_id: application.tenant_id
+          })
+          .select()
+          .single();
 
-      if (!tenantInfo) {
-        throw new Error('Failed to create tenant information');
+        if (tenantError) {
+          console.error('Error creating tenant_info:', tenantError);
+          throw tenantError;
+        }
+
+        if (!newTenantInfo) {
+          throw new Error('Failed to create tenant information');
+        }
+
+        tenantInfo = newTenantInfo;
+        console.log('Created tenant_info:', tenantInfo.id);
       }
 
       // Create the lease with default dates (can be updated later)
       const startDate = application.preferred_move_in_date || new Date().toISOString().split('T')[0];
       const endDate = new Date(new Date(startDate).getTime() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
+      console.log('Creating lease with dates:', startDate, endDate);
       const { error: leaseError } = await supabase
         .from('leases')
         .insert({
@@ -366,28 +409,43 @@ export const useUnitApplications = () => {
           status: 'active'
         });
 
-      if (leaseError) throw leaseError;
+      if (leaseError) {
+        console.error('Error creating lease:', leaseError);
+        throw leaseError;
+      }
+      console.log('Lease created successfully');
 
       // Update unit status to occupied
+      console.log('Updating unit status to occupied');
       const { error: unitError } = await supabase
         .from('units')
         .update({ status: 'occupied' })
         .eq('id', application.unit_id);
 
-      if (unitError) throw unitError;
+      if (unitError) {
+        console.error('Error updating unit status:', unitError);
+        throw unitError;
+      }
+      console.log('Unit status updated');
 
       // Update profile role to tenant if not already
+      console.log('Updating profile role to tenant');
       const { error: profileError } = await supabase
         .from('profiles')
         .update({ role: 'tenant' })
         .eq('id', application.tenant_id);
 
-      if (profileError) console.error('Error updating profile role:', profileError);
+      if (profileError) {
+        console.error('Error updating profile role:', profileError);
+        // Don't throw here, just log the error
+      } else {
+        console.log('Profile role updated to tenant');
+      }
 
       toast.success('Tenant created successfully from application!');
     } catch (error) {
       console.error('Error creating tenant from application:', error);
-      toast.error('Failed to create tenant from application');
+      toast.error('Failed to create tenant from application: ' + (error as Error).message);
       throw error;
     }
   };
