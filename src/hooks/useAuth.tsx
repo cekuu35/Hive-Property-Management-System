@@ -48,9 +48,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       (event, session) => {
         console.log('Auth state changed:', event, session?.user?.id);
         
-        // If we're logging out, don't process any auth changes
+        // CRITICAL: Block all auth changes during logout
         if (isLoggingOut.current) {
-          console.log('Logout in progress, ignoring auth state change');
+          console.log('Logout in progress, blocking auth state change');
           return;
         }
 
@@ -60,7 +60,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         if (session?.user) {
           // Defer async calls with setTimeout to prevent deadlocks
           setTimeout(() => {
-            fetchProfile(session.user!.id);
+            if (!isLoggingOut.current) {
+              fetchProfile(session.user!.id);
+            }
           }, 0);
         } else {
           setProfile(null);
@@ -70,17 +72,23 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        setTimeout(() => {
-          fetchProfile(session.user!.id);
-        }, 0);
-      } else {
-        setLoading(false);
-      }
-    });
+    if (!isLoggingOut.current) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (isLoggingOut.current) return;
+        
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          setTimeout(() => {
+            if (!isLoggingOut.current) {
+              fetchProfile(session.user!.id);
+            }
+          }, 0);
+        } else {
+          setLoading(false);
+        }
+      });
+    }
 
     return () => subscription.unsubscribe();
   }, []);
@@ -149,37 +157,35 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     try {
       console.log('Starting logout process...');
       
-      // Set logout flag to prevent auth state changes from interfering
+      // Set logout flag FIRST to block all auth state changes
       isLoggingOut.current = true;
       
-      // Clear local state immediately
+      // Clear Supabase session immediately - don't wait for response
+      supabase.auth.signOut({ scope: 'local' });
+      
+      // Clear all local storage auth data
+      localStorage.removeItem('supabase.auth.token');
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('sb-')) {
+          localStorage.removeItem(key);
+        }
+      });
+      
+      // Clear local state
       setUser(null);
       setProfile(null);
       setLoading(false);
       
-      // Sign out from Supabase
-      const { error } = await supabase.auth.signOut();
+      console.log('Logout complete, redirecting...');
       
-      if (error && error.message !== 'Auth session missing!') {
-        console.error('Error signing out:', error);
-      }
-      
-      console.log('Logout successful, redirecting to login...');
-      
-      // Use a small delay to ensure state is cleared
-      setTimeout(() => {
-        isLoggingOut.current = false;
-        // Force a full page reload to login page to clear all state
-        window.location.replace('/');
-      }, 100);
+      // Immediate redirect without delay - use replace to prevent back button issues
+      window.location.replace('/');
       
     } catch (error) {
       console.error('Unexpected error during sign out:', error);
-      // Still clear state and redirect even if there's an error
-      isLoggingOut.current = false;
-      setUser(null);
-      setProfile(null);
-      setLoading(false);
+      // Force logout anyway
+      isLoggingOut.current = true;
+      localStorage.clear();
       window.location.replace('/');
     }
   };

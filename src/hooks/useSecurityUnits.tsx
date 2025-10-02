@@ -3,38 +3,57 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useToast } from './use-toast';
 
-export interface OccupiedUnit {
+export interface AvailableTenant {
+  tenant_id: string;
+  tenant_name: string;
+  tenant_phone?: string;
   unit_id: string;
   unit_number: string;
   property_id: string;
   property_name: string;
   property_address: string;
-  tenant_id: string;
-  tenant_name: string;
-  tenant_phone?: string;
   lease_id: string;
   lease_start: string;
   lease_end: string;
 }
 
 export const useSecurityUnits = () => {
-  const [occupiedUnits, setOccupiedUnits] = useState<OccupiedUnit[]>([]);
+  const [availableTenants, setAvailableTenants] = useState<AvailableTenant[]>([]);
   const [loading, setLoading] = useState(true);
   const { profile } = useAuth();
   const { toast } = useToast();
 
-  const fetchOccupiedUnits = async () => {
+  const fetchAvailableTenants = async () => {
     if (!profile?.id || profile.role !== 'security') {
-      console.log('Security units fetch skipped - profile:', profile?.role, 'id:', profile?.id);
+      console.log('Security tenants fetch skipped - profile:', profile?.role, 'id:', profile?.id);
       setLoading(false);
       return;
     }
 
     try {
       setLoading(true);
-      console.log('Fetching occupied units for security role...');
+      console.log('Fetching available tenants for security role...');
 
-      // Get all active leases and then fetch related data separately to avoid foreign key issues
+      // Get all tenant profiles with active leases
+      const { data: tenantsData, error: tenantsError } = await supabase
+        .from('profiles')
+        .select(`
+          id,
+          first_name,
+          last_name,
+          phone
+        `)
+        .eq('role', 'tenant');
+
+      if (tenantsError) throw tenantsError;
+
+      if (!tenantsData || tenantsData.length === 0) {
+        setAvailableTenants([]);
+        return;
+      }
+
+      // Get active leases for these tenants
+      const tenantIds = tenantsData.map(t => t.id);
       const { data: leasesData, error: leasesError } = await supabase
         .from('leases')
         .select(`
@@ -44,18 +63,18 @@ export const useSecurityUnits = () => {
           tenant_id,
           unit_id
         `)
-        .eq('status', 'active');
+        .eq('status', 'active')
+        .in('tenant_id', tenantIds);
 
       if (leasesError) throw leasesError;
 
       if (!leasesData || leasesData.length === 0) {
-        setOccupiedUnits([]);
+        setAvailableTenants([]);
         return;
       }
 
-      // Get unique unit IDs and tenant IDs
+      // Get unique unit IDs
       const unitIds = [...new Set(leasesData.map(lease => lease.unit_id))];
-      const tenantIds = [...new Set(leasesData.map(lease => lease.tenant_id))];
 
       // Fetch units and properties
       const { data: unitsData, error: unitsError } = await supabase
@@ -74,55 +93,39 @@ export const useSecurityUnits = () => {
 
       if (unitsError) throw unitsError;
 
-      // Fetch tenant profiles
-      const { data: tenantsData, error: tenantsError } = await supabase
-        .from('profiles')
-        .select(`
-          id,
-          first_name,
-          last_name,
-          phone
-        `)
-        .in('id', tenantIds);
-
-      if (tenantsError) throw tenantsError;
-
-      // Combine the data
-      const occupiedUnitsData: OccupiedUnit[] = leasesData.map((lease: any) => {
+      // Combine the data - tenant-centric
+      const availableTenantsData: AvailableTenant[] = leasesData.map((lease: any) => {
+        const tenant = tenantsData.find(t => t.id === lease.tenant_id);
         const unit = unitsData?.find(u => u.id === lease.unit_id);
-        const tenant = tenantsData?.find(t => t.id === lease.tenant_id);
         const property = unit?.properties;
 
         return {
+          tenant_id: tenant?.id || '',
+          tenant_name: tenant ? `${tenant.first_name} ${tenant.last_name}`.trim() : '',
+          tenant_phone: tenant?.phone,
           unit_id: unit?.id || '',
           unit_number: unit?.unit_number || '',
           property_id: property?.id || '',
           property_name: property?.name || '',
           property_address: property?.address || '',
-          tenant_id: tenant?.id || '',
-          tenant_name: tenant ? `${tenant.first_name} ${tenant.last_name}`.trim() : '',
-          tenant_phone: tenant?.phone,
           lease_id: lease.id,
           lease_start: lease.start_date,
           lease_end: lease.end_date
         };
-      }).filter(unit => unit.unit_id && unit.tenant_id); // Filter out incomplete data
+      }).filter(tenant => tenant.tenant_id && tenant.unit_id); // Filter out incomplete data
 
-      // Sort by property name then unit number
-      occupiedUnitsData.sort((a, b) => {
-        if (a.property_name !== b.property_name) {
-          return a.property_name.localeCompare(b.property_name);
-        }
-        return a.unit_number.localeCompare(b.unit_number, undefined, { numeric: true });
-      });
+      // Sort by tenant name
+      availableTenantsData.sort((a, b) => 
+        a.tenant_name.localeCompare(b.tenant_name)
+      );
 
-      console.log('Processed occupied units:', occupiedUnitsData.length, 'units');
-      setOccupiedUnits(occupiedUnitsData);
+      console.log('Processed available tenants:', availableTenantsData.length, 'tenants');
+      setAvailableTenants(availableTenantsData);
     } catch (error) {
-      console.error('Error fetching occupied units:', error);
+      console.error('Error fetching available tenants:', error);
       toast({
         title: "Error",
-        description: `Failed to load occupied units: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        description: `Failed to load available tenants: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: "destructive"
       });
     } finally {
@@ -131,11 +134,11 @@ export const useSecurityUnits = () => {
   };
 
   useEffect(() => {
-    fetchOccupiedUnits();
+    fetchAvailableTenants();
 
     // Set up real-time subscription for lease changes
     const channel = supabase
-      .channel('occupied_units_changes')
+      .channel('available_tenants_changes')
       .on(
         'postgres_changes',
         {
@@ -144,8 +147,8 @@ export const useSecurityUnits = () => {
           table: 'leases'
         },
         () => {
-          console.log('Lease changed, refetching occupied units...');
-          fetchOccupiedUnits();
+          console.log('Lease changed, refetching available tenants...');
+          fetchAvailableTenants();
         }
       )
       .subscribe();
@@ -155,37 +158,38 @@ export const useSecurityUnits = () => {
     };
   }, [profile?.id, profile?.role]);
 
-  // Group units by property for better organization
+  // Group tenants by property for better organization
   const getGroupedUnits = () => {
-    const grouped = occupiedUnits.reduce((acc, unit) => {
-      if (!acc[unit.property_name]) {
-        acc[unit.property_name] = [];
+    const grouped = availableTenants.reduce((acc, tenant) => {
+      if (!acc[tenant.property_name]) {
+        acc[tenant.property_name] = [];
       }
-      acc[unit.property_name].push(unit);
+      acc[tenant.property_name].push(tenant);
       return acc;
-    }, {} as Record<string, OccupiedUnit[]>);
+    }, {} as Record<string, AvailableTenant[]>);
 
     return grouped;
   };
 
-  // Search function for filtering units
+  // Search function for filtering tenants
   const searchUnits = (searchTerm: string) => {
-    if (!searchTerm) return occupiedUnits;
+    if (!searchTerm) return availableTenants;
 
     const term = searchTerm.toLowerCase();
-    return occupiedUnits.filter(unit =>
-      unit.tenant_name.toLowerCase().includes(term) ||
-      unit.unit_number.toLowerCase().includes(term) ||
-      unit.property_name.toLowerCase().includes(term) ||
-      unit.property_address.toLowerCase().includes(term)
+    return availableTenants.filter(tenant =>
+      tenant.tenant_name.toLowerCase().includes(term) ||
+      tenant.unit_number.toLowerCase().includes(term) ||
+      tenant.property_name.toLowerCase().includes(term) ||
+      tenant.property_address.toLowerCase().includes(term) ||
+      tenant.tenant_phone?.toLowerCase().includes(term)
     );
   };
 
   return {
-    occupiedUnits,
+    occupiedUnits: availableTenants, // Keep same property name for backward compatibility
     loading,
     getGroupedUnits,
     searchUnits,
-    refetch: fetchOccupiedUnits
+    refetch: fetchAvailableTenants
   };
 };
