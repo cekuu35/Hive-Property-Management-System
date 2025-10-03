@@ -159,18 +159,27 @@ export const LoginForm = () => {
       {/* Dark overlay for better text readability */}
       <div className="absolute inset-0 bg-black/30 backdrop-blur-[0.5px] z-10"></div>
       
-      <div className="relative z-20 w-full max-w-md px-6">
+      <div className="relative z-20 w-full max-w-md px-4 sm:px-6 mx-auto">
         {/* Logo */}
         <div className="text-center mb-8 animate-fade-in">
-          <div className="w-16 h-16 mx-auto mb-4 bg-gradient-logo-blue rounded-2xl flex items-center justify-center shadow-glow">
-            <span className="text-2xl font-bold text-white">PM</span>
+          <div className="w-16 h-16 mx-auto mb-4 bg-gradient-logo-blue rounded-2xl flex items-center justify-center shadow-glow relative overflow-hidden">
+            {/* Subtle inner glow */}
+            <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-2xl"></div>
+            <span className="text-2xl font-bold text-white relative z-10 drop-shadow-lg">PM</span>
           </div>
-          <h1 className="text-3xl font-bold text-auth-foreground">Property Manager Pro</h1>
-          <p className="text-auth-muted-foreground mt-2">Professional Rental Management</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-white text-shadow-responsive">Property Manager Pro</h1>
+          <p className="text-white/80 mt-2 text-shadow-responsive text-sm sm:text-base">Professional Rental Management</p>
         </div>
 
-        <Card className="card-elevated animate-scale-in bg-auth-card border-auth-border">
-          <div className="p-8">
+        <Card className="relative overflow-hidden animate-scale-in glass-card mx-2 sm:mx-0">
+          {/* Subtle gradient overlay for depth */}
+          <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-white/10 pointer-events-none"></div>
+          
+          {/* Animated border glow effect */}
+          <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-blue-400/20 via-purple-500/20 to-blue-400/20 opacity-50 blur-sm animate-pulse"></div>
+          
+          {/* Main content with enhanced styling */}
+          <div className="relative z-10 p-6 sm:p-8">
             {step === "role" ? (
               <div className="animate-fade-in">
                 <RoleSelector
@@ -186,28 +195,28 @@ export const LoginForm = () => {
                     variant="ghost"
                     size="sm"
                     onClick={() => setStep("role")}
-                    className="text-auth-muted-foreground hover:text-auth-foreground hover:bg-auth-muted/50"
+                    className="text-white/70 hover:text-white hover:bg-white/10 backdrop-blur-sm border border-white/20 transition-all duration-200"
                   >
                     <ArrowLeft className="h-4 w-4 mr-1" />
                     Back
                   </Button>
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gradient-to-r from-blue-500/20 to-purple-500/20 backdrop-blur-sm border border-white/30 text-white text-sm font-medium shadow-lg">
                     {selectedRole}
                   </div>
                 </div>
 
                 {/* Auth Mode Toggle */}
                 <div className="text-center mb-6">
-                  <h2 className="text-xl font-semibold text-auth-foreground mb-4">
+                  <h2 className="text-xl font-semibold text-white mb-4 text-shadow-responsive">
                     {authMode === "login" ? "Welcome back" : "Create account"}
                   </h2>
-                  <div className="relative bg-auth-muted/30 backdrop-blur-sm rounded-xl p-1 border border-auth-border/30">
+                  <div className="relative bg-white/10 backdrop-blur-sm rounded-xl p-1 border border-white/20 shadow-lg">
                     <div 
-                      className={`absolute top-1 bottom-1 w-1/2 bg-gradient-to-r from-primary via-primary to-primary/80 rounded-lg shadow-lg transition-all duration-300 ease-out ${
+                      className={`absolute top-1 bottom-1 w-1/2 bg-gradient-to-r from-blue-500 via-purple-500 to-blue-500 rounded-lg shadow-lg transition-all duration-300 ease-out ${
                         authMode === "login" ? "left-1" : "left-1/2"
                       }`}
                       style={{
-                        boxShadow: "0 4px 20px rgba(124, 58, 237, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1)"
+                        boxShadow: "0 4px 20px rgba(59, 130, 246, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2)"
                       }}
                     />
                     <div className="relative flex">
@@ -217,7 +226,7 @@ export const LoginForm = () => {
                         className={`flex-1 py-3 px-4 text-sm font-medium rounded-lg transition-all duration-300 ease-out relative z-10 ${
                           authMode === "login" 
                             ? "text-white shadow-sm" 
-                            : "text-auth-muted-foreground hover:text-auth-foreground"
+                            : "text-white/70 hover:text-white"
                         }`}
                       >
                         <span className="relative z-10">Sign In</span>
@@ -228,7 +237,7 @@ export const LoginForm = () => {
                         className={`flex-1 py-3 px-4 text-sm font-medium rounded-lg transition-all duration-300 ease-out relative z-10 ${
                           authMode === "signup" 
                             ? "text-white shadow-sm" 
-                            : "text-auth-muted-foreground hover:text-auth-foreground"
+                            : "text-white/70 hover:text-white"
                         }`}
                       >
                         <span className="relative z-10">Sign Up</span>
@@ -240,7 +249,7 @@ export const LoginForm = () => {
                 {/* Auth Form */}
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="email" className="text-auth-foreground">Email</Label>
+                    <Label htmlFor="email" className="text-white font-medium drop-shadow-sm">Email</Label>
                     <Input
                       id="email"
                       type="email"
@@ -249,12 +258,12 @@ export const LoginForm = () => {
                       onChange={(e) => handleInputChange("email", e.target.value)}
                       required
                       disabled={isLoading}
-                      className="bg-auth-input border-auth-border text-auth-foreground placeholder:text-auth-muted-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      className="bg-white/10 border-white/30 text-white placeholder:text-white/60 focus:ring-2 focus:ring-blue-400/50 focus:border-blue-400 backdrop-blur-sm transition-all duration-200"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="password" className="text-auth-foreground">Password</Label>
+                    <Label htmlFor="password" className="text-white font-medium drop-shadow-sm">Password</Label>
                     <div className="relative">
                       <Input
                         id="password"
@@ -264,13 +273,13 @@ export const LoginForm = () => {
                         onChange={(e) => handleInputChange("password", e.target.value)}
                         required
                         disabled={isLoading}
-                        className="pr-10 bg-auth-input border-auth-border text-auth-foreground placeholder:text-auth-muted-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        className="pr-10 bg-white/10 border-white/30 text-white placeholder:text-white/60 focus:ring-2 focus:ring-blue-400/50 focus:border-blue-400 backdrop-blur-sm transition-all duration-200"
                       />
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent text-auth-muted-foreground hover:text-auth-foreground"
+                        className="absolute right-0 top-0 h-full px-3 hover:bg-white/10 text-white/70 hover:text-white transition-all duration-200"
                         onClick={() => setShowPassword(!showPassword)}
                         disabled={isLoading}
                       >
@@ -287,7 +296,7 @@ export const LoginForm = () => {
                     <>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor="firstName" className="text-auth-foreground">First Name</Label>
+                          <Label htmlFor="firstName" className="text-white font-medium drop-shadow-sm">First Name</Label>
                           <Input
                             id="firstName"
                             type="text"
@@ -296,11 +305,11 @@ export const LoginForm = () => {
                             onChange={(e) => handleInputChange("firstName", e.target.value)}
                             required
                             disabled={isLoading}
-                            className="bg-auth-input border-auth-border text-auth-foreground placeholder:text-auth-muted-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                            className="bg-white/10 border-white/30 text-white placeholder:text-white/60 focus:ring-2 focus:ring-blue-400/50 focus:border-blue-400 backdrop-blur-sm transition-all duration-200"
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="lastName" className="text-auth-foreground">Last Name</Label>
+                          <Label htmlFor="lastName" className="text-white font-medium drop-shadow-sm">Last Name</Label>
                           <Input
                             id="lastName"
                             type="text"
@@ -309,13 +318,13 @@ export const LoginForm = () => {
                             onChange={(e) => handleInputChange("lastName", e.target.value)}
                             required
                             disabled={isLoading}
-                            className="bg-auth-input border-auth-border text-auth-foreground placeholder:text-auth-muted-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                            className="bg-white/10 border-white/30 text-white placeholder:text-white/60 focus:ring-2 focus:ring-blue-400/50 focus:border-blue-400 backdrop-blur-sm transition-all duration-200"
                           />
                         </div>
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="confirmPassword" className="text-auth-foreground">Confirm Password</Label>
+                        <Label htmlFor="confirmPassword" className="text-white font-medium drop-shadow-sm">Confirm Password</Label>
                         <Input
                           id="confirmPassword"
                           type="password"
@@ -324,7 +333,7 @@ export const LoginForm = () => {
                           onChange={(e) => handleInputChange("confirmPassword", e.target.value)}
                           required
                           disabled={isLoading}
-                          className="bg-auth-input border-auth-border text-auth-foreground placeholder:text-auth-muted-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                          className="bg-white/10 border-white/30 text-white placeholder:text-white/60 focus:ring-2 focus:ring-blue-400/50 focus:border-blue-400 backdrop-blur-sm transition-all duration-200"
                         />
                       </div>
                     </>
@@ -332,7 +341,7 @@ export const LoginForm = () => {
 
                   <Button 
                     type="submit" 
-                    className="w-full btn-primary mt-6"
+                    className="w-full mt-6 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold py-3 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02] border border-white/20"
                     disabled={isLoading}
                   >
                     {isLoading ? (
@@ -348,7 +357,7 @@ export const LoginForm = () => {
 
                 {authMode === "login" && (
                   <div className="mt-6 text-center">
-                    <Button variant="link" className="text-sm text-auth-muted-foreground hover:text-primary">
+                    <Button variant="link" className="text-sm text-white/70 hover:text-white transition-colors duration-200">
                       Forgot your password?
                     </Button>
                   </div>
@@ -358,7 +367,7 @@ export const LoginForm = () => {
           </div>
         </Card>
 
-        <div className="text-center mt-6 text-xs text-auth-muted-foreground">
+        <div className="text-center mt-6 text-xs text-white/60 drop-shadow-sm">
           © 2024 Property Manager Pro. All rights reserved.
         </div>
       </div>
