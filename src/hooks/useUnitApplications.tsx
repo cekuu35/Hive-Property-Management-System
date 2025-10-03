@@ -324,7 +324,7 @@ export const useUnitApplications = () => {
 
       console.log('Landlord ID:', landlordId);
 
-      // Get applicant's profile information with email from auth.users
+      // Get applicant's profile information
       const { data: applicantProfile, error: applicantError } = await supabase
         .from('profiles')
         .select('id, user_id, first_name, last_name, phone')
@@ -338,16 +338,9 @@ export const useUnitApplications = () => {
 
       console.log('Applicant profile:', applicantProfile);
 
-      // Get email from auth.users
-      const { data: authUser, error: authError } = await supabase.auth.admin.getUserById(
-        applicantProfile.user_id
-      );
-
-      if (authError) {
-        console.error('Error fetching auth user:', authError);
-      }
-
-      const userEmail = authUser?.user?.email || `tenant-${application.tenant_id}@temp.com`;
+      // Get current user's session to access email
+      const { data: { session } } = await supabase.auth.getSession();
+      const userEmail = session?.user?.email || `tenant-${application.tenant_id.substring(0, 8)}@pending.com`;
       console.log('User email:', userEmail);
 
       // Check if tenant_info already exists for this profile
