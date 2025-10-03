@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
-import { Loader2, Eye, EyeOff, ArrowLeft } from "lucide-react";
+import { Loader2, Eye, EyeOff } from "lucide-react";
 import { RoleSelector, UserRole } from "./RoleSelector";
 import { AnimatedBackground } from "./AnimatedBackground";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,7 +13,6 @@ export const LoginForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
-  const [step, setStep] = useState<"role" | "auth">("role");
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const { toast } = useToast();
   
@@ -23,12 +22,12 @@ export const LoginForm = () => {
     confirmPassword: "",
     firstName: "",
     lastName: "",
-    role: selectedRole || "tenant" as UserRole,
+    role: "tenant" as UserRole,
   });
 
   const handleRoleSelect = (role: UserRole) => {
     setSelectedRole(role);
-    setTimeout(() => setStep("auth"), 300);
+    setFormData(prev => ({ ...prev, role }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -53,7 +52,7 @@ export const LoginForm = () => {
           options: {
             emailRedirectTo: `${window.location.origin}/`,
             data: {
-              role: selectedRole || 'tenant',
+              role: formData.role,
               first_name: formData.firstName,
               last_name: formData.lastName,
             }
@@ -180,36 +179,23 @@ export const LoginForm = () => {
           
           {/* Main content with enhanced styling */}
           <div className="relative z-10 p-6 sm:p-8">
-            {step === "role" ? (
-              <div className="animate-fade-in">
-                <RoleSelector
-                  selectedRole={selectedRole}
-                  onSelectRole={handleRoleSelect}
-                />
-              </div>
-            ) : (
-              <div className="animate-slide-in">
-                {/* Back Button & Role Display */}
-                <div className="flex items-center justify-between mb-6">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setStep("role")}
-                    className="text-white/70 hover:text-white hover:bg-white/10 backdrop-blur-sm border border-white/20 transition-all duration-200"
-                  >
-                    <ArrowLeft className="h-4 w-4 mr-1" />
-                    Back
-                  </Button>
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gradient-to-r from-blue-500/20 to-purple-500/20 backdrop-blur-sm border border-white/30 text-white text-sm font-medium shadow-lg">
-                    {selectedRole}
-                  </div>
-                </div>
+            <div className="animate-fade-in">
 
                 {/* Auth Mode Toggle */}
                 <div className="text-center mb-6">
                   <h2 className="text-xl font-semibold text-white mb-4 text-shadow-responsive">
                     {authMode === "login" ? "Welcome back" : "Create account"}
                   </h2>
+                  
+                  {/* Role Selection - Only show during signup */}
+                  {authMode === "signup" && (
+                    <div className="mb-6">
+                      <RoleSelector
+                        selectedRole={selectedRole}
+                        onSelectRole={handleRoleSelect}
+                      />
+                    </div>
+                  )}
                   <div className="relative bg-white/10 backdrop-blur-sm rounded-xl p-1 border border-white/20 shadow-lg">
                     <div 
                       className={`absolute top-1 bottom-1 w-1/2 bg-gradient-to-r from-blue-500 via-purple-500 to-blue-500 rounded-lg shadow-lg transition-all duration-300 ease-out ${
@@ -362,8 +348,7 @@ export const LoginForm = () => {
                     </Button>
                   </div>
                 )}
-              </div>
-            )}
+            </div>
           </div>
         </Card>
 
