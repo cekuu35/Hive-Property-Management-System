@@ -14,6 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      contractors: {
+        Row: {
+          address: string | null
+          avatar_url: string | null
+          created_at: string
+          description: string | null
+          email: string | null
+          hourly_rate: number | null
+          id: string
+          is_active: boolean
+          landlord_id: string
+          name: string
+          phone: string | null
+          rating: number
+          rating_count: number
+          specialty: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          avatar_url?: string | null
+          created_at?: string
+          description?: string | null
+          email?: string | null
+          hourly_rate?: number | null
+          id?: string
+          is_active?: boolean
+          landlord_id: string
+          name: string
+          phone?: string | null
+          rating?: number
+          rating_count?: number
+          specialty: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          avatar_url?: string | null
+          created_at?: string
+          description?: string | null
+          email?: string | null
+          hourly_rate?: number | null
+          id?: string
+          is_active?: boolean
+          landlord_id?: string
+          name?: string
+          phone?: string | null
+          rating?: number
+          rating_count?: number
+          specialty?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       expenses: {
         Row: {
           amount: number
@@ -366,6 +420,7 @@ export type Database = {
           avatar_url: string | null
           bio: string | null
           created_at: string
+          email: string | null
           emergency_contact_name: string | null
           emergency_contact_phone: string | null
           first_name: string | null
@@ -380,6 +435,7 @@ export type Database = {
           avatar_url?: string | null
           bio?: string | null
           created_at?: string
+          email?: string | null
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
           first_name?: string | null
@@ -394,6 +450,7 @@ export type Database = {
           avatar_url?: string | null
           bio?: string | null
           created_at?: string
+          email?: string | null
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
           first_name?: string | null
