@@ -324,10 +324,10 @@ export const useUnitApplications = () => {
 
       console.log('Landlord ID:', landlordId);
 
-      // Get applicant's profile information
+      // Get applicant's profile information including email
       const { data: applicantProfile, error: applicantError } = await supabase
         .from('profiles')
-        .select('id, user_id, first_name, last_name, phone')
+        .select('id, user_id, first_name, last_name, phone, email')
         .eq('id', application.tenant_id)
         .single();
 
@@ -338,10 +338,9 @@ export const useUnitApplications = () => {
 
       console.log('Applicant profile:', applicantProfile);
 
-      // Get current user's session to access email
-      const { data: { session } } = await supabase.auth.getSession();
-      const userEmail = session?.user?.email || `tenant-${application.tenant_id.substring(0, 8)}@pending.com`;
-      console.log('User email:', userEmail);
+      // Use the applicant's email from their profile
+      const userEmail = applicantProfile.email || `tenant-${application.tenant_id.substring(0, 8)}@pending.com`;
+      console.log('Applicant email:', userEmail);
 
       // Check if tenant_info already exists for this profile
       const { data: existingTenantInfo } = await supabase

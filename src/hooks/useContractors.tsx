@@ -40,6 +40,8 @@ export interface UpdateContractorData {
   hourly_rate?: number;
   description?: string;
   is_active?: boolean;
+  rating?: number;
+  rating_count?: number;
 }
 
 export const useContractors = () => {
