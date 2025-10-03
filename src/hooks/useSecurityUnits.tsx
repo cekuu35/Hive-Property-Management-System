@@ -34,26 +34,7 @@ export const useSecurityUnits = () => {
       setLoading(true);
       console.log('Fetching available tenants for security role...');
 
-      // Get all tenant profiles with active leases
-      const { data: tenantsData, error: tenantsError } = await supabase
-        .from('profiles')
-        .select(`
-          id,
-          first_name,
-          last_name,
-          phone
-        `)
-        .eq('role', 'tenant');
-
-      if (tenantsError) throw tenantsError;
-
-      if (!tenantsData || tenantsData.length === 0) {
-        setAvailableTenants([]);
-        return;
-      }
-
-      // Get active leases for these tenants
-      const tenantIds = tenantsData.map(t => t.id);
+      // Get active leases with tenant info and units
       const { data: leasesData, error: leasesError } = await supabase
         .from('leases')
         .select(`
@@ -61,47 +42,116 @@ export const useSecurityUnits = () => {
           start_date,
           end_date,
           tenant_id,
-          unit_id
+          tenant_info_id,
+          unit_id,
+          units (
+            id,
+            unit_number,
+            property_id,
+            properties (
+              id,
+              name,
+              address
+            )
+          )
         `)
-        .eq('status', 'active')
-        .in('tenant_id', tenantIds);
+        .eq('status', 'active');
 
       if (leasesError) throw leasesError;
 
       if (!leasesData || leasesData.length === 0) {
+        console.log('No active leases found');
         setAvailableTenants([]);
         return;
       }
 
-      // Get unique unit IDs
-      const unitIds = [...new Set(leasesData.map(lease => lease.unit_id))];
+      console.log('Found active leases:', leasesData.length);
 
-      // Fetch units and properties
-      const { data: unitsData, error: unitsError } = await supabase
-        .from('units')
-        .select(`
-          id,
-          unit_number,
-          property_id,
-          properties (
-            id,
-            name,
-            address
-          )
-        `)
-        .in('id', unitIds);
+      // Get tenant profile IDs from leases (need to check both tenant_id and tenant_info)
+      const profileIds = new Set<string>();
+      const tenantInfoIds = new Set<string>();
 
-      if (unitsError) throw unitsError;
+      leasesData.forEach((lease: any) => {
+        if (lease.tenant_id) {
+          profileIds.add(lease.tenant_id);
+        }
+        if (lease.tenant_info_id) {
+          tenantInfoIds.add(lease.tenant_info_id);
+        }
+      });
+
+      // Fetch profiles directly referenced
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, first_name, last_name, phone, role')
+        .in('id', Array.from(profileIds));
+
+      if (profilesError) throw profilesError;
+
+      // Fetch tenant_info records and their associated profiles
+      const { data: tenantInfoData, error: tenantInfoError } = await supabase
+        .from('tenant_info')
+        .select('id, first_name, last_name, phone, profile_id')
+        .in('id', Array.from(tenantInfoIds));
+
+      if (tenantInfoError) throw tenantInfoError;
+
+      // Get profile IDs from tenant_info
+      const tenantInfoProfileIds = tenantInfoData?.map(ti => ti.profile_id).filter(Boolean) || [];
+      
+      // Fetch profiles for tenant_info records
+      const { data: tenantInfoProfilesData, error: tenantInfoProfilesError } = await supabase
+        .from('profiles')
+        .select('id, first_name, last_name, phone, role')
+        .in('id', tenantInfoProfileIds);
+
+      if (tenantInfoProfilesError) throw tenantInfoProfilesError;
+
+      console.log('Profiles from direct reference:', profilesData?.length || 0);
+      console.log('Tenant info records:', tenantInfoData?.length || 0);
+      console.log('Profiles from tenant_info:', tenantInfoProfilesData?.length || 0);
 
       // Combine the data - tenant-centric
       const availableTenantsData: AvailableTenant[] = leasesData.map((lease: any) => {
-        const tenant = tenantsData.find(t => t.id === lease.tenant_id);
-        const unit = unitsData?.find(u => u.id === lease.unit_id);
+        // Try to find tenant profile directly first
+        let tenant = profilesData?.find(p => p.id === lease.tenant_id && p.role === 'tenant');
+        
+        // If not found, try through tenant_info
+        if (!tenant && lease.tenant_info_id) {
+          const tenantInfo = tenantInfoData?.find(ti => ti.id === lease.tenant_info_id);
+          if (tenantInfo) {
+            // Use tenant_info data if available
+            tenant = {
+              id: tenantInfo.profile_id || lease.tenant_id,
+              first_name: tenantInfo.first_name,
+              last_name: tenantInfo.last_name,
+              phone: tenantInfo.phone,
+              role: 'tenant'
+            };
+            
+            // Enhance with profile data if available
+            const profile = tenantInfoProfilesData?.find(p => p.id === tenantInfo.profile_id);
+            if (profile) {
+              tenant = {
+                ...tenant,
+                first_name: profile.first_name || tenant.first_name,
+                last_name: profile.last_name || tenant.last_name,
+                phone: profile.phone || tenant.phone
+              };
+            }
+          }
+        }
+
+        const unit = lease.units;
         const property = unit?.properties;
 
+        if (!tenant || !unit) {
+          console.log('Missing data for lease:', lease.id, 'tenant:', !!tenant, 'unit:', !!unit);
+        }
+
         return {
-          tenant_id: tenant?.id || '',
-          tenant_name: tenant ? `${tenant.first_name} ${tenant.last_name}`.trim() : '',
+          tenant_id: tenant?.id || lease.tenant_id,
+          tenant_name: tenant ? `${tenant.first_name || ''} ${tenant.last_name || ''}`.trim() : 'Unknown Tenant',
           tenant_phone: tenant?.phone,
           unit_id: unit?.id || '',
           unit_number: unit?.unit_number || '',
@@ -112,7 +162,7 @@ export const useSecurityUnits = () => {
           lease_start: lease.start_date,
           lease_end: lease.end_date
         };
-      }).filter(tenant => tenant.tenant_id && tenant.unit_id); // Filter out incomplete data
+      }).filter(tenant => tenant.unit_id && tenant.tenant_name !== 'Unknown Tenant'); // Filter out incomplete data
 
       // Sort by tenant name
       availableTenantsData.sort((a, b) => 
