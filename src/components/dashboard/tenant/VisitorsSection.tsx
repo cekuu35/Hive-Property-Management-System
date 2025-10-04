@@ -30,7 +30,8 @@ export const VisitorsSection = () => {
     requests, 
     loading: requestsLoading, 
     createVisitorRequest, 
-    cancelVisitorRequest 
+    cancelVisitorRequest,
+    updateVisitorRequestStatus
   } = useVisitorRequests();
   
   const { visitors, loading: visitorsLoading } = useVisitors();
@@ -306,7 +307,27 @@ export const VisitorsSection = () => {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    {request.status === 'pending' && (
+                    {request.status === 'pending' && request.security_id && (
+                      <>
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={() => updateVisitorRequestStatus(request.id, 'approved')}
+                        >
+                          <CheckCircle className="h-4 w-4 mr-1" />
+                          Approve
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => updateVisitorRequestStatus(request.id, 'rejected')}
+                        >
+                          <XCircle className="h-4 w-4 mr-1" />
+                          Reject
+                        </Button>
+                      </>
+                    )}
+                    {request.status === 'pending' && !request.security_id && (
                       <Button
                         variant="outline"
                         size="sm"
