@@ -56,8 +56,37 @@ export const useTenants = () => {
         throw new Error('Profile not found');
       }
       
-      // Get tenants through leases joined with tenant_info, units, and properties
-      // Filter by landlord's properties
+      // First, get all properties owned by this landlord
+      const { data: properties, error: propertiesError } = await supabase
+        .from('properties')
+        .select('id')
+        .eq('landlord_id', profile.id);
+
+      if (propertiesError) throw propertiesError;
+
+      if (!properties || properties.length === 0) {
+        setTenants([]);
+        return;
+      }
+
+      const propertyIds = properties.map(p => p.id);
+
+      // Get all units for these properties
+      const { data: units, error: unitsError } = await supabase
+        .from('units')
+        .select('id')
+        .in('property_id', propertyIds);
+
+      if (unitsError) throw unitsError;
+
+      if (!units || units.length === 0) {
+        setTenants([]);
+        return;
+      }
+
+      const unitIds = units.map(u => u.id);
+
+      // Now get leases for these units with full details
       const { data, error } = await supabase
         .from('leases')
         .select(`
@@ -86,30 +115,33 @@ export const useTenants = () => {
             )
           )
         `)
-        .eq('units.properties.landlord_id', profile.id);
+        .in('unit_id', unitIds);
 
       if (error) throw error;
 
       // Transform the data to match our Tenant interface
-      const transformedTenants: Tenant[] = (data || []).map((lease: any) => ({
-        id: lease.tenant_info?.id || lease.tenant_info_id,
-        profile_id: lease.tenant_info?.id || lease.tenant_info_id,
-        first_name: lease.tenant_info?.first_name,
-        last_name: lease.tenant_info?.last_name,
-        phone: lease.tenant_info?.phone,
-        avatar_url: lease.tenant_info?.avatar_url,
-        email: lease.tenant_info?.email,
-        unit_id: lease.unit_id,
-        unit_number: lease.units?.unit_number || '',
-        property_name: lease.units?.properties?.name || '',
-        lease_start: lease.start_date,
-        lease_end: lease.end_date,
-        rent_amount: lease.rent_amount,
-        deposit_amount: lease.deposit_amount,
-        lease_status: lease.status,
-        lease_id: lease.id
-      }));
+      const transformedTenants: Tenant[] = (data || [])
+        .filter(lease => lease.tenant_info) // Only include leases with valid tenant_info
+        .map((lease: any) => ({
+          id: lease.tenant_info.id,
+          profile_id: lease.tenant_info.id,
+          first_name: lease.tenant_info.first_name,
+          last_name: lease.tenant_info.last_name,
+          phone: lease.tenant_info.phone,
+          avatar_url: lease.tenant_info.avatar_url,
+          email: lease.tenant_info.email,
+          unit_id: lease.unit_id,
+          unit_number: lease.units?.unit_number || '',
+          property_name: lease.units?.properties?.name || '',
+          lease_start: lease.start_date,
+          lease_end: lease.end_date,
+          rent_amount: lease.rent_amount,
+          deposit_amount: lease.deposit_amount,
+          lease_status: lease.status,
+          lease_id: lease.id
+        }));
 
+      console.log('Fetched tenants:', transformedTenants);
       setTenants(transformedTenants);
     } catch (error: any) {
       console.error('Error fetching tenants:', error);

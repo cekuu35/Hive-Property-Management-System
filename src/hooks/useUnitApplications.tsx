@@ -256,6 +256,7 @@ export const useUnitApplications = () => {
         }
       }
 
+      // Fetch full application data with all necessary relationships
       const { data, error } = await supabase
         .from('unit_applications')
         .update({
@@ -271,11 +272,13 @@ export const useUnitApplications = () => {
             type,
             rent_amount,
             deposit_amount,
-            property_id
-          ),
-          properties (
-            name,
-            address
+            property_id,
+            properties (
+              id,
+              name,
+              address,
+              landlord_id
+            )
           )
         `)
         .single();
@@ -285,7 +288,7 @@ export const useUnitApplications = () => {
         throw error;
       }
       
-      console.log('Application updated successfully:', data);
+      console.log('Application updated with full data:', data);
       
       // If application is approved, create tenant and lease
       if (status === 'approved' && data) {
@@ -314,15 +317,17 @@ export const useUnitApplications = () => {
 
   const createTenantFromApplication = async (application: any) => {
     try {
-      console.log('Creating tenant from application:', application.id);
+      console.log('Creating tenant from application:', application);
       
-      // Get the property's landlord ID from the application data
-      const landlordId = application.properties?.landlord_id;
+      // Get the property's landlord ID from the nested structure
+      const landlordId = application.units?.properties?.landlord_id;
+      
       if (!landlordId) {
-        throw new Error('Property landlord not found');
+        console.error('Could not find landlord_id in application data:', application);
+        throw new Error('Property landlord not found in application data');
       }
 
-      console.log('Landlord ID:', landlordId);
+      console.log('Found Landlord ID:', landlordId);
 
       // Get applicant's profile information including email
       const { data: applicantProfile, error: applicantError } = await supabase
