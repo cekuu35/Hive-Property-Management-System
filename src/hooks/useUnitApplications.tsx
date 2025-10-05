@@ -359,8 +359,22 @@ export const useUnitApplications = () => {
       if (existingTenantInfo) {
         console.log('Using existing tenant_info:', existingTenantInfo.id);
         tenantInfo = existingTenantInfo;
+        
+        // Update tenant status and balance after deposit is paid
+        const { error: updateError } = await supabase
+          .from('tenant_info')
+          .update({
+            tenant_status: 'active',
+            current_balance: application.units?.rent_amount || 0,
+            payment_status: 'unpaid'
+          })
+          .eq('id', existingTenantInfo.id);
+          
+        if (updateError) {
+          console.error('Error updating tenant_info status:', updateError);
+        }
       } else {
-        // Create tenant info record
+        // Create tenant info record with active status and initial balance
         console.log('Creating new tenant_info record');
         const { data: newTenantInfo, error: tenantError } = await supabase
           .from('tenant_info')
@@ -370,7 +384,10 @@ export const useUnitApplications = () => {
             last_name: applicantProfile?.last_name || 'N/A',
             email: userEmail,
             phone: applicantProfile?.phone || null,
-            profile_id: application.tenant_id
+            profile_id: application.tenant_id,
+            tenant_status: 'active',
+            current_balance: application.units?.rent_amount || 0,
+            payment_status: 'unpaid'
           })
           .select()
           .single();

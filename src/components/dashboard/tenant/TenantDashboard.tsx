@@ -32,6 +32,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenantPayments } from '@/hooks/useTenantPayments';
 import { useRentFlow } from '@/hooks/useRentFlow';
 import { useMessages } from '@/hooks/useMessages';
+import { useTenantInfo } from '@/hooks/useTenantInfo';
 
 interface TenantDashboardProps {
   activeTab?: string;
@@ -65,9 +66,14 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
     monthlyRentDue, 
     loading: rentFlowLoading 
   } = useRentFlow();
+  const { tenantInfo } = useTenantInfo();
   const { conversations } = useMessages();
   const pendingRequestsCount = maintenanceRequests.filter(r => r.status === 'pending').length;
   const unreadCount = conversations.reduce((sum, c) => sum + (c.unread_count || 0), 0);
+  
+  // Use tenant_info balance if available, otherwise fall back to calculated balance
+  const displayBalance = tenantInfo?.current_balance ?? tenantRentBalance;
+  const displayPaymentStatus = tenantInfo?.payment_status ?? (tenantRentBalance > 0 ? 'unpaid' : 'paid');
 
   // Real-time updates for all tenant data
   useEffect(() => {
@@ -283,14 +289,19 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
         <TabsContent value="overview" className="space-y-6">
           {/* Quick Stats */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Card className="bg-gradient-to-r from-primary to-primary-glow text-primary-foreground">
+            <Card className={`${displayPaymentStatus === 'overdue' || isOverdue ? 'bg-gradient-to-r from-destructive to-destructive/80' : displayBalance > 0 ? 'bg-gradient-to-r from-warning to-warning/80' : 'bg-gradient-to-r from-success to-success/80'} text-primary-foreground`}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Current Balance</CardTitle>
+                <CardTitle className="text-sm font-medium">Rent Balance</CardTitle>
                 <CreditCard className="h-4 w-4" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">KES {(tenantRentBalance ?? 0).toLocaleString()}</div>
-                <p className="text-xs opacity-90">Due: {nextPaymentDue || '-'}</p>
+                <div className="text-2xl font-bold">KES {(displayBalance ?? 0).toLocaleString()}</div>
+                <p className="text-xs opacity-90">
+                  {displayPaymentStatus === 'paid' ? 'Paid' : displayPaymentStatus === 'overdue' || isOverdue ? `Overdue by ${Math.abs(daysUntilDue)} days` : `Due: ${nextPaymentDue || '-'}`}
+                </p>
+                {lateFee > 0 && (
+                  <p className="text-xs opacity-90 mt-1">Late fee: KES {lateFee.toLocaleString()}</p>
+                )}
               </CardContent>
             </Card>
 
@@ -351,11 +362,15 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
                 )}
                 <Button 
                   className="h-auto p-4 flex flex-col items-center gap-2" 
-                  variant="outline"
+                  variant={displayBalance > 0 ? "default" : "outline"}
                   onClick={() => setShowPaymentModal(true)}
+                  disabled={displayBalance === 0}
                 >
                   <CreditCard className="h-6 w-6" />
                   <span>Pay Rent</span>
+                  {displayBalance > 0 && (
+                    <span className="text-xs">KES {displayBalance.toLocaleString()}</span>
+                  )}
                 </Button>
                 <Button 
                   className="h-auto p-4 flex flex-col items-center gap-2" 
@@ -419,9 +434,13 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
               <h3 className="text-xl font-semibold">Rent & Payments</h3>
               <p className="text-muted-foreground">Manage your rent payments and history</p>
             </div>
-            <Button onClick={() => setShowPaymentModal(true)}>
+            <Button 
+              onClick={() => setShowPaymentModal(true)}
+              disabled={displayBalance === 0}
+              variant={displayBalance > 0 ? "default" : "outline"}
+            >
               <CreditCard className="h-4 w-4 mr-2" />
-              Pay Rent
+              Pay Rent {displayBalance > 0 && `(KES ${displayBalance.toLocaleString()})`}
             </Button>
           </div>
 

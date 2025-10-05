@@ -675,37 +675,46 @@ export type Database = {
         Row: {
           avatar_url: string | null
           created_at: string
+          current_balance: number | null
           email: string
           first_name: string
           id: string
           landlord_id: string
           last_name: string
+          payment_status: string | null
           phone: string | null
           profile_id: string | null
+          tenant_status: string | null
           updated_at: string
         }
         Insert: {
           avatar_url?: string | null
           created_at?: string
+          current_balance?: number | null
           email: string
           first_name: string
           id?: string
           landlord_id: string
           last_name: string
+          payment_status?: string | null
           phone?: string | null
           profile_id?: string | null
+          tenant_status?: string | null
           updated_at?: string
         }
         Update: {
           avatar_url?: string | null
           created_at?: string
+          current_balance?: number | null
           email?: string
           first_name?: string
           id?: string
           landlord_id?: string
           last_name?: string
+          payment_status?: string | null
           phone?: string | null
           profile_id?: string | null
+          tenant_status?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -978,6 +987,10 @@ export type Database = {
     Functions: {
       caretaker_can_view_tenant_profile: {
         Args: { _target_profile_id: string }
+        Returns: boolean
+      }
+      current_user_is_landlord_of_property: {
+        Args: { _property_id: string }
         Returns: boolean
       }
       current_user_profile_id: {

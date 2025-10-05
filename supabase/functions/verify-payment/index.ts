@@ -136,6 +136,17 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Get lease details to find tenant_info
+    const { data: lease, error: leaseError } = await supabaseClient
+      .from('leases')
+      .select('tenant_info_id')
+      .eq('id', leaseId)
+      .single();
+
+    if (leaseError) {
+      console.error('Error fetching lease:', leaseError);
+    }
+
     // Record the payment in the database
     const { data: payment, error: paymentError } = await supabaseClient
       .from('rent_payments')
@@ -167,6 +178,24 @@ Deno.serve(async (req) => {
     }
 
     console.log('Payment recorded successfully:', payment.id);
+
+    // Update tenant_info to reflect payment
+    if (lease?.tenant_info_id) {
+      const { error: tenantUpdateError } = await supabaseClient
+        .from('tenant_info')
+        .update({
+          current_balance: 0,
+          payment_status: 'paid'
+        })
+        .eq('id', lease.tenant_info_id);
+
+      if (tenantUpdateError) {
+        console.error('Error updating tenant_info:', tenantUpdateError);
+        // Don't fail the entire request if this update fails
+      } else {
+        console.log('Tenant info updated after payment');
+      }
+    }
 
     return new Response(
       JSON.stringify({ 
