@@ -12,6 +12,7 @@ import {
   Building2, CheckCircle, XCircle, Clock, Eye, Filter, Search
 } from 'lucide-react';
 import { useUnitApplications } from '@/hooks/useUnitApplications';
+import { useTenants } from '@/hooks/useTenants';
 import { format } from 'date-fns';
 
 export const UnitApplicationsSection = () => {
@@ -20,6 +21,7 @@ export const UnitApplicationsSection = () => {
     loading, 
     updateApplicationStatus 
   } = useUnitApplications();
+  const { refetch: refetchTenants } = useTenants();
   
   const [selectedApplication, setSelectedApplication] = useState<any>(null);
   const [filterStatus, setFilterStatus] = useState('all');
@@ -62,6 +64,12 @@ export const UnitApplicationsSection = () => {
       console.log(`Landlord updating application ${applicationId} to ${status}`);
       await updateApplicationStatus(applicationId, status);
       console.log('Status update completed successfully');
+      
+      // Refresh tenants list when application is approved
+      if (status === 'approved') {
+        console.log('Refreshing tenants list after approval');
+        await refetchTenants();
+      }
     } catch (error) {
       console.error('Error updating application status:', error);
     }
