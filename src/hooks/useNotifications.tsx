@@ -145,6 +145,124 @@ export const useNotifications = () => {
     }
   }, [user]);
 
+  // Create a new notification
+  const createNotification = async (notification: {
+    title: string;
+    message: string;
+    type: string;
+    action_url?: string;
+    user_id?: string;
+  }) => {
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .insert({
+          user_id: notification.user_id || user?.id,
+          title: notification.title,
+          message: notification.message,
+          type: notification.type,
+          action_url: notification.action_url,
+          read: false,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Add to local state
+      setNotifications(prev => [data, ...prev]);
+      setUnreadCount(prev => prev + 1);
+
+      return data;
+    } catch (error) {
+      console.error('Error creating notification:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create notification",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Get notifications by type
+  const getNotificationsByType = (type: string) => {
+    return notifications.filter(n => n.type === type);
+  };
+
+  // Get unread notifications by type
+  const getUnreadByType = (type: string) => {
+    return notifications.filter(n => n.type === type && !n.read);
+  };
+
+  // Mark notifications as read by type
+  const markAsReadByType = async (type: string) => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('user_id', user.id)
+        .eq('type', type)
+        .eq('read', false);
+
+      if (error) throw error;
+
+      setNotifications(prev => 
+        prev.map(n => n.type === type ? { ...n, read: true } : n)
+      );
+      
+      const typeUnreadCount = notifications.filter(n => n.type === type && !n.read).length;
+      setUnreadCount(prev => Math.max(0, prev - typeUnreadCount));
+    } catch (error) {
+      console.error('Error marking notifications as read by type:', error);
+    }
+  };
+
+  // Delete notifications by type
+  const deleteByType = async (type: string) => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('type', type);
+
+      if (error) throw error;
+
+      const typeNotifications = notifications.filter(n => n.type === type);
+      const typeUnreadCount = typeNotifications.filter(n => !n.read).length;
+      
+      setNotifications(prev => prev.filter(n => n.type !== type));
+      setUnreadCount(prev => Math.max(0, prev - typeUnreadCount));
+    } catch (error) {
+      console.error('Error deleting notifications by type:', error);
+    }
+  };
+
+  // Get notification statistics
+  const getNotificationStats = () => {
+    const stats = {
+      total: notifications.length,
+      unread: unreadCount,
+      byType: {} as Record<string, { total: number; unread: number }>
+    };
+
+    const types = ['payment', 'maintenance', 'lease', 'security', 'general', 'message', 'maintenance_request', 'visitor_request', 'visitor_response'];
+    
+    types.forEach(type => {
+      const typeNotifications = notifications.filter(n => n.type === type);
+      stats.byType[type] = {
+        total: typeNotifications.length,
+        unread: typeNotifications.filter(n => !n.read).length
+      };
+    });
+
+    return stats;
+  };
+
   return {
     notifications,
     loading,
@@ -153,5 +271,11 @@ export const useNotifications = () => {
     markAllAsRead,
     deleteNotification,
     refetch: fetchNotifications,
+    createNotification,
+    getNotificationsByType,
+    getUnreadByType,
+    markAsReadByType,
+    deleteByType,
+    getNotificationStats,
   };
 };
