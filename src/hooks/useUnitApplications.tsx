@@ -358,9 +358,8 @@ export const useUnitApplications = () => {
       let tenantInfo;
       if (existingTenantInfo) {
         console.log('Using existing tenant_info:', existingTenantInfo.id);
-        tenantInfo = existingTenantInfo;
         
-        // Update tenant status and balance after deposit is paid
+        // Update tenant status to active and set balance after application approval
         const { error: updateError } = await supabase
           .from('tenant_info')
           .update({
@@ -372,7 +371,23 @@ export const useUnitApplications = () => {
           
         if (updateError) {
           console.error('Error updating tenant_info status:', updateError);
+          throw updateError;
         }
+        
+        // Fetch the updated tenant info
+        const { data: updatedTenantInfo, error: fetchError } = await supabase
+          .from('tenant_info')
+          .select('*')
+          .eq('id', existingTenantInfo.id)
+          .single();
+          
+        if (fetchError) {
+          console.error('Error fetching updated tenant_info:', fetchError);
+          throw fetchError;
+        }
+        
+        tenantInfo = updatedTenantInfo;
+        console.log('Updated tenant_info to active status:', tenantInfo);
       } else {
         // Create tenant info record with active status and initial balance
         console.log('Creating new tenant_info record');
@@ -410,24 +425,26 @@ export const useUnitApplications = () => {
       const endDate = new Date(new Date(startDate).getTime() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
       console.log('Creating lease with dates:', startDate, endDate);
-      const { error: leaseError } = await supabase
+      const { data: leaseData, error: leaseError } = await supabase
         .from('leases')
         .insert({
-          tenant_id: tenantInfo.id, // Reference to tenant_info table
-          tenant_info_id: tenantInfo.id,
+          tenant_id: application.tenant_id, // Use the profile ID for tenant_id
+          tenant_info_id: tenantInfo.id, // Reference to tenant_info table
           unit_id: application.unit_id,
           start_date: startDate,
           end_date: endDate,
           rent_amount: application.units?.rent_amount || 0,
           deposit_amount: (application.units?.deposit_amount ?? application.deposit_amount ?? application.units?.rent_amount ?? 0),
           status: 'active'
-        });
+        })
+        .select()
+        .single();
 
       if (leaseError) {
         console.error('Error creating lease:', leaseError);
         throw leaseError;
       }
-      console.log('Lease created successfully');
+      console.log('Lease created successfully with active status:', leaseData);
 
       // Update unit status to occupied
       console.log('Updating unit status to occupied');
@@ -456,7 +473,27 @@ export const useUnitApplications = () => {
         console.log('Profile role updated to tenant');
       }
 
-      toast.success('Tenant created successfully from application!');
+      // Final verification: Check that tenant status is active and lease is active
+      console.log('Verifying tenant and lease status...');
+      const { data: finalTenantInfo, error: verifyTenantError } = await supabase
+        .from('tenant_info')
+        .select('tenant_status')
+        .eq('id', tenantInfo.id)
+        .single();
+        
+      const { data: finalLeaseInfo, error: verifyLeaseError } = await supabase
+        .from('leases')
+        .select('status')
+        .eq('tenant_info_id', tenantInfo.id)
+        .single();
+        
+      if (verifyTenantError || verifyLeaseError) {
+        console.error('Verification errors:', verifyTenantError, verifyLeaseError);
+      } else {
+        console.log('Verification successful - Tenant status:', finalTenantInfo?.tenant_status, 'Lease status:', finalLeaseInfo?.status);
+      }
+
+      toast.success('Tenant created successfully from application with active lease!');
     } catch (error) {
       console.error('Error creating tenant from application:', error);
       toast.error('Failed to create tenant from application: ' + (error as Error).message);
