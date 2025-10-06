@@ -40,7 +40,8 @@ export const useApprovedLease = () => {
       
       console.log('🔍 [useApprovedLease] Fetching lease for profile ID:', profile.id);
       
-      const { data, error } = await supabase
+      // First try to find lease by tenant_id
+      let { data, error } = await supabase
         .from('leases')
         .select(`
           *,
@@ -58,6 +59,40 @@ export const useApprovedLease = () => {
         .eq('tenant_id', profile.id)
         .eq('status', 'active')
         .maybeSingle();
+
+      // If no lease found by tenant_id, try to find via tenant_info
+      if (!data && !error) {
+        const { data: tenantInfo } = await supabase
+          .from('tenant_info')
+          .select('id')
+          .eq('profile_id', profile.id)
+          .order('updated_at', { ascending: false })
+          .limit(1);
+
+        if (tenantInfo && tenantInfo.length > 0) {
+          const { data: leaseData, error: leaseError } = await supabase
+            .from('leases')
+            .select(`
+              *,
+              units (
+                unit_number,
+                type,
+                properties (
+                  id,
+                  name,
+                  address,
+                  landlord_id
+                )
+              )
+            `)
+            .eq('tenant_info_id', tenantInfo[0].id)
+            .eq('status', 'active')
+            .maybeSingle();
+          
+          data = leaseData;
+          error = leaseError;
+        }
+      }
 
       if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
         console.error('❌ [useApprovedLease] Supabase query error:', error);

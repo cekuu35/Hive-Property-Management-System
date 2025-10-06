@@ -31,13 +31,35 @@ export const useRentFlow = () => {
 
       console.log('🔍 [useRentFlow] Checking rent flow for profile ID:', profile.id);
 
-      // Check if tenant has an active lease
-      const { data: lease, error: leaseError } = await supabase
+      // Check if tenant has an active lease - try both tenant_id and tenant_info_id
+      let { data: lease, error: leaseError } = await supabase
         .from('leases')
         .select('id, rent_amount, start_date, status')
         .eq('tenant_id', profile.id)
         .eq('status', 'active')
         .maybeSingle();
+
+      // If no lease found by tenant_id, try via tenant_info
+      if (!lease && !leaseError) {
+        const { data: tenantInfo } = await supabase
+          .from('tenant_info')
+          .select('id')
+          .eq('profile_id', profile.id)
+          .order('updated_at', { ascending: false })
+          .limit(1);
+
+        if (tenantInfo && tenantInfo.length > 0) {
+          const { data: leaseData, error: leaseError2 } = await supabase
+            .from('leases')
+            .select('id, rent_amount, start_date, status')
+            .eq('tenant_info_id', tenantInfo[0].id)
+            .eq('status', 'active')
+            .maybeSingle();
+          
+          lease = leaseData;
+          leaseError = leaseError2;
+        }
+      }
 
       if (leaseError) throw leaseError;
 

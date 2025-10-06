@@ -71,9 +71,12 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
   const pendingRequestsCount = maintenanceRequests.filter(r => r.status === 'pending').length;
   const unreadCount = conversations.reduce((sum, c) => sum + (c.unread_count || 0), 0);
   
-  // Use tenant_info balance if available, otherwise fall back to calculated balance
-  const displayBalance = tenantInfo?.current_balance ?? tenantRentBalance;
-  const displayPaymentStatus = tenantInfo?.payment_status ?? (tenantRentBalance > 0 ? 'unpaid' : 'paid');
+  // Prioritize calculated rent balance over tenant_info balance for consistency
+  // Only use tenant_info balance if no lease is found (fallback scenario)
+  const displayBalance = hasApprovedLease ? tenantRentBalance : (tenantInfo?.current_balance ?? 0);
+  const displayPaymentStatus = hasApprovedLease 
+    ? (tenantRentBalance > 0 ? 'unpaid' : 'paid')
+    : (tenantInfo?.payment_status ?? 'paid');
 
   // Debug logging
   console.log('🏠 [TenantDashboard] Rent Display Debug:', {
