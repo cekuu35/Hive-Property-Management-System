@@ -95,22 +95,55 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const fetchProfile = async (userId: string) => {
     try {
-      const { data, error } = await supabase
+      // First check if user has a tenant record
+      const { data: tenantData, error: tenantError } = await supabase
+        .from('tenant_info')
+        .select('*')
+        .eq('profile_id', userId)
+        .maybeSingle();
+
+      if (tenantError) {
+        console.error('Error fetching tenant data:', tenantError);
+      }
+
+      // Then check for profile record
+      const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('user_id', userId)
         .maybeSingle();
 
-      if (error) {
-        console.error('Error fetching profile:', error);
+      if (profileError) {
+        console.error('Error fetching profile:', profileError);
         setLoading(false);
         return;
       }
 
-      if (data) {
-        setProfile(data as Profile);
+      // If user has both tenant and profile data, we need to handle role switching
+      if (tenantData && profileData) {
+        console.log('User has multiple roles - tenant and', profileData.role);
+        // For now, prioritize the profile role, but this will be handled by the role switcher
+        setProfile(profileData as Profile);
+      } else if (tenantData) {
+        // User is only a tenant, create a minimal profile
+        const tenantProfile = {
+          id: userId,
+          user_id: userId,
+          role: 'tenant' as const,
+          first_name: tenantData.first_name,
+          last_name: tenantData.last_name,
+          phone: tenantData.phone,
+          avatar_url: null,
+          emergency_contact_name: tenantData.emergency_contact_name,
+          emergency_contact_phone: tenantData.emergency_contact_phone,
+          bio: null
+        };
+        setProfile(tenantProfile as Profile);
+      } else if (profileData) {
+        // User has only profile data
+        setProfile(profileData as Profile);
       } else {
-        console.log('No profile found for user, creating one...');
+        console.log('No profile or tenant data found for user, creating profile...');
         // Profile doesn't exist, create it using user metadata
         await createProfile(userId);
       }

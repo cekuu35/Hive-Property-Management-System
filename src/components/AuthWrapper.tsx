@@ -1,11 +1,13 @@
 import { useRoleBasedAuth } from '@/hooks/useRoleBasedAuth';
 import { RoleSwitcher } from '@/components/RoleSwitcher';
-import { TenantDashboardNew } from '@/components/dashboard/tenant/TenantDashboardNew';
+import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
+import { TenantDashboard } from '@/components/dashboard/tenant/TenantDashboard';
 import { LandlordDashboard } from '@/components/dashboard/landlord/LandlordDashboard';
 import { CaretakerDashboard } from '@/components/dashboard/caretaker/CaretakerDashboard';
 import { SecurityDashboard } from '@/components/dashboard/security/SecurityDashboard';
 import { AdminDashboard } from '@/components/dashboard/admin/AdminDashboard';
 import { Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 interface AuthWrapperProps {
   children?: React.ReactNode;
@@ -13,13 +15,32 @@ interface AuthWrapperProps {
 
 export const AuthWrapper = ({ children }: AuthWrapperProps) => {
   const { userRole, loading, error } = useRoleBasedAuth();
+  const [activeTab, setActiveTab] = useState("overview");
+  const [activeSection, setActiveSection] = useState<string>("dashboard");
+
+  useEffect(() => {
+    if (!userRole) return;
+    switch (userRole.role) {
+      case "landlord":
+        setActiveSection("dashboard");
+        break;
+      case "caretaker":
+        setActiveSection("dashboard");
+        break;
+      case "security":
+        setActiveSection("overview");
+        break;
+      default:
+        break;
+    }
+  }, [userRole?.role]);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading your dashboard...</p>
+      <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-primary/5 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-muted-foreground">Loading dashboard...</p>
         </div>
       </div>
     );
@@ -27,7 +48,7 @@ export const AuthWrapper = ({ children }: AuthWrapperProps) => {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-primary/5 flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-600 mb-4">Error loading dashboard: {error}</p>
           <button 
@@ -43,9 +64,11 @@ export const AuthWrapper = ({ children }: AuthWrapperProps) => {
 
   if (!userRole) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-primary/5 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-muted-foreground mb-4">Please log in to access your dashboard</p>
+          <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+          <h2 className="text-2xl font-bold text-foreground mb-2">Setting up your profile...</h2>
+          <p className="text-muted-foreground">This will only take a moment.</p>
         </div>
       </div>
     );
@@ -70,31 +93,37 @@ export const AuthWrapper = ({ children }: AuthWrapperProps) => {
     );
   }
 
-  // Render appropriate dashboard based on role
-  switch (userRole.role) {
-    case 'tenant':
-      return <TenantDashboardNew />;
-    case 'landlord':
-      return <LandlordDashboard />;
-    case 'caretaker':
-      return <CaretakerDashboard />;
-    case 'security':
-      return <SecurityDashboard />;
-    case 'admin':
-      return <AdminDashboard />;
-    default:
-      return (
-        <div className="flex items-center justify-center min-h-screen">
+  const renderDashboard = () => {
+    switch (userRole.role) {
+      case 'tenant':
+        return <TenantDashboard activeTab={activeTab} onTabChange={setActiveTab} />;
+      case 'landlord':
+        return <LandlordDashboard activeSection={activeSection} onSectionChange={setActiveSection} />;
+      case 'caretaker':
+        return <CaretakerDashboard activeSection={activeSection} onSectionChange={setActiveSection} />;
+      case 'security':
+        return <SecurityDashboard activeSection={activeSection} onSectionChange={setActiveSection} />;
+      case 'admin':
+        return <AdminDashboard />;
+      default:
+        return (
           <div className="text-center">
-            <p className="text-muted-foreground mb-4">Unknown role: {userRole.role}</p>
-            <button 
-              onClick={() => window.location.reload()} 
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-            >
-              Refresh
-            </button>
+            <h2 className="text-2xl font-bold text-foreground mb-2">Unknown Role</h2>
+            <p className="text-muted-foreground">Your role is not recognized. Please contact support.</p>
           </div>
-        </div>
-      );
-  }
+        );
+    }
+  };
+
+  return (
+    <DashboardLayout 
+      userRole={userRole.role} 
+      activeTab={activeTab} 
+      onTabChange={setActiveTab}
+      activeSection={activeSection}
+      onSectionChange={setActiveSection}
+    >
+      {renderDashboard()}
+    </DashboardLayout>
+  );
 };
