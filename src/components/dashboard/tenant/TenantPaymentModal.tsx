@@ -56,7 +56,7 @@ export const TenantPaymentModal = ({ open, onOpenChange, rentAmount, dueDate, on
     setLoading(true);
 
     try {
-      // Get user's active lease to include in metadata - try both tenant_id and tenant_info_id
+      // Comprehensive lease lookup - try multiple approaches
       let { data: lease } = await supabase
         .from('leases')
         .select('id')
@@ -82,6 +82,35 @@ export const TenantPaymentModal = ({ open, onOpenChange, rentAmount, dueDate, on
             .maybeSingle();
           
           lease = leaseData;
+        }
+      }
+
+      // If still no lease found, try reverse lookup - find tenant_info by email
+      if (!lease) {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('email')
+          .eq('id', profile?.id)
+          .single();
+
+        if (profileData?.email) {
+          const { data: tenantInfoByEmail } = await supabase
+            .from('tenant_info')
+            .select('id')
+            .eq('email', profileData.email)
+            .order('updated_at', { ascending: false })
+            .limit(1);
+
+          if (tenantInfoByEmail && tenantInfoByEmail.length > 0) {
+            const { data: leaseData } = await supabase
+              .from('leases')
+              .select('id')
+              .eq('tenant_info_id', tenantInfoByEmail[0].id)
+              .eq('status', 'active')
+              .maybeSingle();
+            
+            lease = leaseData;
+          }
         }
       }
 

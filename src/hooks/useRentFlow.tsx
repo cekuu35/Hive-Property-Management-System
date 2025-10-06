@@ -31,7 +31,7 @@ export const useRentFlow = () => {
 
       console.log('🔍 [useRentFlow] Checking rent flow for profile ID:', profile.id);
 
-      // Check if tenant has an active lease - try both tenant_id and tenant_info_id
+      // Comprehensive lease lookup - try multiple approaches
       let { data: lease, error: leaseError } = await supabase
         .from('leases')
         .select('id, rent_amount, start_date, status')
@@ -58,6 +58,36 @@ export const useRentFlow = () => {
           
           lease = leaseData;
           leaseError = leaseError2;
+        }
+      }
+
+      // If still no lease found, try reverse lookup - find tenant_info by email
+      if (!lease && !leaseError) {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('email')
+          .eq('id', profile.id)
+          .single();
+
+        if (profileData?.email) {
+          const { data: tenantInfoByEmail } = await supabase
+            .from('tenant_info')
+            .select('id')
+            .eq('email', profileData.email)
+            .order('updated_at', { ascending: false })
+            .limit(1);
+
+          if (tenantInfoByEmail && tenantInfoByEmail.length > 0) {
+            const { data: leaseData, error: leaseError2 } = await supabase
+              .from('leases')
+              .select('id, rent_amount, start_date, status')
+              .eq('tenant_info_id', tenantInfoByEmail[0].id)
+              .eq('status', 'active')
+              .maybeSingle();
+            
+            lease = leaseData;
+            leaseError = leaseError2;
+          }
         }
       }
 

@@ -40,7 +40,7 @@ export const useApprovedLease = () => {
       
       console.log('🔍 [useApprovedLease] Fetching lease for profile ID:', profile.id);
       
-      // First try to find lease by tenant_id
+      // Comprehensive lease lookup - try multiple approaches
       let { data, error } = await supabase
         .from('leases')
         .select(`
@@ -60,7 +60,7 @@ export const useApprovedLease = () => {
         .eq('status', 'active')
         .maybeSingle();
 
-      // If no lease found by tenant_id, try to find via tenant_info
+      // If no lease found by tenant_id, try via tenant_info
       if (!data && !error) {
         const { data: tenantInfo } = await supabase
           .from('tenant_info')
@@ -91,6 +91,48 @@ export const useApprovedLease = () => {
           
           data = leaseData;
           error = leaseError;
+        }
+      }
+
+      // If still no lease found, try reverse lookup - find tenant_info by email
+      if (!data && !error) {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('email')
+          .eq('id', profile.id)
+          .single();
+
+        if (profileData?.email) {
+          const { data: tenantInfoByEmail } = await supabase
+            .from('tenant_info')
+            .select('id')
+            .eq('email', profileData.email)
+            .order('updated_at', { ascending: false })
+            .limit(1);
+
+          if (tenantInfoByEmail && tenantInfoByEmail.length > 0) {
+            const { data: leaseData, error: leaseError } = await supabase
+              .from('leases')
+              .select(`
+                *,
+                units (
+                  unit_number,
+                  type,
+                  properties (
+                    id,
+                    name,
+                    address,
+                    landlord_id
+                  )
+                )
+              `)
+              .eq('tenant_info_id', tenantInfoByEmail[0].id)
+              .eq('status', 'active')
+              .maybeSingle();
+            
+            data = leaseData;
+            error = leaseError;
+          }
         }
       }
 
