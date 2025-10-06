@@ -56,13 +56,34 @@ export const TenantPaymentModal = ({ open, onOpenChange, rentAmount, dueDate, on
     setLoading(true);
 
     try {
-      // Get user's active lease to include in metadata
-      const { data: lease } = await supabase
+      // Get user's active lease to include in metadata - try both tenant_id and tenant_info_id
+      let { data: lease } = await supabase
         .from('leases')
         .select('id')
         .eq('tenant_id', profile?.id)
         .eq('status', 'active')
-        .single();
+        .maybeSingle();
+
+      // If no lease found by tenant_id, try via tenant_info
+      if (!lease) {
+        const { data: tenantInfo } = await supabase
+          .from('tenant_info')
+          .select('id')
+          .eq('profile_id', profile?.id)
+          .order('updated_at', { ascending: false })
+          .limit(1);
+
+        if (tenantInfo && tenantInfo.length > 0) {
+          const { data: leaseData } = await supabase
+            .from('leases')
+            .select('id')
+            .eq('tenant_info_id', tenantInfo[0].id)
+            .eq('status', 'active')
+            .maybeSingle();
+          
+          lease = leaseData;
+        }
+      }
 
       const reference = `rent_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
       const publicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || 'pk_test_9f2c94cce8c01d4403373ce6f4bf8f1a7d142668';

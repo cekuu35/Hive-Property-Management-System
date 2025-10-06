@@ -908,7 +908,7 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
       <TenantPaymentModal
         open={showPaymentModal}
         onOpenChange={setShowPaymentModal}
-        rentAmount={tenantRentBalance ?? 0}
+        rentAmount={displayBalance}
         dueDate={nextPaymentDue || '-'}
         onPaymentSuccess={handlePaymentSuccess}
       />
