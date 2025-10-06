@@ -110,8 +110,7 @@ export const useTenants = () => {
           // Find the most recent active lease for this tenant
           const lease = leasesData?.find(l => l.tenant_info_id === tenantInfo.id);
           
-          if (!lease) return null;
-
+          // Include tenant even if no lease exists (for approved tenants without leases yet)
           return {
             id: tenantInfo.id,
             profile_id: tenantInfo.profile_id || tenantInfo.id,
@@ -120,18 +119,17 @@ export const useTenants = () => {
             phone: tenantInfo.phone,
             avatar_url: tenantInfo.avatar_url,
             email: tenantInfo.email,
-            unit_id: lease.unit_id,
-            unit_number: lease.units?.unit_number || '',
-            property_name: lease.units?.properties?.name || '',
-            lease_start: lease.start_date,
-            lease_end: lease.end_date,
-            rent_amount: lease.rent_amount,
-            deposit_amount: lease.deposit_amount,
-            lease_status: lease.status,
-            lease_id: lease.id
+            unit_id: lease?.unit_id || '',
+            unit_number: lease?.units?.unit_number || 'Not Assigned',
+            property_name: lease?.units?.properties?.name || 'No Property',
+            lease_start: lease?.start_date || '',
+            lease_end: lease?.end_date || '',
+            rent_amount: lease?.rent_amount || 0,
+            deposit_amount: lease?.deposit_amount || 0,
+            lease_status: lease?.status || 'no_lease',
+            lease_id: lease?.id || ''
           };
-        })
-        .filter(Boolean) as Tenant[];
+        });
 
       console.log('Fetched tenants from tenant_info:', transformedTenants);
       setTenants(transformedTenants);

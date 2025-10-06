@@ -83,6 +83,7 @@ export const TenantsSection = () => {
   // Calculate stats
   const activeTenants = tenants.filter(t => t.lease_status === 'active').length;
   const pendingLeases = tenants.filter(t => t.lease_status === 'pending').length;
+  const noLeaseTenants = tenants.filter(t => t.lease_status === 'no_lease').length;
   const totalMonthlyRent = tenants.reduce((sum, t) => sum + (t.rent_amount || 0), 0);
   
   // For overdue payments, we would need to check payment records
@@ -155,6 +156,13 @@ export const TenantsSection = () => {
             Pending
           </Button>
           <Button 
+            variant={statusFilter === 'no_lease' ? 'default' : 'outline'} 
+            size="sm"
+            onClick={() => setStatusFilter('no_lease')}
+          >
+            No Lease
+          </Button>
+          <Button 
             variant={statusFilter === 'terminated' ? 'default' : 'outline'} 
             size="sm"
             onClick={() => setStatusFilter('terminated')}
@@ -165,11 +173,17 @@ export const TenantsSection = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="text-2xl font-bold">{activeTenants}</div>
             <div className="text-sm text-muted-foreground">Active Tenants</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-blue-600">{noLeaseTenants}</div>
+            <div className="text-sm text-muted-foreground">No Lease</div>
           </CardContent>
         </Card>
         <Card>
@@ -369,10 +383,11 @@ export const TenantsSection = () => {
                           className={
                             tenant.lease_status === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
                             tenant.lease_status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
+                            tenant.lease_status === 'no_lease' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
                             'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
                           }
                         >
-                          {tenant.lease_status}
+                          {tenant.lease_status === 'no_lease' ? 'No Lease' : tenant.lease_status}
                         </Badge>
                       </TableCell>
                       <TableCell>
