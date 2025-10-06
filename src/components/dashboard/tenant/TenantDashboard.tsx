@@ -71,11 +71,14 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
   const pendingRequestsCount = maintenanceRequests.filter(r => r.status === 'pending').length;
   const unreadCount = conversations.reduce((sum, c) => sum + (c.unread_count || 0), 0);
   
-  // Prioritize calculated rent balance over tenant_info balance for consistency
-  // Only use tenant_info balance if no lease is found (fallback scenario)
-  const displayBalance = hasApprovedLease ? tenantRentBalance : (tenantInfo?.current_balance ?? 0);
+  // Use the higher value between tenantRentBalance and tenantInfo.current_balance
+  // This ensures we show the correct balance regardless of data source
+  const calculatedBalance = tenantRentBalance || 0;
+  const tenantInfoBalance = tenantInfo?.current_balance || 0;
+  const displayBalance = Math.max(calculatedBalance, tenantInfoBalance);
+  
   const displayPaymentStatus = hasApprovedLease 
-    ? (tenantRentBalance > 0 ? 'unpaid' : 'paid')
+    ? (displayBalance > 0 ? 'unpaid' : 'paid')
     : (tenantInfo?.payment_status ?? 'paid');
 
   // Debug logging
@@ -342,8 +345,15 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
                 <FileText className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">Active</div>
-                <p className="text-xs text-muted-foreground">Expires: Dec 2024</p>
+                <div className="text-2xl font-bold">{hasApprovedLease ? 'Active' : 'No Lease'}</div>
+                <p className="text-xs text-muted-foreground">
+                  {hasApprovedLease && approvedLease?.end_date 
+                    ? `Expires: ${new Date(approvedLease.end_date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`
+                    : hasApprovedLease 
+                      ? 'Lease Active'
+                      : 'Apply for a lease'
+                  }
+                </p>
               </CardContent>
             </Card>
 
@@ -474,7 +484,7 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold mb-2">KES {(tenantRentBalance ?? 0).toLocaleString()}</div>
+                <div className="text-3xl font-bold mb-2">KES {(displayBalance ?? 0).toLocaleString()}</div>
                 
                 {/* Rent Flow Status */}
                 {hasApprovedLease && (
