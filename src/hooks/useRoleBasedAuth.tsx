@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from './useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import { SimpleTenantCreationService } from '@/services/simpleTenantCreationService';
 
 export interface UserRole {
   role: 'landlord' | 'tenant' | 'caretaker' | 'security' | 'admin';
@@ -28,7 +27,15 @@ export const useRoleBasedAuth = () => {
       setError(null);
 
       // First, check if this user has a tenant record
-      const tenantData = await SimpleTenantCreationService.getTenantByAuthUser(user.id);
+      const { data: tenantData, error: tenantError } = await supabase
+        .from('tenant_info')
+        .select('*')
+        .eq('profile_id', user.id)
+        .maybeSingle();
+
+      if (tenantError) {
+        console.error('Error fetching tenant data:', tenantError);
+      }
       
       if (tenantData) {
         // User is a tenant
@@ -79,7 +86,16 @@ export const useRoleBasedAuth = () => {
 
     try {
       // Check if user has tenant data
-      const tenantData = await SimpleTenantCreationService.getTenantByAuthUser(user.id);
+      const { data: tenantData, error } = await supabase
+        .from('tenant_info')
+        .select('*')
+        .eq('profile_id', user.id)
+        .maybeSingle();
+      
+      if (error) {
+        console.error('Error fetching tenant data:', error);
+        return false;
+      }
       
       if (tenantData) {
         setUserRole({
