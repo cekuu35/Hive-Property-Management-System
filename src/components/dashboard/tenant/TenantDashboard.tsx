@@ -477,7 +477,7 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
                 <div className="text-3xl font-bold mb-2">KES {(tenantRentBalance ?? 0).toLocaleString()}</div>
                 
                 {/* Rent Flow Status */}
-                {hasActiveLease && (
+                {hasApprovedLease && (
                   <div className="mb-4 p-3 bg-white/10 rounded-lg">
                     <div className="flex items-center gap-2 mb-2">
                       <div className={`w-2 h-2 rounded-full ${securityDepositPaid ? 'bg-green-400' : 'bg-yellow-400'}`}></div>
@@ -520,9 +520,9 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
                   variant="secondary" 
                   onClick={() => setShowPaymentModal(true)}
                   className="w-full"
-                  disabled={!hasActiveLease || !securityDepositPaid}
+                  disabled={!hasApprovedLease || !securityDepositPaid}
                 >
-                  {!hasActiveLease ? 'No Active Lease' : 
+                  {!hasApprovedLease ? 'No Active Lease' : 
                    !securityDepositPaid ? 'Security Deposit Required' :
                    isOverdue ? 'Pay Overdue Amount' : 'Pay Now'}
                 </Button>
