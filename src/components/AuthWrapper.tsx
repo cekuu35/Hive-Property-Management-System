@@ -5,7 +5,6 @@ import { TenantDashboard } from '@/components/dashboard/tenant/TenantDashboard';
 import { LandlordDashboard } from '@/components/dashboard/landlord/LandlordDashboard';
 import { CaretakerDashboard } from '@/components/dashboard/caretaker/CaretakerDashboard';
 import { SecurityDashboard } from '@/components/dashboard/security/SecurityDashboard';
-import { AdminDashboard } from '@/components/dashboard/admin/AdminDashboard';
 import { Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
@@ -104,7 +103,15 @@ export const AuthWrapper = ({ children }: AuthWrapperProps) => {
       case 'security':
         return <SecurityDashboard activeSection={activeSection} onSectionChange={setActiveSection} />;
       case 'admin':
-        return <AdminDashboard />;
+        return (
+          <div className="text-center py-12">
+            <h2 className="text-2xl font-bold text-foreground mb-2">Admin Dashboard</h2>
+            <p className="text-muted-foreground mb-4">Admin functionality is coming soon.</p>
+            <p className="text-sm text-muted-foreground">
+              For now, you can use the landlord dashboard for property management.
+            </p>
+          </div>
+        );
       default:
         return (
           <div className="text-center">
