@@ -16,16 +16,19 @@ import {
   Eye,
   AlertCircle,
   CheckCircle,
-  Clock
+  Clock,
+  Settings
 } from 'lucide-react';
 import { useLandlordTenants } from '@/hooks/useLandlordTenants';
 import { TenantCreationForm } from '../TenantCreationForm';
+import { TenantEditForm } from '../TenantEditForm';
 import { format } from 'date-fns';
 
 export const TenantManagementSection = () => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedTenant, setSelectedTenant] = useState<any>(null);
   const [showTenantDetails, setShowTenantDetails] = useState(false);
+  const [showEditForm, setShowEditForm] = useState(false);
   
   const {
     tenants,
@@ -41,6 +44,21 @@ export const TenantManagementSection = () => {
 
   const handleCreateSuccess = () => {
     setShowCreateForm(false);
+  };
+
+  const handleEditTenant = (tenant: any) => {
+    setSelectedTenant(tenant);
+    setShowEditForm(true);
+  };
+
+  const handleEditSuccess = () => {
+    setShowEditForm(false);
+    setSelectedTenant(null);
+  };
+
+  const handleEditCancel = () => {
+    setShowEditForm(false);
+    setSelectedTenant(null);
   };
 
   const handleDeleteTenant = async (tenantId: string) => {
@@ -109,24 +127,29 @@ export const TenantManagementSection = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Tenant Management</h2>
-        <Dialog open={showCreateForm} onOpenChange={setShowCreateForm}>
-          <DialogTrigger asChild>
-            <Button>
-              <UserPlus className="w-4 h-4 mr-2" />
-              Add Tenant
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Create New Tenant</DialogTitle>
-            </DialogHeader>
-            <TenantCreationForm 
-              onSuccess={handleCreateSuccess}
-              onCancel={() => setShowCreateForm(false)}
-            />
-          </DialogContent>
-        </Dialog>
+        <div>
+          <h2 className="text-2xl font-bold">Tenant Management</h2>
+          <p className="text-muted-foreground">Manage your tenants and their information</p>
+        </div>
+        <div className="flex gap-2">
+          <Dialog open={showCreateForm} onOpenChange={setShowCreateForm}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <UserPlus className="w-4 h-4 mr-2" />
+                Add Tenant
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Create New Tenant</DialogTitle>
+              </DialogHeader>
+              <TenantCreationForm 
+                onSuccess={handleCreateSuccess}
+                onCancel={() => setShowCreateForm(false)}
+              />
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -281,13 +304,23 @@ export const TenantManagementSection = () => {
                             setSelectedTenant(tenant);
                             setShowTenantDetails(true);
                           }}
+                          title="View Details"
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
+                          onClick={() => handleEditTenant(tenant)}
+                          title="Edit Tenant"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => handleDeleteTenant(tenant.id)}
+                          title="Delete Tenant"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -336,7 +369,45 @@ export const TenantManagementSection = () => {
                 <p><strong>Status:</strong> {selectedTenant.tenant_info.payment_status}</p>
                 <p><strong>Balance:</strong> KES {selectedTenant.tenant_info.current_balance.toLocaleString()}</p>
               </div>
+              <div className="flex gap-2 pt-4">
+                <Button
+                  onClick={() => {
+                    setShowTenantDetails(false);
+                    handleEditTenant(selectedTenant);
+                  }}
+                  className="flex-1"
+                >
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit Tenant
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowTenantDetails(false)}
+                >
+                  Close
+                </Button>
+              </div>
             </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Tenant Edit Dialog */}
+      <Dialog open={showEditForm} onOpenChange={setShowEditForm}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Tenant Information</DialogTitle>
+          </DialogHeader>
+          {selectedTenant && (
+            <TenantEditForm
+              tenant={selectedTenant}
+              onSuccess={handleEditSuccess}
+              onCancel={handleEditCancel}
+              onResetPassword={(email) => {
+                console.log('Reset password for:', email);
+                // This will be handled by the TenantEditForm component
+              }}
+            />
           )}
         </DialogContent>
       </Dialog>

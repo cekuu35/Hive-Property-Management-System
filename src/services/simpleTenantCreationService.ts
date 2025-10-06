@@ -27,6 +27,67 @@ export interface TenantCreationResult {
 
 export class SimpleTenantCreationService {
   /**
+   * Check if email is available for tenant creation
+   */
+  static async checkEmailAvailability(email: string) {
+    try {
+      // Check if email exists in auth.users
+      const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
+      const userExists = existingUsers?.users?.find(user => user.email === email);
+      
+      if (userExists) {
+        // Check if this user is already linked to a tenant
+        const { data: existingTenant } = await supabaseAdmin
+          .from('tenant_info')
+          .select('id, profile_id')
+          .eq('profile_id', userExists.id)
+          .single();
+
+        if (existingTenant) {
+          return {
+            available: false,
+            reason: 'This email is already registered as a tenant',
+            existingUser: userExists
+          };
+        }
+
+        // Check if this user has a profile with a different role
+        const { data: existingProfile } = await supabaseAdmin
+          .from('profiles')
+          .select('id, role')
+          .eq('id', userExists.id)
+          .single();
+
+        if (existingProfile && existingProfile.role !== 'tenant') {
+          return {
+            available: false,
+            reason: `This email is already registered as ${existingProfile.role}. You can create a tenant account but will need to use role switching to access both accounts.`,
+            existingUser: userExists,
+            canCreateWithRoleSwitch: true
+          };
+        }
+
+        return {
+          available: true,
+          reason: 'Email available for tenant creation',
+          existingUser: userExists
+        };
+      }
+
+      return {
+        available: true,
+        reason: 'Email available for tenant creation'
+      };
+    } catch (error) {
+      console.error('Error checking email availability:', error);
+      return {
+        available: false,
+        reason: 'Error checking email availability'
+      };
+    }
+  }
+
+  /**
    * Create a new tenant with automatic auth user creation
    * This version works with the existing schema
    */
@@ -35,6 +96,16 @@ export class SimpleTenantCreationService {
     tenantData: CreateTenantData
   ): Promise<TenantCreationResult> {
     try {
+      // Check email availability
+      const emailCheck = await this.checkEmailAvailability(tenantData.email);
+      
+      if (!emailCheck.available && !emailCheck.canCreateWithRoleSwitch) {
+        return {
+          success: false,
+          error: emailCheck.reason
+        };
+      }
+
       // Validate email uniqueness for this landlord
       const emailExists = await this.checkEmailUniqueness(landlordId, tenantData.email);
       if (emailExists) {
@@ -44,34 +115,45 @@ export class SimpleTenantCreationService {
         };
       }
 
-      // Generate a random password
-      const password = this.generateRandomPassword();
+      let authUser;
+      let password;
 
-      // Create auth user first
-      const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
-        email: tenantData.email,
-        password: password,
-        email_confirm: true,
-        user_metadata: {
-          first_name: tenantData.first_name,
-          last_name: tenantData.last_name,
-          role: 'tenant'
+      if (emailCheck.existingUser) {
+        // Use existing user
+        authUser = { user: emailCheck.existingUser };
+        password = 'Use existing account - password reset required';
+      } else {
+        // Generate a random password
+        password = this.generateRandomPassword();
+
+        // Create auth user first
+        const { data: newAuthUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+          email: tenantData.email,
+          password: password,
+          email_confirm: true,
+          user_metadata: {
+            first_name: tenantData.first_name,
+            last_name: tenantData.last_name,
+            role: 'tenant'
+          }
+        });
+
+        if (authError) {
+          console.error('Error creating auth user:', authError);
+          return {
+            success: false,
+            error: `Failed to create user account: ${authError.message}`
+          };
         }
-      });
 
-      if (authError) {
-        console.error('Error creating auth user:', authError);
-        return {
-          success: false,
-          error: `Failed to create user account: ${authError.message}`
-        };
-      }
+        if (!newAuthUser.user) {
+          return {
+            success: false,
+            error: 'Failed to create user account'
+          };
+        }
 
-      if (!authUser.user) {
-        return {
-          success: false,
-          error: 'Failed to create user account'
-        };
+        authUser = newAuthUser;
       }
 
       // Create tenant_info record
@@ -272,19 +354,105 @@ export class SimpleTenantCreationService {
   }
 
   /**
-   * Send welcome email to tenant (placeholder for email service integration)
+   * Reset tenant password
    */
-  static async sendWelcomeEmail(email: string, password: string, tenantName: string) {
-    // This would integrate with your email service (SendGrid, AWS SES, etc.)
-    console.log(`Welcome email would be sent to ${email} with password: ${password}`);
-    console.log(`Tenant: ${tenantName}`);
-    
-    // For now, just log the credentials
-    // In production, you would:
-    // 1. Send email with login credentials
-    // 2. Include a link to reset password
-    // 3. Provide instructions for first login
-    
-    return { success: true };
+  static async resetPassword(authUserId: string, newPassword: string) {
+    try {
+      const { error } = await supabaseAdmin.auth.admin.updateUserById(authUserId, {
+        password: newPassword
+      });
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error in resetPassword:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      };
+    }
+  }
+
+  /**
+   * Update tenant information
+   */
+  static async updateTenant(tenantId: string, updates: Partial<CreateTenantData & {
+    tenant_status?: string;
+    payment_status?: string;
+    current_balance?: number;
+    emergency_contact_name?: string;
+    emergency_contact_phone?: string;
+    notes?: string;
+  }>) {
+    try {
+      // Update tenant_info record
+      const tenantInfoUpdates: any = {};
+      if (updates.first_name) tenantInfoUpdates.first_name = updates.first_name;
+      if (updates.last_name) tenantInfoUpdates.last_name = updates.last_name;
+      if (updates.email) tenantInfoUpdates.email = updates.email;
+      if (updates.phone) tenantInfoUpdates.phone = updates.phone;
+      if (updates.emergency_contact_name) tenantInfoUpdates.emergency_contact_name = updates.emergency_contact_name;
+      if (updates.emergency_contact_phone) tenantInfoUpdates.emergency_contact_phone = updates.emergency_contact_phone;
+      if (updates.notes) tenantInfoUpdates.notes = updates.notes;
+      if (updates.tenant_status) tenantInfoUpdates.tenant_status = updates.tenant_status;
+      if (updates.payment_status) tenantInfoUpdates.payment_status = updates.payment_status;
+      if (updates.current_balance !== undefined) tenantInfoUpdates.current_balance = updates.current_balance;
+
+      if (Object.keys(tenantInfoUpdates).length > 0) {
+        const { error: tenantInfoError } = await supabaseAdmin
+          .from('tenant_info')
+          .update(tenantInfoUpdates)
+          .eq('id', tenantId);
+
+        if (tenantInfoError) {
+          return { success: false, error: tenantInfoError.message };
+        }
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating tenant:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      };
+    }
+  }
+
+  /**
+   * Send welcome email to tenant
+   */
+  static async sendWelcomeEmail(email: string, password: string, tenantName: string, landlordName?: string) {
+    try {
+      // Option 1: Use Supabase Edge Function (recommended)
+      const { data: result, error } = await supabase.functions.invoke('send-welcome-email', {
+        body: {
+          email,
+          password,
+          tenantName,
+          landlordName: landlordName || 'Your Landlord'
+        }
+      });
+
+      if (error) {
+        console.error('Error calling email function:', error);
+        // Fallback: just log the credentials
+        console.log(`Welcome email failed for ${email}. Credentials: ${password}`);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true, data: result };
+    } catch (error) {
+      console.error('Error in sendWelcomeEmail:', error);
+      // Fallback: just log the credentials
+      console.log(`Welcome email error for ${email}. Credentials: ${password}`);
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      };
+    }
   }
 }
