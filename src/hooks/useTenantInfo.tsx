@@ -24,6 +24,8 @@ export const useTenantInfo = () => {
     try {
       setLoading(true);
       
+      console.log('🔍 [useTenantInfo] Fetching tenant info for profile ID:', profile.id);
+      
       // Fetch tenant_info by profile_id, get the most recent one if multiple exist
       const { data, error } = await supabase
         .from('tenant_info')
@@ -34,7 +36,22 @@ export const useTenantInfo = () => {
 
       if (error) throw error;
       
-      setTenantInfo(data?.[0] || null);
+      console.log('🔍 [useTenantInfo] Tenant info data:', data);
+      
+      const tenantInfoData = data?.[0] || null;
+      
+      if (tenantInfoData) {
+        console.log('✅ [useTenantInfo] Tenant info found:', {
+          id: tenantInfoData.id,
+          current_balance: tenantInfoData.current_balance,
+          payment_status: tenantInfoData.payment_status,
+          tenant_status: tenantInfoData.tenant_status
+        });
+      } else {
+        console.log('⚠️ [useTenantInfo] No tenant info found');
+      }
+      
+      setTenantInfo(tenantInfoData);
     } catch (error) {
       console.error('Error fetching tenant info:', error);
     } finally {

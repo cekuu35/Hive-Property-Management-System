@@ -75,6 +75,23 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
   const displayBalance = tenantInfo?.current_balance ?? tenantRentBalance;
   const displayPaymentStatus = tenantInfo?.payment_status ?? (tenantRentBalance > 0 ? 'unpaid' : 'paid');
 
+  // Debug logging
+  console.log('🏠 [TenantDashboard] Rent Display Debug:', {
+    tenantInfo: tenantInfo ? {
+      current_balance: tenantInfo.current_balance,
+      payment_status: tenantInfo.payment_status,
+      tenant_status: tenantInfo.tenant_status
+    } : null,
+    tenantRentBalance,
+    displayBalance,
+    hasApprovedLease,
+    approvedLease: approvedLease ? {
+      id: approvedLease.id,
+      rent_amount: approvedLease.rent_amount,
+      status: approvedLease.status
+    } : null
+  });
+
   // Real-time updates for all tenant data
   useEffect(() => {
     const rentPaymentsChannel = supabase

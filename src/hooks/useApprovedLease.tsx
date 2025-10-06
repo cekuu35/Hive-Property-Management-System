@@ -38,6 +38,8 @@ export const useApprovedLease = () => {
     try {
       setLoading(true);
       
+      console.log('🔍 [useApprovedLease] Fetching lease for profile ID:', profile.id);
+      
       const { data, error } = await supabase
         .from('leases')
         .select(`
@@ -58,8 +60,21 @@ export const useApprovedLease = () => {
         .maybeSingle();
 
       if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
-        console.error('Supabase query error:', error);
+        console.error('❌ [useApprovedLease] Supabase query error:', error);
         throw error;
+      }
+
+      console.log('🔍 [useApprovedLease] Lease data:', data);
+      
+      if (data) {
+        console.log('✅ [useApprovedLease] Active lease found:', {
+          id: data.id,
+          rent_amount: data.rent_amount,
+          status: data.status,
+          unit: data.units?.unit_number
+        });
+      } else {
+        console.log('⚠️ [useApprovedLease] No active lease found');
       }
 
       setApprovedLease(data as ApprovedLease);

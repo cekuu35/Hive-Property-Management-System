@@ -29,6 +29,8 @@ export const useRentFlow = () => {
     try {
       setLoading(true);
 
+      console.log('🔍 [useRentFlow] Checking rent flow for profile ID:', profile.id);
+
       // Check if tenant has an active lease
       const { data: lease, error: leaseError } = await supabase
         .from('leases')
@@ -39,7 +41,10 @@ export const useRentFlow = () => {
 
       if (leaseError) throw leaseError;
 
+      console.log('🔍 [useRentFlow] Lease found:', lease);
+
       if (!lease) {
+        console.log('⚠️ [useRentFlow] No active lease found - setting hasActiveLease to false');
         setRentFlowStatus({
           hasActiveLease: false,
           securityDepositPaid: false,
@@ -49,6 +54,12 @@ export const useRentFlow = () => {
         });
         return;
       }
+
+      console.log('✅ [useRentFlow] Active lease found:', {
+        id: lease.id,
+        rent_amount: lease.rent_amount,
+        status: lease.status
+      });
 
       // Check if security deposit was paid (look for approved application with deposit_paid = true)
       const { data: application, error: appError } = await supabase

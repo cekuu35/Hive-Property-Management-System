@@ -37,14 +37,18 @@ export const useTenantPayments = () => {
       // Try to find an active lease by direct profile mapping
       const { data: leaseByProfile, error: leaseError1 } = await supabase
         .from('leases')
-        .select('id')
+        .select('id, rent_amount')
         .eq('tenant_id', profile.id)
         .eq('status', 'active')
         .maybeSingle();
 
       if (leaseError1) throw leaseError1;
 
+      console.log('🔍 [useTenantPayments] Profile ID:', profile.id);
+      console.log('🔍 [useTenantPayments] Lease by profile:', leaseByProfile);
+
       let leaseId: string | null = leaseByProfile?.id ?? null;
+      let leaseRentAmount: number = leaseByProfile?.rent_amount ?? 0;
 
       // Fallback: resolve via tenant_info.profile_id if lease not found
       if (!leaseId) {
@@ -52,27 +56,39 @@ export const useTenantPayments = () => {
           .from('tenant_info')
           .select('id')
           .eq('profile_id', profile.id)
-          .maybeSingle();
+          .order('updated_at', { ascending: false })
+          .limit(1);
+        
         if (tinfoError) throw tinfoError;
 
-        if (tinfo?.id) {
+        console.log('🔍 [useTenantPayments] Tenant info:', tinfo);
+
+        if (tinfo && tinfo.length > 0) {
           const { data: leaseByTenantInfo, error: leaseError2 } = await supabase
             .from('leases')
-            .select('id')
-            .eq('tenant_info_id', tinfo.id)
+            .select('id, rent_amount')
+            .eq('tenant_info_id', tinfo[0].id)
             .eq('status', 'active')
             .maybeSingle();
+          
           if (leaseError2) throw leaseError2;
+          
+          console.log('🔍 [useTenantPayments] Lease by tenant_info:', leaseByTenantInfo);
+          
           leaseId = leaseByTenantInfo?.id ?? null;
+          leaseRentAmount = leaseByTenantInfo?.rent_amount ?? 0;
         }
       }
 
       if (!leaseId) {
+        console.log('⚠️ [useTenantPayments] No active lease found');
         setRecentPayments([]);
         setRentBalance(0);
         setNextPaymentDue('');
         return;
       }
+
+      console.log('✅ [useTenantPayments] Active lease found:', leaseId, 'Rent amount:', leaseRentAmount);
 
       const { data: payments, error: paymentsError } = await supabase
         .from('rent_payments')

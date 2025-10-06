@@ -38,7 +38,11 @@ export const useMonthlyRent = () => {
 
       if (leaseError) throw leaseError;
 
+      console.log('🔍 [useMonthlyRent] Profile ID:', profile.id);
+      console.log('🔍 [useMonthlyRent] Active lease found:', lease);
+
       if (!lease) {
+        console.log('⚠️ [useMonthlyRent] No active lease found for tenant');
         setMonthlyRentData({
           currentRentDue: 0,
           nextDueDate: '',
@@ -48,6 +52,8 @@ export const useMonthlyRent = () => {
         });
         return;
       }
+
+      console.log('💰 [useMonthlyRent] Lease rent amount:', lease.rent_amount);
 
       const today = new Date();
       const currentMonth = today.getMonth();
