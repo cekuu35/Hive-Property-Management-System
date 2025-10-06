@@ -24,16 +24,17 @@ export const useTenantInfo = () => {
     try {
       setLoading(true);
       
-      // Fetch tenant_info by profile_id
+      // Fetch tenant_info by profile_id, get the most recent one if multiple exist
       const { data, error } = await supabase
         .from('tenant_info')
         .select('*')
         .eq('profile_id', profile.id)
-        .maybeSingle();
+        .order('updated_at', { ascending: false })
+        .limit(1);
 
       if (error) throw error;
       
-      setTenantInfo(data);
+      setTenantInfo(data?.[0] || null);
     } catch (error) {
       console.error('Error fetching tenant info:', error);
     } finally {

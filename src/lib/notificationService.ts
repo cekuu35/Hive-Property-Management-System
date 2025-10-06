@@ -218,17 +218,18 @@ export class NotificationService {
    */
   static async notifyAllTenants(propertyId: string, title: string, message: string, type: CreateNotificationParams['type'] = 'general') {
     try {
-      // Get all tenants for the property
-      const { data: tenants, error: tenantError } = await supabase
-        .from('tenants')
-        .select('user_id')
-        .eq('property_id', propertyId);
+      // Get all tenants for the property through leases
+      const { data: leases, error: leaseError } = await supabase
+        .from('leases')
+        .select('tenant_id, profiles!inner(user_id)')
+        .eq('units.property_id', propertyId)
+        .eq('status', 'active');
 
-      if (tenantError) throw tenantError;
+      if (leaseError) throw leaseError;
 
       // Create notifications for all tenants
-      const notifications = tenants?.map(tenant => ({
-        user_id: tenant.user_id,
+      const notifications = leases?.map(lease => ({
+        user_id: (lease.profiles as any).user_id,
         title,
         message,
         type,
@@ -252,10 +253,11 @@ export class NotificationService {
 
   static async notifyAllCaretakers(title: string, message: string, type: CreateNotificationParams['type'] = 'general') {
     try {
-      // Get all caretakers
+      // Get all caretakers from profiles
       const { data: caretakers, error: caretakerError } = await supabase
-        .from('caretakers')
-        .select('user_id');
+        .from('profiles')
+        .select('user_id')
+        .eq('role', 'caretaker');
 
       if (caretakerError) throw caretakerError;
 
