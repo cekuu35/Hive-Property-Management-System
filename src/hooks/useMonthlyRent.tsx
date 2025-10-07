@@ -28,64 +28,48 @@ export const useMonthlyRent = () => {
     try {
       setLoading(true);
 
-      // Comprehensive lease lookup - try multiple approaches
-      let { data: lease, error: leaseError } = await supabase
+      // First, find the tenant_info record for this user
+      const { data: tenantInfo, error: tenantInfoError } = await supabase
+        .from('tenant_info')
+        .select('id')
+        .eq('profile_id', profile.id)
+        .order('updated_at', { ascending: false })
+        .limit(1);
+
+      if (tenantInfoError) {
+        console.error('Error fetching tenant_info:', tenantInfoError);
+        setLoading(false);
+        return;
+      }
+
+      if (!tenantInfo || tenantInfo.length === 0) {
+        console.log('No tenant_info found for profile ID:', profile.id);
+        setMonthlyRentData({
+          currentRentDue: 0,
+          nextDueDate: '',
+          isOverdue: false,
+          daysUntilDue: 0,
+          lateFee: 0
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Now fetch the lease using tenant_info_id
+      const { data: lease, error: leaseError } = await supabase
         .from('leases')
         .select('id, rent_amount, start_date')
-        .eq('tenant_id', profile.id)
+        .eq('tenant_info_id', tenantInfo[0].id)
         .eq('status', 'active')
         .maybeSingle();
 
-      // If no lease found by tenant_id, try via tenant_info
-      if (!lease && !leaseError) {
-        const { data: tenantInfo } = await supabase
-          .from('tenant_info')
-          .select('id')
-          .eq('profile_id', profile.id)
-          .order('updated_at', { ascending: false })
-          .limit(1);
-
-        if (tenantInfo && tenantInfo.length > 0) {
-          const { data: leaseData, error: leaseError2 } = await supabase
-            .from('leases')
-            .select('id, rent_amount, start_date')
-            .eq('tenant_info_id', tenantInfo[0].id)
-            .eq('status', 'active')
-            .maybeSingle();
-          
-          lease = leaseData;
-          leaseError = leaseError2;
-        }
-      }
-
-      // If still no lease found, try reverse lookup - find tenant_info by email
-      if (!lease && !leaseError) {
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('email')
-          .eq('id', profile.id)
-          .single();
-
-        if (profileData?.email) {
-          const { data: tenantInfoByEmail } = await supabase
-            .from('tenant_info')
-            .select('id')
-            .eq('email', profileData.email)
-            .order('updated_at', { ascending: false })
-            .limit(1);
-
-          if (tenantInfoByEmail && tenantInfoByEmail.length > 0) {
-            const { data: leaseData, error: leaseError2 } = await supabase
-              .from('leases')
-              .select('id, rent_amount, start_date')
-              .eq('tenant_info_id', tenantInfoByEmail[0].id)
-              .eq('status', 'active')
-              .maybeSingle();
-            
-            lease = leaseData;
-            leaseError = leaseError2;
-          }
-        }
+      // Log the result
+      if (leaseError) {
+        console.error('Error fetching lease:', leaseError);
+      } else if (lease) {
+        console.log('✅ Found active lease for monthly rent:', lease.id);
+      } else {
+        console.log('No active lease found for tenant_info_id:', tenantInfo[0].id);
       }
 
       if (leaseError) throw leaseError;

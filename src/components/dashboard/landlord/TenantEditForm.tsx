@@ -28,7 +28,7 @@ import {
   Key
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { SimpleTenantCreationService } from '@/services/simpleTenantCreationService';
+import { ClientTenantCreationService } from '@/services/clientTenantCreationService';
 import { useProperties } from '@/hooks/useProperties';
 import { format } from 'date-fns';
 
@@ -37,6 +37,7 @@ const tenantEditSchema = z.object({
   last_name: z.string().min(2, 'Last name must be at least 2 characters'),
   email: z.string().email('Please enter a valid email address'),
   phone: z.string().min(10, 'Phone number must be at least 10 characters'),
+  property_id: z.string().optional(),
   unit_id: z.string().optional(),
   rent_amount: z.number().min(0, 'Rent amount must be positive'),
   security_deposit: z.number().min(0, 'Security deposit must be positive'),
@@ -69,7 +70,7 @@ export const TenantEditForm = ({
   const [showPasswordReset, setShowPasswordReset] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const { toast } = useToast();
-  const { properties, loading: propertiesLoading } = useProperties();
+  const { properties, units, getPropertyUnits, loading: propertiesLoading } = useProperties();
 
   const {
     register,
@@ -85,6 +86,7 @@ export const TenantEditForm = ({
       last_name: tenant?.tenant_info?.last_name || '',
       email: tenant?.tenant_info?.email || '',
       phone: tenant?.tenant_info?.phone || '',
+      property_id: tenant?.units?.properties?.id || '',
       unit_id: tenant?.units?.id || '',
       rent_amount: tenant?.rent_amount || 0,
       security_deposit: tenant?.security_deposit || 0,
@@ -99,11 +101,33 @@ export const TenantEditForm = ({
     }
   });
 
-  const selectedPropertyId = watch('unit_id');
-  const selectedProperty = properties.find(p => p.id === selectedPropertyId);
-  const availableUnits = selectedProperty?.units?.filter(unit => 
-    unit.status === 'available' || unit.id === tenant?.units?.id
-  ) || [];
+  const selectedPropertyId = watch('property_id');
+  const selectedUnitId = watch('unit_id');
+  
+  // Set property_id when component mounts if tenant has a unit
+  useEffect(() => {
+    if (tenant?.units?.properties?.id && !selectedPropertyId) {
+      setValue('property_id', tenant.units.properties.id);
+    }
+  }, [tenant, selectedPropertyId, setValue]);
+  
+  // Get all units for the selected property
+  const availableUnits = selectedPropertyId 
+    ? getPropertyUnits(selectedPropertyId).filter(unit => 
+        unit.status === 'vacant' || unit.id === tenant?.units?.id
+      )
+    : [];
+
+  // Debug logging
+  console.log('🔍 TenantEditForm debug:', {
+    selectedPropertyId,
+    selectedUnitId,
+    availableUnitsCount: availableUnits.length,
+    propertiesCount: properties.length,
+    unitsCount: units.length,
+    tenantUnits: tenant?.units,
+    availableUnits: availableUnits.map(u => ({ id: u.id, number: u.unit_number, rent: u.rent_amount, status: u.status }))
+  });
 
   const onSubmit = async (data: TenantEditFormData) => {
     if (!tenant?.id) {
@@ -118,7 +142,9 @@ export const TenantEditForm = ({
     setIsSubmitting(true);
 
     try {
-      // Update tenant_info
+      console.log('🔄 Starting tenant update process...');
+      
+      // Update tenant_info table (only tenant-specific fields)
       const tenantInfoUpdates = {
         first_name: data.first_name,
         last_name: data.last_name,
@@ -132,23 +158,45 @@ export const TenantEditForm = ({
         current_balance: data.current_balance,
       };
 
-      // Update tenant record (if using the new tenants table)
-      const tenantUpdates = {
-        unit_id: data.unit_id,
-        rent_amount: data.rent_amount,
-        security_deposit: data.security_deposit,
-        lease_start_date: data.lease_start_date,
-        lease_end_date: data.lease_end_date,
-      };
+      console.log('📝 Updating tenant_info with:', tenantInfoUpdates);
 
-      // For now, we'll update the existing tenant_info table
-      const { error: updateError } = await SimpleTenantCreationService.updateTenant(
+      // Update tenant_info table
+      const { error: tenantInfoError } = await ClientTenantCreationService.updateTenantInfo(
         tenant.id, 
-        { ...tenantInfoUpdates, ...tenantUpdates }
+        tenantInfoUpdates
       );
 
-      if (updateError) {
-        throw new Error(updateError);
+      if (tenantInfoError) {
+        throw new Error(`Tenant info update failed: ${tenantInfoError}`);
+      }
+
+      console.log('✅ Tenant info updated successfully');
+
+      // Update lease information if lease fields are provided
+      if (data.lease_start_date || data.lease_end_date || data.rent_amount || data.security_deposit || data.unit_id) {
+        console.log('📝 Updating lease information...');
+        
+        const leaseUpdates = {
+          unit_id: data.unit_id,
+          rent_amount: data.rent_amount,
+          deposit_amount: data.security_deposit,
+          start_date: data.lease_start_date,
+          end_date: data.lease_end_date,
+        };
+
+        console.log('📝 Updating lease with:', leaseUpdates);
+
+        const { error: leaseError } = await ClientTenantCreationService.updateLease(
+          tenant.id,
+          leaseUpdates
+        );
+
+        if (leaseError) {
+          console.warn('⚠️ Lease update failed:', leaseError);
+          // Don't fail the entire operation if lease update fails
+        } else {
+          console.log('✅ Lease updated successfully');
+        }
       }
 
       toast({
@@ -158,7 +206,7 @@ export const TenantEditForm = ({
 
       onSuccess?.();
     } catch (error) {
-      console.error('Error updating tenant:', error);
+      console.error('❌ Error updating tenant:', error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to update tenant",
@@ -184,7 +232,7 @@ export const TenantEditForm = ({
       const password = generateRandomPassword();
       
       // Update password in Supabase Auth
-      const { error } = await SimpleTenantCreationService.resetPassword(
+      const { error } = await ClientTenantCreationService.resetPassword(
         tenant.tenant_info.profile_id,
         password
       );
@@ -376,7 +424,10 @@ export const TenantEditForm = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="property">Property</Label>
-                <Select onValueChange={(value) => setValue('unit_id', value)}>
+                <Select onValueChange={(value) => {
+                  setValue('property_id', value);
+                  setValue('unit_id', ''); // Reset unit selection when property changes
+                }}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select a property" />
                   </SelectTrigger>
@@ -391,18 +442,44 @@ export const TenantEditForm = ({
               </div>
               <div>
                 <Label htmlFor="unit">Unit</Label>
-                <Select onValueChange={(value) => setValue('unit_id', value)}>
+                <Select onValueChange={(value) => {
+                  setValue('unit_id', value);
+                  // Auto-update rent amount when unit is selected
+                  const selectedUnit = availableUnits.find(u => u.id === value);
+                  if (selectedUnit && selectedUnit.rent_amount) {
+                    setValue('rent_amount', selectedUnit.rent_amount);
+                  }
+                }}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select a unit" />
+                    <SelectValue placeholder={
+                      !selectedPropertyId 
+                        ? "Select a property first" 
+                        : availableUnits.length === 0 
+                          ? "No units available" 
+                          : "Select a unit"
+                    } />
                   </SelectTrigger>
                   <SelectContent>
-                    {availableUnits.map((unit) => (
-                      <SelectItem key={unit.id} value={unit.id}>
-                        Unit {unit.unit_number} - {unit.type}
+                    {availableUnits.length === 0 ? (
+                      <SelectItem value="no-units" disabled>
+                        {!selectedPropertyId 
+                          ? "Please select a property first" 
+                          : "No units available"}
                       </SelectItem>
-                    ))}
+                    ) : (
+                      availableUnits.map((unit) => (
+                        <SelectItem key={unit.id} value={unit.id}>
+                          Unit {unit.unit_number} - {unit.type} (KES {unit.rent_amount?.toLocaleString() || 0}/month)
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
+                {selectedPropertyId && availableUnits.length === 0 && (
+                  <p className="text-sm text-amber-600 mt-1">
+                    No units available in this property
+                  </p>
+                )}
               </div>
             </div>
           </div>

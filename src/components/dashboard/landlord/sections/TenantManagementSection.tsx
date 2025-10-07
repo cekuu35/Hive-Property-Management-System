@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Label } from '@/components/ui/label';
 import { 
   UserPlus, 
   Users, 
@@ -17,7 +18,9 @@ import {
   AlertCircle,
   CheckCircle,
   Clock,
-  Settings
+  Settings,
+  User,
+  Key
 } from 'lucide-react';
 import { useLandlordTenants } from '@/hooks/useLandlordTenants';
 import { TenantCreationForm } from '../TenantCreationForm';
@@ -29,6 +32,8 @@ export const TenantManagementSection = () => {
   const [selectedTenant, setSelectedTenant] = useState<any>(null);
   const [showTenantDetails, setShowTenantDetails] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
+  const [showCredentials, setShowCredentials] = useState(false);
+  const [tenantCredentials, setTenantCredentials] = useState<any>(null);
   
   const {
     tenants,
@@ -39,11 +44,24 @@ export const TenantManagementSection = () => {
     terminatedTenants,
     totalMonthlyRent,
     totalSecurityDeposits,
-    deleteTenant
+    deleteTenant,
+    refetch
   } = useLandlordTenants();
 
-  const handleCreateSuccess = () => {
+  const handleCreateSuccess = (credentials?: any) => {
+    console.log('🔄 Tenant created successfully, refreshing tenant list...');
     setShowCreateForm(false);
+    // Refresh the tenant list to show the newly created tenant
+    refetch();
+    if (credentials) {
+      setTenantCredentials(credentials);
+      setShowCredentials(true);
+    }
+  };
+
+  const handleShowCredentials = (tenant: any) => {
+    setSelectedTenant(tenant);
+    setShowCredentials(true);
   };
 
   const handleEditTenant = (tenant: any) => {
@@ -54,6 +72,8 @@ export const TenantManagementSection = () => {
   const handleEditSuccess = () => {
     setShowEditForm(false);
     setSelectedTenant(null);
+    // Refresh the tenant list to show updated tenant data
+    refetch();
   };
 
   const handleEditCancel = () => {
@@ -311,6 +331,14 @@ export const TenantManagementSection = () => {
                         <Button
                           variant="ghost"
                           size="sm"
+                          onClick={() => handleShowCredentials(tenant)}
+                          title="View Credentials"
+                        >
+                          <Key className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => handleEditTenant(tenant)}
                           title="Edit Tenant"
                         >
@@ -336,40 +364,20 @@ export const TenantManagementSection = () => {
 
       {/* Tenant Details Dialog */}
       <Dialog open={showTenantDetails} onOpenChange={setShowTenantDetails}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Tenant Details</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              Tenant Information
+            </DialogTitle>
+            <CardDescription>
+              Complete tenant details and account information
+            </CardDescription>
           </DialogHeader>
           {selectedTenant && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h4 className="font-medium">Personal Information</h4>
-                  <p><strong>Name:</strong> {selectedTenant.tenant_info.first_name} {selectedTenant.tenant_info.last_name}</p>
-                  <p><strong>Email:</strong> {selectedTenant.tenant_info.email}</p>
-                  <p><strong>Phone:</strong> {selectedTenant.tenant_info.phone}</p>
-                </div>
-                <div>
-                  <h4 className="font-medium">Lease Information</h4>
-                  <p><strong>Status:</strong> {selectedTenant.status}</p>
-                  <p><strong>Rent:</strong> KES {selectedTenant.rent_amount.toLocaleString()}</p>
-                  <p><strong>Deposit:</strong> KES {selectedTenant.security_deposit.toLocaleString()}</p>
-                </div>
-              </div>
-              {selectedTenant.units && (
-                <div>
-                  <h4 className="font-medium">Unit Information</h4>
-                  <p><strong>Unit:</strong> {selectedTenant.units.unit_number}</p>
-                  <p><strong>Property:</strong> {selectedTenant.units.properties?.name}</p>
-                  <p><strong>Address:</strong> {selectedTenant.units.properties?.address}</p>
-                </div>
-              )}
-              <div>
-                <h4 className="font-medium">Payment Information</h4>
-                <p><strong>Status:</strong> {selectedTenant.tenant_info.payment_status}</p>
-                <p><strong>Balance:</strong> KES {selectedTenant.tenant_info.current_balance.toLocaleString()}</p>
-              </div>
-              <div className="flex gap-2 pt-4">
+            <div className="space-y-6">
+              {/* Quick Actions */}
+              <div className="flex gap-2 p-4 bg-gray-50 rounded-lg">
                 <Button
                   onClick={() => {
                     setShowTenantDetails(false);
@@ -378,7 +386,220 @@ export const TenantManagementSection = () => {
                   className="flex-1"
                 >
                   <Edit className="h-4 w-4 mr-2" />
-                  Edit Tenant
+                  Edit Tenant Information
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowTenantDetails(false)}
+                >
+                  Close
+                </Button>
+              </div>
+
+              {/* Personal Information */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Personal Information</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium text-muted-foreground">Full Name</Label>
+                      <p className="text-base">{selectedTenant.tenant_info.first_name} {selectedTenant.tenant_info.last_name}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-muted-foreground">Email Address</Label>
+                      <p className="text-base">{selectedTenant.tenant_info.email}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-muted-foreground">Phone Number</Label>
+                      <p className="text-base">{selectedTenant.tenant_info.phone}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-muted-foreground">Tenant Status</Label>
+                      <Badge 
+                        variant={selectedTenant.tenant_info.tenant_status === 'active' ? 'default' : 'secondary'}
+                        className={
+                          selectedTenant.tenant_info.tenant_status === 'active' 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-yellow-100 text-yellow-800'
+                        }
+                      >
+                        {selectedTenant.tenant_info.tenant_status || 'Unknown'}
+                      </Badge>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Account Information */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Account Information</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium text-muted-foreground">Login Email</Label>
+                      <p className="text-base font-mono bg-gray-100 p-2 rounded">{selectedTenant.tenant_info.email}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-muted-foreground">Account Status</Label>
+                      <p className="text-base">
+                        {selectedTenant.tenant_info.profile_id ? '✅ Active Account' : '❌ No Account'}
+                      </p>
+                    </div>
+                  </div>
+                  {selectedTenant.tenant_info.profile_id && (
+                    <Alert>
+                      <Key className="h-4 w-4" />
+                      <AlertDescription>
+                        <strong>Login Credentials:</strong> The tenant can log in using their email address. 
+                        If they need a password reset, use the "Edit Tenant" button to reset their password.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Lease Information */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Lease Information</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium text-muted-foreground">Rent Amount</Label>
+                      <p className="text-base font-semibold text-green-600">
+                        KES {selectedTenant.rent_amount?.toLocaleString() || '0'}
+                      </p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-muted-foreground">Security Deposit</Label>
+                      <p className="text-base font-semibold text-blue-600">
+                        KES {selectedTenant.security_deposit?.toLocaleString() || '0'}
+                      </p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-muted-foreground">Lease Start Date</Label>
+                      <p className="text-base">
+                        {selectedTenant.lease_start_date ? new Date(selectedTenant.lease_start_date).toLocaleDateString() : 'Not set'}
+                      </p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-muted-foreground">Lease End Date</Label>
+                      <p className="text-base">
+                        {selectedTenant.lease_end_date ? new Date(selectedTenant.lease_end_date).toLocaleDateString() : 'Not set'}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Unit Information */}
+              {selectedTenant.units && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Unit Assignment</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-sm font-medium text-muted-foreground">Unit Number</Label>
+                        <p className="text-base font-semibold">{selectedTenant.units.unit_number}</p>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium text-muted-foreground">Unit Type</Label>
+                        <p className="text-base">{selectedTenant.units.type || 'Not specified'}</p>
+                      </div>
+                      <div className="md:col-span-2">
+                        <Label className="text-sm font-medium text-muted-foreground">Property</Label>
+                        <p className="text-base font-semibold">{selectedTenant.units.properties?.name}</p>
+                        <p className="text-sm text-muted-foreground">{selectedTenant.units.properties?.address}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Payment Information */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Payment Information</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium text-muted-foreground">Payment Status</Label>
+                      <Badge 
+                        variant={
+                          selectedTenant.tenant_info.payment_status === 'paid' ? 'default' : 
+                          selectedTenant.tenant_info.payment_status === 'overdue' ? 'destructive' : 'secondary'
+                        }
+                        className={
+                          selectedTenant.tenant_info.payment_status === 'paid' ? 'bg-green-100 text-green-800' : 
+                          selectedTenant.tenant_info.payment_status === 'overdue' ? 'bg-red-100 text-red-800' : 
+                          'bg-yellow-100 text-yellow-800'
+                        }
+                      >
+                        {selectedTenant.tenant_info.payment_status || 'Unknown'}
+                      </Badge>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-muted-foreground">Current Balance</Label>
+                      <p className="text-base font-semibold text-red-600">
+                        KES {selectedTenant.tenant_info.current_balance?.toLocaleString() || '0'}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Emergency Contact */}
+              {(selectedTenant.tenant_info.emergency_contact_name || selectedTenant.tenant_info.emergency_contact_phone) && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Emergency Contact</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-sm font-medium text-muted-foreground">Contact Name</Label>
+                        <p className="text-base">{selectedTenant.tenant_info.emergency_contact_name || 'Not provided'}</p>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium text-muted-foreground">Contact Phone</Label>
+                        <p className="text-base">{selectedTenant.tenant_info.emergency_contact_phone || 'Not provided'}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Notes */}
+              {selectedTenant.tenant_info.notes && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Notes</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-base">{selectedTenant.tenant_info.notes}</p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-2 pt-4 border-t">
+                <Button
+                  onClick={() => {
+                    setShowTenantDetails(false);
+                    handleEditTenant(selectedTenant);
+                  }}
+                  className="flex-1"
+                >
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit Tenant Information
                 </Button>
                 <Button
                   variant="outline"
@@ -408,6 +629,111 @@ export const TenantManagementSection = () => {
                 // This will be handled by the TenantEditForm component
               }}
             />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Tenant Credentials Dialog */}
+      <Dialog open={showCredentials} onOpenChange={setShowCredentials}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Key className="h-5 w-5" />
+              Tenant Login Credentials
+            </DialogTitle>
+            <CardDescription>
+              Share these credentials with the tenant for login access
+            </CardDescription>
+          </DialogHeader>
+          {(tenantCredentials || selectedTenant) && (
+            <div className="space-y-4">
+              <Alert>
+                <Key className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Important:</strong> Save these credentials securely. The tenant will need these to log in to their account.
+                </AlertDescription>
+              </Alert>
+              
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Tenant Name</Label>
+                  <p className="text-base font-semibold">
+                    {tenantCredentials?.tenantName || 
+                     `${selectedTenant?.tenant_info?.first_name} ${selectedTenant?.tenant_info?.last_name}`}
+                  </p>
+                </div>
+                
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Login Email</Label>
+                  <div className="p-3 bg-gray-100 rounded-lg">
+                    <p className="font-mono text-base">
+                      {tenantCredentials?.email || selectedTenant?.tenant_info?.email}
+                    </p>
+                  </div>
+                </div>
+                
+                {tenantCredentials?.password && (
+                  <div>
+                    <Label className="text-sm font-medium text-muted-foreground">Temporary Password</Label>
+                    <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <p className="font-mono text-base font-semibold text-yellow-800">
+                        {tenantCredentials.password}
+                      </p>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      The tenant should change this password on first login
+                    </p>
+                  </div>
+                )}
+                
+                {!tenantCredentials?.password && (
+                  <div>
+                    <Label className="text-sm font-medium text-muted-foreground">Password Status</Label>
+                    <p className="text-base">
+                      {selectedTenant?.tenant_info?.profile_id ? 
+                        '✅ Account exists - Use "Edit Tenant" to reset password' : 
+                        '❌ No account created yet'
+                      }
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-medium text-blue-900 mb-2">Instructions for Tenant:</h4>
+                <ul className="text-sm text-blue-800 space-y-1">
+                  <li>• Go to the login page</li>
+                  <li>• Enter the email address above</li>
+                  <li>• Enter the password (if provided)</li>
+                  <li>• Change password on first login</li>
+                  <li>• Contact you if they need help</li>
+                </ul>
+              </div>
+
+              <div className="flex gap-2 pt-4">
+                <Button
+                  onClick={() => {
+                    setShowCredentials(false);
+                    setTenantCredentials(null);
+                  }}
+                  className="flex-1"
+                >
+                  Close
+                </Button>
+                {tenantCredentials?.password && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      navigator.clipboard.writeText(
+                        `Email: ${tenantCredentials.email}\nPassword: ${tenantCredentials.password}`
+                      );
+                    }}
+                  >
+                    Copy Credentials
+                  </Button>
+                )}
+              </div>
+            </div>
           )}
         </DialogContent>
       </Dialog>

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from './useAuth';
-import { TenantCreationService, CreateTenantData } from '@/services/tenantCreationService';
+import { supabase } from '@/integrations/supabase/client';
+import { ClientTenantCreationService } from '@/services/clientTenantCreationService';
+import { CompleteTenantCreationService, CreateTenantData } from '@/services/completeTenantCreationService';
 import { toast } from '@/hooks/use-toast';
 
 export interface LandlordTenant {
@@ -39,6 +41,7 @@ export const useLandlordTenants = () => {
   const [error, setError] = useState<string | null>(null);
 
   const fetchTenants = async () => {
+    console.log('🔄 Fetching tenants for landlord:', profile?.id);
     if (!profile?.id) {
       setLoading(false);
       return;
@@ -48,8 +51,119 @@ export const useLandlordTenants = () => {
       setLoading(true);
       setError(null);
 
-      const tenantsData = await TenantCreationService.getTenantsForLandlord(profile.id);
-      setTenants(tenantsData);
+      // Use the same approach as the existing useTenants hook
+      // Query tenant_info table directly for this landlord
+      const { data: tenantInfoData, error: tenantInfoError } = await supabase
+        .from('tenant_info')
+        .select(`
+          id,
+          first_name,
+          last_name,
+          email,
+          phone,
+          avatar_url,
+          profile_id,
+          tenant_status,
+          current_balance,
+          payment_status,
+          emergency_contact_name,
+          emergency_contact_phone,
+          notes,
+          created_at
+        `)
+        .eq('landlord_id', profile.id);
+
+      if (tenantInfoError) {
+        throw new Error(tenantInfoError.message);
+      }
+
+      if (!tenantInfoData || tenantInfoData.length === 0) {
+        setTenants([]);
+        return;
+      }
+
+      // Get tenant_info IDs
+      const tenantInfoIds = tenantInfoData.map(t => t.id);
+
+      // Fetch leases for these tenant_info records
+      const { data: leasesData, error: leasesError } = await supabase
+        .from('leases')
+        .select(`
+          id,
+          tenant_info_id,
+          unit_id,
+          start_date,
+          end_date,
+          rent_amount,
+          deposit_amount,
+          status,
+          units (
+            id,
+            unit_number,
+            type,
+            properties (
+              id,
+              name,
+              address
+            )
+          )
+        `)
+        .in('tenant_info_id', tenantInfoIds);
+
+      if (leasesError) {
+        console.error('Error fetching leases:', leasesError);
+        // Continue without leases data
+      }
+
+      // Create a map of tenant_info_id to lease data
+      const leaseMap = new Map();
+      if (leasesData) {
+        leasesData.forEach(lease => {
+          leaseMap.set(lease.tenant_info_id, lease);
+        });
+      }
+
+      // Transform the data to match the expected format
+      const transformedTenants = tenantInfoData.map(tenant => {
+        const lease = leaseMap.get(tenant.id);
+        
+        return {
+          id: tenant.id,
+          rent_amount: lease?.rent_amount || 0,
+          security_deposit: lease?.deposit_amount || 0,
+          status: lease?.status || tenant.tenant_status || 'pending',
+          lease_start_date: lease?.start_date || '',
+          lease_end_date: lease?.end_date || '',
+          created_at: tenant.created_at,
+          tenant_info: {
+            id: tenant.id,
+            first_name: tenant.first_name,
+            last_name: tenant.last_name,
+            email: tenant.email,
+            phone: tenant.phone,
+            tenant_status: tenant.tenant_status,
+            current_balance: lease?.rent_amount || tenant.current_balance || 0,
+            payment_status: tenant.payment_status || 'unpaid',
+            profile_id: tenant.profile_id,
+            emergency_contact_name: tenant.emergency_contact_name,
+            emergency_contact_phone: tenant.emergency_contact_phone,
+            notes: tenant.notes
+          },
+          units: lease?.units ? {
+            id: lease.units.id,
+            unit_number: lease.units.unit_number,
+            type: lease.units.type,
+            properties: lease.units.properties ? {
+              id: lease.units.properties.id,
+              name: lease.units.properties.name,
+              address: lease.units.properties.address
+            } : undefined
+          } : undefined
+        };
+      });
+
+      console.log('✅ Successfully fetched tenants:', transformedTenants.length);
+      setTenants(transformedTenants);
     } catch (err) {
       console.error('Error fetching tenants:', err);
       setError('Failed to load tenants');
@@ -62,7 +176,7 @@ export const useLandlordTenants = () => {
     fetchTenants();
   }, [profile?.id]);
 
-  const createTenant = async (tenantData: CreateTenantData) => {
+  const createTenant = async (tenantData: any) => {
     if (!profile?.id) {
       toast({
         title: "Error",
@@ -73,7 +187,7 @@ export const useLandlordTenants = () => {
     }
 
     try {
-      const result = await TenantCreationService.createTenant(profile.id, tenantData);
+      const result = await ClientTenantCreationService.createTenant(profile.id, tenantData);
       
       if (result.success) {
         // Refresh tenants list
@@ -105,7 +219,9 @@ export const useLandlordTenants = () => {
 
   const updateTenant = async (tenantId: string, updates: Partial<CreateTenantData>) => {
     try {
-      const result = await TenantCreationService.updateTenant(tenantId, updates);
+      console.log('🔄 Updating tenant:', tenantId, 'with updates:', updates);
+      
+      const result = await ClientTenantCreationService.updateTenant(tenantId, updates);
       
       if (result.success) {
         // Refresh tenants list
@@ -136,35 +252,13 @@ export const useLandlordTenants = () => {
   };
 
   const deleteTenant = async (tenantId: string) => {
-    try {
-      const result = await TenantCreationService.deleteTenant(tenantId);
-      
-      if (result.success) {
-        // Refresh tenants list
-        await fetchTenants();
-        
-        toast({
-          title: "Success",
-          description: "Tenant deleted successfully!",
-        });
-      } else {
-        toast({
-          title: "Error",
-          description: result.error || "Failed to delete tenant",
-          variant: "destructive",
-        });
-      }
-
-      return result;
-    } catch (err) {
-      console.error('Error deleting tenant:', err);
-      toast({
-        title: "Error",
-        description: "An unexpected error occurred",
-        variant: "destructive",
-      });
-      return { success: false, error: 'Unknown error occurred' };
-    }
+    // TODO: Implement tenant deletion functionality
+    toast({
+      title: "Not Implemented", 
+      description: "Tenant deletion functionality is not yet implemented",
+      variant: "destructive",
+    });
+    return { success: false, error: 'Not implemented' };
   };
 
   // Filter tenants by status

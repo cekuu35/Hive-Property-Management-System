@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import TestRoleSwitching from "./pages/TestRoleSwitching";
@@ -27,7 +28,9 @@ const App = () => (
                 path="/dashboard" 
                 element={
                   <ProtectedRoute>
-                    <Dashboard />
+                    <ErrorBoundary>
+                      <Dashboard />
+                    </ErrorBoundary>
                   </ProtectedRoute>
                 } 
               />

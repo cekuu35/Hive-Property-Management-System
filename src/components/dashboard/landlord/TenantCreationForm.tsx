@@ -9,9 +9,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, UserPlus, CheckCircle, AlertCircle, Mail, Key, Info } from 'lucide-react';
+import { Loader2, UserPlus, CheckCircle, AlertCircle, Mail, Key, Info, Copy, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { SimpleTenantCreationService, CreateTenantData } from '@/services/simpleTenantCreationService';
+import { SimpleClientTenantService } from '@/services/simpleClientTenantService';
 import { useAuth } from '@/hooks/useAuth';
 import { useProperties } from '@/hooks/useProperties';
 
@@ -20,6 +20,7 @@ const tenantSchema = z.object({
   last_name: z.string().min(2, 'Last name must be at least 2 characters'),
   email: z.string().email('Please enter a valid email address'),
   phone: z.string().min(10, 'Phone number must be at least 10 characters'),
+  property_id: z.string().optional(),
   unit_id: z.string().optional(),
   rent_amount: z.number().min(0, 'Rent amount must be positive'),
   security_deposit: z.number().min(0, 'Security deposit must be positive'),
@@ -43,9 +44,19 @@ export const TenantCreationForm = ({ onSuccess, onCancel }: TenantCreationFormPr
   const [showCredentials, setShowCredentials] = useState(false);
   const [emailConflict, setEmailConflict] = useState<any>(null);
   const [checkingEmail, setCheckingEmail] = useState(false);
+  const [passwordCopied, setPasswordCopied] = useState(false);
   const { toast } = useToast();
   const { profile } = useAuth();
-  const { properties, loading: propertiesLoading } = useProperties();
+  const { properties, units, loading: propertiesLoading } = useProperties();
+
+  console.log('🔍 TenantCreationForm render:', {
+    profile: profile?.id,
+    propertiesCount: properties.length,
+    unitsCount: units.length,
+    propertiesLoading,
+    isSubmitting,
+    showCredentials
+  });
 
   const {
     register,
@@ -59,15 +70,21 @@ export const TenantCreationForm = ({ onSuccess, onCancel }: TenantCreationFormPr
     defaultValues: {
       rent_amount: 0,
       security_deposit: 0,
+      property_id: undefined,
+      unit_id: undefined,
     }
   });
 
-  const selectedPropertyId = watch('unit_id');
+  const selectedPropertyId = watch('property_id');
   const email = watch('email');
 
   // Get units for selected property
-  const selectedProperty = properties.find(p => p.id === selectedPropertyId);
-  const availableUnits = selectedProperty?.units?.filter(unit => unit.status === 'available') || [];
+  const availableUnits = selectedPropertyId 
+    ? units.filter(unit => 
+        unit.property_id === selectedPropertyId && 
+        unit.status === 'vacant'
+      )
+    : [];
 
   // Check email availability when email changes
   useEffect(() => {
@@ -75,7 +92,7 @@ export const TenantCreationForm = ({ onSuccess, onCancel }: TenantCreationFormPr
       if (email && email.includes('@')) {
         setCheckingEmail(true);
         try {
-          const result = await SimpleTenantCreationService.checkEmailAvailability(email);
+          const result = await SimpleClientTenantService.checkEmailAvailability(email);
           setEmailConflict(result);
         } catch (error) {
           console.error('Error checking email:', error);
@@ -92,7 +109,10 @@ export const TenantCreationForm = ({ onSuccess, onCancel }: TenantCreationFormPr
   }, [email]);
 
   const onSubmit = async (data: TenantFormData) => {
+    console.log('🚀 Form submission started with data:', data);
+    
     if (!profile?.id) {
+      console.error('❌ No profile ID found');
       toast({
         title: "Error",
         description: "Landlord profile not found",
@@ -106,32 +126,42 @@ export const TenantCreationForm = ({ onSuccess, onCancel }: TenantCreationFormPr
 
     // Check for email conflicts before submitting
     if (emailConflict && !emailConflict.available && !emailConflict.canCreateWithRoleSwitch) {
+      console.log('❌ Email conflict detected:', emailConflict);
       toast({
         title: "Email Conflict",
         description: emailConflict.reason,
         variant: "destructive",
       });
+      setIsSubmitting(false);
       return;
     }
 
     try {
-      const result = await SimpleTenantCreationService.createTenant(profile.id, data);
+      console.log('📞 Calling SimpleClientTenantService.createTenant...');
+      const result = await SimpleClientTenantService.createTenant(profile.id, data);
+      console.log('📞 Service call result:', result);
 
       if (result.success) {
+        console.log('✅ Tenant creation successful');
         setCreationResult(result);
         setShowCredentials(true);
         
         toast({
           title: "Success",
-          description: "Tenant created successfully!",
+          description: "Tenant created successfully! They can now login with the credentials below.",
         });
 
         // Send welcome email (in production)
-        await SimpleTenantCreationService.sendWelcomeEmail(
-          result.email!,
-          result.password!,
-          `${data.first_name} ${data.last_name}`
-        );
+        try {
+          await SimpleClientTenantService.sendWelcomeEmail(
+            result.email!,
+            result.password!,
+            `${data.first_name} ${data.last_name}`
+          );
+          console.log('✅ Welcome email sent');
+        } catch (emailError) {
+          console.error('❌ Welcome email failed:', emailError);
+        }
 
         // Reset form
         reset();
@@ -139,6 +169,7 @@ export const TenantCreationForm = ({ onSuccess, onCancel }: TenantCreationFormPr
         // Call success callback
         onSuccess?.();
       } else {
+        console.error('❌ Tenant creation failed:', result.error);
         toast({
           title: "Error",
           description: result.error || "Failed to create tenant",
@@ -146,7 +177,7 @@ export const TenantCreationForm = ({ onSuccess, onCancel }: TenantCreationFormPr
         });
       }
     } catch (error) {
-      console.error('Error creating tenant:', error);
+      console.error('❌ Error creating tenant:', error);
       toast({
         title: "Error",
         description: "An unexpected error occurred",
@@ -160,9 +191,37 @@ export const TenantCreationForm = ({ onSuccess, onCancel }: TenantCreationFormPr
   const handleCloseCredentials = () => {
     setShowCredentials(false);
     setCreationResult(null);
+    setPasswordCopied(false);
+  };
+
+  const copyPassword = async () => {
+    if (creationResult?.password) {
+      try {
+        await navigator.clipboard.writeText(creationResult.password);
+        setPasswordCopied(true);
+        toast({
+          title: "Password Copied",
+          description: "Temporary password copied to clipboard",
+        });
+        setTimeout(() => setPasswordCopied(false), 2000);
+      } catch (err) {
+        toast({
+          title: "Copy Failed",
+          description: "Could not copy password to clipboard",
+          variant: "destructive",
+        });
+      }
+    }
   };
 
   if (showCredentials && creationResult) {
+    console.log('🔍 Password display debug:', {
+      showCredentials,
+      creationResult,
+      password: creationResult.password,
+      email: creationResult.email
+    });
+    
     return (
       <Card className="max-w-2xl mx-auto">
         <CardHeader>
@@ -184,10 +243,51 @@ export const TenantCreationForm = ({ onSuccess, onCancel }: TenantCreationFormPr
           
           <Alert>
             <Key className="h-4 w-4" />
-            <AlertDescription>
-              <strong>Temporary Password:</strong> {creationResult.password}
+            <AlertDescription className="flex items-center justify-between">
+              <div>
+                <strong>Temporary Password:</strong> 
+                <span className="ml-2 font-mono text-lg bg-gray-100 px-2 py-1 rounded">
+                  {creationResult.password || 'NO PASSWORD GENERATED'}
+                </span>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={copyPassword}
+                className="ml-4"
+              >
+                {passwordCopied ? (
+                  <>
+                    <Check className="h-4 w-4 mr-1" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-4 w-4 mr-1" />
+                    Copy
+                  </>
+                )}
+              </Button>
             </AlertDescription>
           </Alert>
+
+          <Alert>
+            <Info className="h-4 w-4" />
+            <AlertDescription>
+              <strong>Ready to Login:</strong> The tenant can now login to the tenant portal
+              using the email and password above. They will see their active lease and can pay rent immediately.
+            </AlertDescription>
+          </Alert>
+
+          {!creationResult.auth_created && (
+            <Alert className="border-amber-200 bg-amber-50">
+              <AlertCircle className="h-4 w-4 text-amber-600" />
+              <AlertDescription className="text-amber-800">
+                <strong>Manual Account Creation Required:</strong> The tenant account was created but the login credentials need to be set up manually. 
+                Use the email and password above to create the account in the Supabase dashboard or have the tenant sign up with these credentials.
+              </AlertDescription>
+            </Alert>
+          )}
 
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
             <h4 className="font-medium text-yellow-800 mb-2">Important:</h4>
@@ -304,7 +404,10 @@ export const TenantCreationForm = ({ onSuccess, onCancel }: TenantCreationFormPr
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="property">Property</Label>
-                <Select onValueChange={(value) => setValue('unit_id', value)}>
+                <Select onValueChange={(value) => {
+                  setValue('property_id', value);
+                  setValue('unit_id', undefined); // Reset unit selection when property changes
+                }}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select a property" />
                   </SelectTrigger>
@@ -321,16 +424,35 @@ export const TenantCreationForm = ({ onSuccess, onCancel }: TenantCreationFormPr
                 <Label htmlFor="unit">Unit</Label>
                 <Select onValueChange={(value) => setValue('unit_id', value)}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select a unit" />
+                    <SelectValue placeholder={
+                      !selectedPropertyId 
+                        ? "Select a property first" 
+                        : availableUnits.length === 0 
+                          ? "No vacant units available" 
+                          : "Select a unit"
+                    } />
                   </SelectTrigger>
                   <SelectContent>
-                    {availableUnits.map((unit) => (
-                      <SelectItem key={unit.id} value={unit.id}>
-                        Unit {unit.unit_number} - {unit.type}
+                    {availableUnits.length === 0 ? (
+                      <SelectItem value="no-units-available" disabled>
+                        {!selectedPropertyId 
+                          ? "Please select a property first" 
+                          : "No vacant units available"}
                       </SelectItem>
-                    ))}
+                    ) : (
+                      availableUnits.map((unit) => (
+                        <SelectItem key={unit.id} value={unit.id}>
+                          Unit {unit.unit_number} - {unit.type}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
+                {selectedPropertyId && availableUnits.length === 0 && (
+                  <p className="text-sm text-amber-600 mt-1">
+                    No vacant units available in this property
+                  </p>
+                )}
               </div>
             </div>
           </div>
