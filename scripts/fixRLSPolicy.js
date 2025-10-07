@@ -63,3 +63,4 @@ async function fixRLSPolicy() {
 // Run the script
 fixRLSPolicy();
 
+

@@ -36,3 +36,4 @@ CREATE POLICY "landlords_can_view_tenant_leases" ON leases
 GRANT SELECT ON leases TO authenticated;
 GRANT ALL ON leases TO service_role;
 
+

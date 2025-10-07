@@ -110,3 +110,4 @@ async function fixCurrentUserAuth() {
 // Run the script
 fixCurrentUserAuth();
 
+
