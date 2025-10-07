@@ -23,7 +23,7 @@ import {
   Key
 } from 'lucide-react';
 import { useLandlordTenants } from '@/hooks/useLandlordTenants';
-// import { TenantCreationForm } from '../TenantCreationForm';
+import { TenantCreationForm } from '../TenantCreationForm';
 // import { TenantEditForm } from '../TenantEditForm';
 import { format } from 'date-fns';
 
@@ -163,13 +163,10 @@ export const TenantManagementSection = () => {
               <DialogHeader>
                 <DialogTitle>Create New Tenant</DialogTitle>
               </DialogHeader>
-              {/* <TenantCreationForm 
+              <TenantCreationForm 
                 onSuccess={handleCreateSuccess}
                 onCancel={() => setShowCreateForm(false)}
-              /> */}
-              <div className="p-4">
-                <p className="text-muted-foreground">Tenant creation form is being updated. Please use the Tenants section to add new tenants.</p>
-              </div>
+              />
             </DialogContent>
           </Dialog>
         </div>
