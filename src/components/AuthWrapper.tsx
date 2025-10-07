@@ -124,7 +124,7 @@ export const AuthWrapper = ({ children }: AuthWrapperProps) => {
 
   return (
     <DashboardLayout 
-      userRole={userRole.role} 
+      userRole={userRole.role === 'admin' ? 'landlord' : userRole.role as "landlord" | "tenant" | "caretaker" | "security"} 
       activeTab={activeTab} 
       onTabChange={setActiveTab}
       activeSection={activeSection}

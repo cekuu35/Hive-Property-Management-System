@@ -417,45 +417,57 @@ export type Database = {
       }
       profiles: {
         Row: {
+          address: string | null
           avatar_url: string | null
           bio: string | null
+          company_name: string | null
           created_at: string
           email: string | null
           emergency_contact_name: string | null
           emergency_contact_phone: string | null
           first_name: string | null
           id: string
+          is_active: boolean | null
           last_name: string | null
+          license_number: string | null
           phone: string | null
           role: string
           updated_at: string
           user_id: string
         }
         Insert: {
+          address?: string | null
           avatar_url?: string | null
           bio?: string | null
+          company_name?: string | null
           created_at?: string
           email?: string | null
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
           first_name?: string | null
           id?: string
+          is_active?: boolean | null
           last_name?: string | null
+          license_number?: string | null
           phone?: string | null
           role: string
           updated_at?: string
           user_id: string
         }
         Update: {
+          address?: string | null
           avatar_url?: string | null
           bio?: string | null
+          company_name?: string | null
           created_at?: string
           email?: string | null
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
           first_name?: string | null
           id?: string
+          is_active?: boolean | null
           last_name?: string | null
+          license_number?: string | null
           phone?: string | null
           role?: string
           updated_at?: string
@@ -673,14 +685,20 @@ export type Database = {
       }
       tenant_info: {
         Row: {
+          auth_user_id: string | null
           avatar_url: string | null
           created_at: string
           current_balance: number | null
           email: string
+          emergency_contact_name: string | null
+          emergency_contact_phone: string | null
           first_name: string
+          full_name: string | null
           id: string
           landlord_id: string
           last_name: string
+          move_in_date: string | null
+          notes: string | null
           payment_status: string | null
           phone: string | null
           profile_id: string | null
@@ -688,14 +706,20 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          auth_user_id?: string | null
           avatar_url?: string | null
           created_at?: string
           current_balance?: number | null
           email: string
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
           first_name: string
+          full_name?: string | null
           id?: string
           landlord_id: string
           last_name: string
+          move_in_date?: string | null
+          notes?: string | null
           payment_status?: string | null
           phone?: string | null
           profile_id?: string | null
@@ -703,14 +727,20 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          auth_user_id?: string | null
           avatar_url?: string | null
           created_at?: string
           current_balance?: number | null
           email?: string
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
           first_name?: string
+          full_name?: string | null
           id?: string
           landlord_id?: string
           last_name?: string
+          move_in_date?: string | null
+          notes?: string | null
           payment_status?: string | null
           phone?: string | null
           profile_id?: string | null
@@ -718,6 +748,73 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      tenants: {
+        Row: {
+          auth_user_id: string | null
+          created_at: string | null
+          id: string
+          landlord_id: string
+          lease_end_date: string | null
+          lease_start_date: string | null
+          rent_amount: number
+          security_deposit: number
+          status: string
+          tenant_info_id: string
+          unit_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          auth_user_id?: string | null
+          created_at?: string | null
+          id?: string
+          landlord_id: string
+          lease_end_date?: string | null
+          lease_start_date?: string | null
+          rent_amount?: number
+          security_deposit?: number
+          status?: string
+          tenant_info_id: string
+          unit_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          auth_user_id?: string | null
+          created_at?: string | null
+          id?: string
+          landlord_id?: string
+          lease_end_date?: string | null
+          lease_start_date?: string | null
+          rent_amount?: number
+          security_deposit?: number
+          status?: string
+          tenant_info_id?: string
+          unit_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenants_landlord_id_fkey"
+            columns: ["landlord_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenants_tenant_info_id_fkey"
+            columns: ["tenant_info_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenants_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       unit_applications: {
         Row: {
@@ -989,6 +1086,21 @@ export type Database = {
         Args: { _target_profile_id: string }
         Returns: boolean
       }
+      create_tenant_with_auth: {
+        Args: {
+          p_email: string
+          p_first_name: string
+          p_landlord_id: string
+          p_last_name: string
+          p_lease_end_date?: string
+          p_lease_start_date?: string
+          p_phone: string
+          p_rent_amount?: number
+          p_security_deposit?: number
+          p_unit_id?: string
+        }
+        Returns: Json
+      }
       current_user_is_landlord_of_property: {
         Args: { _property_id: string }
         Returns: boolean
@@ -1019,6 +1131,24 @@ export type Database = {
           tenant_first_name: string
           tenant_id: string
           tenant_last_name: string
+          unit_number: string
+        }[]
+      }
+      get_tenant_by_auth_user: {
+        Args: { p_auth_user_id: string }
+        Returns: {
+          email: string
+          first_name: string
+          landlord_id: string
+          last_name: string
+          phone: string
+          property_name: string
+          rent_amount: number
+          security_deposit: number
+          status: string
+          tenant_id: string
+          tenant_info_id: string
+          unit_id: string
           unit_number: string
         }[]
       }

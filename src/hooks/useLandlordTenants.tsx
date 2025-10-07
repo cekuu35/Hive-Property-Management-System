@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from './useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import { ClientTenantCreationService } from '@/services/clientTenantCreationService';
 import { CompleteTenantCreationService, CreateTenantData } from '@/services/completeTenantCreationService';
 import { toast } from '@/hooks/use-toast';
 
@@ -187,7 +186,7 @@ export const useLandlordTenants = () => {
     }
 
     try {
-      const result = await ClientTenantCreationService.createTenant(profile.id, tenantData);
+      const result = await CompleteTenantCreationService.createTenant(profile.id, tenantData);
       
       if (result.success) {
         // Refresh tenants list
@@ -221,33 +220,54 @@ export const useLandlordTenants = () => {
     try {
       console.log('🔄 Updating tenant:', tenantId, 'with updates:', updates);
       
-      const result = await ClientTenantCreationService.updateTenant(tenantId, updates);
-      
-      if (result.success) {
-        // Refresh tenants list
-        await fetchTenants();
-        
-        toast({
-          title: "Success",
-          description: "Tenant updated successfully!",
-        });
-      } else {
-        toast({
-          title: "Error",
-          description: result.error || "Failed to update tenant",
-          variant: "destructive",
-        });
-      }
+      // Direct update to tenant_info table
+      const { error: tenantInfoError } = await supabase
+        .from('tenant_info')
+        .update({
+          first_name: updates.first_name,
+          last_name: updates.last_name,
+          phone: updates.phone,
+          email: updates.email,
+          emergency_contact_name: updates.emergency_contact_name,
+          emergency_contact_phone: updates.emergency_contact_phone,
+          notes: updates.notes
+        })
+        .eq('id', tenantId);
 
-      return result;
-    } catch (err) {
+      if (tenantInfoError) throw tenantInfoError;
+
+      // Update lease if relevant fields changed
+      if (updates.rent_amount || updates.security_deposit || updates.lease_start_date || updates.lease_end_date) {
+        const { error: leaseError } = await supabase
+          .from('leases')
+          .update({
+            rent_amount: updates.rent_amount,
+            deposit_amount: updates.security_deposit,
+            start_date: updates.lease_start_date,
+            end_date: updates.lease_end_date
+          })
+          .eq('tenant_info_id', tenantId);
+
+        if (leaseError) throw leaseError;
+      }
+      
+      // Refresh tenants list
+      await fetchTenants();
+      
+      toast({
+        title: "Success",
+        description: "Tenant updated successfully!",
+      });
+
+      return { success: true };
+    } catch (err: any) {
       console.error('Error updating tenant:', err);
       toast({
         title: "Error",
-        description: "An unexpected error occurred",
+        description: err.message || "An unexpected error occurred",
         variant: "destructive",
       });
-      return { success: false, error: 'Unknown error occurred' };
+      return { success: false, error: err.message || 'Unknown error occurred' };
     }
   };
 

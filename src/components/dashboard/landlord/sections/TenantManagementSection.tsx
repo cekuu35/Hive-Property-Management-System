@@ -23,8 +23,8 @@ import {
   Key
 } from 'lucide-react';
 import { useLandlordTenants } from '@/hooks/useLandlordTenants';
-import { TenantCreationForm } from '../TenantCreationForm';
-import { TenantEditForm } from '../TenantEditForm';
+// import { TenantCreationForm } from '../TenantCreationForm';
+// import { TenantEditForm } from '../TenantEditForm';
 import { format } from 'date-fns';
 
 export const TenantManagementSection = () => {
@@ -163,10 +163,13 @@ export const TenantManagementSection = () => {
               <DialogHeader>
                 <DialogTitle>Create New Tenant</DialogTitle>
               </DialogHeader>
-              <TenantCreationForm 
+              {/* <TenantCreationForm 
                 onSuccess={handleCreateSuccess}
                 onCancel={() => setShowCreateForm(false)}
-              />
+              /> */}
+              <div className="p-4">
+                <p className="text-muted-foreground">Tenant creation form is being updated. Please use the Tenants section to add new tenants.</p>
+              </div>
             </DialogContent>
           </Dialog>
         </div>
@@ -620,7 +623,7 @@ export const TenantManagementSection = () => {
             <DialogTitle>Edit Tenant Information</DialogTitle>
           </DialogHeader>
           {selectedTenant && (
-            <TenantEditForm
+            /* <TenantEditForm
               tenant={selectedTenant}
               onSuccess={handleEditSuccess}
               onCancel={handleEditCancel}
@@ -628,7 +631,10 @@ export const TenantManagementSection = () => {
                 console.log('Reset password for:', email);
                 // This will be handled by the TenantEditForm component
               }}
-            />
+            /> */
+            <div className="p-4">
+              <p className="text-muted-foreground">Tenant edit form is being updated. Please use the Tenant details view to manage tenant information.</p>
+            </div>
           )}
         </DialogContent>
       </Dialog>
