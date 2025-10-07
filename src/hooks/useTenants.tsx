@@ -149,7 +149,9 @@ export const useTenants = () => {
     if (!user) return false;
 
     try {
-      // Get the current authenticated user's profile ID
+      console.log('🚀 [useTenants] Starting tenant creation:', tenantData);
+      
+      // Get the current authenticated user's profile ID (landlord)
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) throw new Error('Not authenticated');
       
@@ -163,40 +165,57 @@ export const useTenants = () => {
         throw new Error('Your profile was not found. Please contact support.');
       }
 
-      // Create tenant info record
+      console.log('👤 [useTenants] Landlord profile ID:', myProfile.id);
+
+      // Create tenant info record with landlord link
       const { data: tenantInfo, error: tenantError } = await supabase
         .from('tenant_info')
         .insert({
-          landlord_id: myProfile.id,
+          landlord_id: myProfile.id, // Link to landlord
           first_name: tenantData.first_name,
           last_name: tenantData.last_name,
           email: tenantData.email,
-          phone: tenantData.phone
+          phone: tenantData.phone,
+          tenant_status: 'active', // Set as active immediately
+          current_balance: tenantData.rent_amount, // Initialize with first month's rent
+          payment_status: 'unpaid'
         })
         .select()
         .single();
 
-      if (tenantError) throw tenantError;
+      if (tenantError) {
+        console.error('❌ [useTenants] Error creating tenant_info:', tenantError);
+        throw tenantError;
+      }
 
       if (!tenantInfo) {
         throw new Error('Failed to create tenant information');
       }
 
-      // Create the lease
-      const { error: leaseError } = await supabase
+      console.log('✅ [useTenants] Tenant info created:', tenantInfo.id);
+
+      // Create the lease with all required fields
+      const { data: lease, error: leaseError } = await supabase
         .from('leases')
         .insert({
-          tenant_id: tenantInfo.id, // Use tenant_info id as tenant_id for now
-          tenant_info_id: tenantInfo.id,
+          tenant_id: tenantInfo.id, // Link to tenant_info
+          tenant_info_id: tenantInfo.id, // Also set tenant_info_id
           unit_id: tenantData.unit_id,
           start_date: tenantData.lease_start,
           end_date: tenantData.lease_end,
           rent_amount: tenantData.rent_amount,
           deposit_amount: tenantData.deposit_amount,
-          status: 'active'
-        });
+          status: 'active' // Set lease as active
+        })
+        .select()
+        .single();
 
-      if (leaseError) throw leaseError;
+      if (leaseError) {
+        console.error('❌ [useTenants] Error creating lease:', leaseError);
+        throw leaseError;
+      }
+
+      console.log('✅ [useTenants] Lease created:', lease.id);
 
       // Update unit status to occupied
       const { error: unitError } = await supabase
@@ -204,20 +223,25 @@ export const useTenants = () => {
         .update({ status: 'occupied' })
         .eq('id', tenantData.unit_id);
 
-      if (unitError) throw unitError;
+      if (unitError) {
+        console.error('❌ [useTenants] Error updating unit:', unitError);
+        throw unitError;
+      }
+
+      console.log('✅ [useTenants] Unit updated to occupied');
 
       toast({
         title: "Success",
-        description: "Tenant added successfully!",
+        description: "Tenant and lease created successfully!",
       });
 
       fetchTenants(); // Refresh the list
       return true;
     } catch (error: any) {
-      console.error('Error creating tenant:', error);
+      console.error('❌ [useTenants] Error creating tenant:', error);
       toast({
         title: "Error",
-        description: "Failed to add tenant. Please try again.",
+        description: error.message || "Failed to add tenant. Please try again.",
         variant: "destructive",
       });
       return false;
