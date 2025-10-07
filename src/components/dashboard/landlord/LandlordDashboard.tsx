@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Building, Users, DollarSign, TrendingUp, AlertTriangle, Plus, Loader2 } from 'lucide-react';
+import { Building, Users, DollarSign, TrendingUp, AlertTriangle, Plus, Loader2, Receipt } from 'lucide-react';
 import { PropertiesSection } from './sections/PropertiesSection';
 import { TenantsSection } from './sections/TenantsSection';
 import { FinancialsSection } from './sections/FinancialsSection';
@@ -9,6 +9,7 @@ import { MaintenanceSection } from './sections/MaintenanceSection';
 import { ReportsSection } from './sections/ReportsSection';
 import { SettingsSection } from './sections/SettingsSection';
 import { MessagesSection } from './sections/MessagesSection';
+import { UtilityBillsManagement } from './UtilityBillsManagement';
 import { PropertyForm } from './PropertyForm';
 import { useFinancials } from '@/hooks/useFinancials';
 import { useMaintenanceRequests } from '@/hooks/useMaintenanceRequests';
@@ -29,6 +30,7 @@ const LandlordDashboard = ({ activeSection = 'dashboard', onSectionChange }: Lan
       case 'properties': return <PropertiesSection />;
       case 'tenants': return <TenantsSection />;
       case 'financials': return <FinancialsSection />;
+      case 'utility-bills': return <UtilityBillsManagement />;
       case 'maintenance': return <MaintenanceSection />;
       case 'messages': return <MessagesSection />;
       case 'reports': return <ReportsSection />;
@@ -73,6 +75,9 @@ const DashboardOverview = ({ onSectionChange }: { onSectionChange?: (section: st
         break;
       case 'view-financials':
         onSectionChange?.('financials');
+        break;
+      case 'utility-bills':
+        onSectionChange?.('utility-bills');
         break;
       case 'analytics':
         onSectionChange?.('reports');
@@ -188,6 +193,14 @@ const DashboardOverview = ({ onSectionChange }: { onSectionChange?: (section: st
             >
               <DollarSign className="h-6 w-6" />
               <span>View Financials</span>
+            </Button>
+            <Button 
+              className="h-auto p-4 flex flex-col items-center gap-2" 
+              variant="outline"
+              onClick={() => handleQuickAction('utility-bills')}
+            >
+              <Receipt className="h-6 w-6" />
+              <span>Utility Bills</span>
             </Button>
             <Button 
               className="h-auto p-4 flex flex-col items-center gap-2" 

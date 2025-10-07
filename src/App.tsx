@@ -11,6 +11,8 @@ import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import TestRoleSwitching from "./pages/TestRoleSwitching";
 import NotFound from "./pages/NotFound";
+import SupabaseConnectionTest from "./components/SupabaseConnectionTest";
+import { PaymentCallback } from "./pages/PaymentCallback";
 
 const queryClient = new QueryClient();
 
@@ -41,6 +43,14 @@ const App = () => (
                     <TestRoleSwitching />
                   </ProtectedRoute>
                 } 
+              />
+              <Route 
+                path="/test-supabase" 
+                element={<SupabaseConnectionTest />} 
+              />
+              <Route 
+                path="/payment/callback" 
+                element={<PaymentCallback />} 
               />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />

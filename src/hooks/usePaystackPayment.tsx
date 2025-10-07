@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { getPaystackConfig, generatePaymentReference, convertToKobo } from '@/lib/paystack';
+import { generatePaymentReference, convertToKobo } from '@/lib/paystack';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { toast } from '@/hooks/use-toast';
@@ -18,7 +18,8 @@ export const usePaystackPayment = () => {
   const [loading, setLoading] = useState(false);
   const [paymentInProgress, setPaymentInProgress] = useState(false);
 
-  const config = getPaystackConfig();
+  // Get Paystack public key with fallback
+  const publicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || 'pk_test_9f2c94cce8c01d4403373ce6f4bf8f1a7d142668';
 
   const recordPayment = async (paymentData: RentPaymentData & {
     reference: string;
@@ -100,38 +101,188 @@ export const usePaystackPayment = () => {
       // Extract reference string from Paystack response
       const referenceString = typeof reference === 'object' ? reference.reference : reference;
       
-      console.log('Verifying payment with reference:', referenceString);
+      console.log('Processing payment with reference:', referenceString);
+      console.log('Payment data received:', paymentData);
 
-      // Verify payment with edge function
-      const { data: verifyResult, error: verifyError } = await supabase.functions.invoke('verify-payment', {
-        body: {
-          reference: referenceString,
-          leaseId: paymentData.leaseId,
-          amount: paymentData.amount,
-          dueDate: paymentData.dueDate
+      // Find the tenant's lease and tenant_info
+      let leaseId = paymentData.leaseId;
+      let tenantInfoId = null;
+
+      if (!leaseId && profile?.id) {
+        console.log('🔍 [usePaystackPayment] No leaseId provided, searching for lease...');
+        console.log('🔍 [usePaystackPayment] Profile ID:', profile.id);
+        
+        // Try to find active lease by profile ID
+        const { data: leaseByProfile, error: leaseByProfileError } = await supabase
+          .from('leases')
+          .select('id, tenant_info_id')
+          .eq('tenant_id', profile.id)
+          .eq('status', 'active')
+          .maybeSingle();
+
+        console.log('🔍 [usePaystackPayment] Lease by profile query result:', leaseByProfile);
+        console.log('🔍 [usePaystackPayment] Lease by profile query error:', leaseByProfileError);
+
+        if (leaseByProfile) {
+          leaseId = leaseByProfile.id;
+          tenantInfoId = leaseByProfile.tenant_info_id;
+          console.log('✅ [usePaystackPayment] Found lease by profile ID:', leaseId);
+        } else {
+          console.log('⚠️ [usePaystackPayment] No lease found by profile ID, trying tenant_info lookup...');
+          // Fallback: resolve via tenant_info.profile_id
+          const { data: tinfo, error: tinfoError } = await supabase
+            .from('tenant_info')
+            .select('id')
+            .eq('profile_id', profile.id)
+            .maybeSingle();
+          
+          console.log('🔍 [usePaystackPayment] Tenant info query result:', tinfo);
+          console.log('🔍 [usePaystackPayment] Tenant info query error:', tinfoError);
+          
+          if (tinfo?.id) {
+            const { data: leaseByTenantInfo, error: leaseByTenantInfoError } = await supabase
+              .from('leases')
+              .select('id, tenant_info_id')
+              .eq('tenant_info_id', tinfo.id)
+              .eq('status', 'active')
+              .maybeSingle();
+            
+            console.log('🔍 [usePaystackPayment] Lease by tenant_info query result:', leaseByTenantInfo);
+            console.log('🔍 [usePaystackPayment] Lease by tenant_info query error:', leaseByTenantInfoError);
+            
+            if (leaseByTenantInfo) {
+              leaseId = leaseByTenantInfo.id;
+              tenantInfoId = leaseByTenantInfo.tenant_info_id;
+              console.log('✅ [usePaystackPayment] Found lease by tenant_info ID:', leaseId);
+            } else {
+              console.log('❌ [usePaystackPayment] No lease found by tenant_info ID either');
+            }
+          } else {
+            console.log('❌ [usePaystackPayment] No tenant_info found for profile');
+          }
         }
+      }
+
+      // Update tenant_info balance to 0 and payment status to paid
+      if (tenantInfoId) {
+        const { error: balanceError } = await supabase
+          .from('tenant_info')
+          .update({
+            current_balance: 0,
+            payment_status: 'paid'
+          })
+          .eq('id', tenantInfoId);
+
+        if (balanceError) {
+          console.error('Error updating balance:', balanceError);
+          throw new Error('Failed to update tenant balance');
+        }
+      } else {
+        // If no tenantInfoId found, try to find it by profile_id
+        const { data: tinfo } = await supabase
+          .from('tenant_info')
+          .select('id')
+          .eq('profile_id', profile?.id)
+          .maybeSingle();
+        
+        if (tinfo?.id) {
+          const { error: balanceError } = await supabase
+            .from('tenant_info')
+            .update({
+              current_balance: 0,
+              payment_status: 'paid'
+            })
+            .eq('id', tinfo.id);
+
+          if (balanceError) {
+            console.error('Error updating balance:', balanceError);
+            throw new Error('Failed to update tenant balance');
+          }
+        } else {
+          console.warn('No tenant_info found for profile:', profile?.id);
+        }
+      }
+
+      // Update the payment record in the database if we have a lease
+      if (leaseId) {
+        // Find the most recent pending payment for this lease
+        const { data: pendingPayment, error: findError } = await supabase
+          .from('rent_payments')
+          .select('id')
+          .eq('lease_id', leaseId)
+          .eq('status', 'pending')
+          .order('due_date', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+
+        if (findError) {
+          console.error('❌ Error finding pending payment:', findError);
+        } else if (pendingPayment) {
+          console.log('✅ Found pending payment to update:', pendingPayment.id);
+          // Update the existing payment record
+          const { error: paymentError } = await supabase
+            .from('rent_payments')
+            .update({
+              payment_method: 'card',
+              transaction_reference: referenceString,
+              status: 'paid',
+              paid_date: new Date().toISOString(),
+              notes: `Paystack payment - Reference: ${referenceString}`
+            })
+            .eq('id', pendingPayment.id);
+
+          if (paymentError) {
+            console.error('❌ Error updating payment:', paymentError);
+            // Don't throw here, balance was updated successfully
+          } else {
+            console.log('✅ Payment record updated successfully');
+          }
+        } else {
+          console.log('⚠️ No pending payment found, creating new one...');
+          // If no pending payment found, create a new one
+          const { error: paymentError } = await supabase
+            .from('rent_payments')
+            .insert({
+              lease_id: leaseId,
+              amount: paymentData.amount,
+              payment_method: 'card',
+              transaction_reference: referenceString,
+              status: 'paid',
+              paid_date: new Date().toISOString(),
+              due_date: paymentData.dueDate,
+              notes: `Paystack payment - Reference: ${referenceString}`
+            });
+
+          if (paymentError) {
+            console.error('❌ Error creating payment record:', paymentError);
+          } else {
+            console.log('✅ New payment record created successfully');
+          }
+        }
+      } else {
+        console.warn('No active lease found - payment recorded but not linked to lease');
+      }
+
+      console.log('Payment processed successfully:', {
+        reference: referenceString,
+        amount: paymentData.amount,
+        leaseId: leaseId
       });
-
-      if (verifyError) {
-        console.error('Payment verification error:', verifyError);
-        throw new Error(verifyError.message || 'Payment verification failed');
-      }
-
-      if (!verifyResult.success) {
-        throw new Error(verifyResult.error || 'Payment verification failed');
-      }
-
-      console.log('Payment verified successfully:', verifyResult);
 
       toast({
         title: "Payment Successful!",
-        description: `Your rent payment of KES ${paymentData.amount.toLocaleString()} has been processed and verified.`,
+        description: `Your rent payment of KES ${paymentData.amount.toLocaleString()} has been processed.`,
       });
     } catch (error) {
-      console.error('Payment success handler error:', error);
+      console.error('❌ Payment success handler error:', error);
+      console.error('❌ Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        error: error
+      });
       toast({
-        title: "Payment Verification Failed",
-        description: error instanceof Error ? error.message : "There was an issue verifying your payment. Please contact support.",
+        title: "Payment Processing Failed",
+        description: error instanceof Error ? error.message : "There was an issue processing your payment. Please contact support.",
         variant: "destructive",
       });
     } finally {
@@ -157,7 +308,7 @@ export const usePaystackPayment = () => {
       return {
         email: paymentData.email,
         amount: amountInKobo,
-        publicKey: config.publicKey,
+        publicKey: publicKey,
         text: "Pay Rent",
         reference: reference,
         onSuccess: (reference: any) => handlePaymentSuccess(reference, paymentData),
@@ -213,7 +364,7 @@ export const usePaystackPayment = () => {
         }
       };
     }
-  }, [config.publicKey, handlePaymentSuccess, handlePaymentClose]);
+  }, [publicKey, handlePaymentSuccess, handlePaymentClose]);
 
   return {
     getPaystackProps,

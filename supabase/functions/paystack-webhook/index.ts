@@ -1,171 +1,245 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
-import { crypto } from 'https://deno.land/std@0.177.0/crypto/mod.ts';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { crypto } from 'https://deno.land/std@0.168.0/crypto/mod.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-paystack-signature',
-};
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
 
-Deno.serve(async (req) => {
+serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const paystackSecretKey = Deno.env.get('PAYSTACK_SECRET_KEY');
-    if (!paystackSecretKey) {
-      console.error('Paystack secret key not configured');
-      return new Response(
-        JSON.stringify({ error: 'Webhook not configured' }),
-        { status: 500 }
-      );
-    }
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+    )
 
-    // Verify webhook signature
-    const signature = req.headers.get('x-paystack-signature');
-    const body = await req.text();
-    
+    // Get the webhook signature
+    const signature = req.headers.get('x-paystack-signature')
     if (!signature) {
-      console.error('Missing webhook signature');
-      return new Response(
-        JSON.stringify({ error: 'Invalid signature' }),
-        { status: 401 }
-      );
+      console.error('No Paystack signature found')
+      return new Response('Unauthorized', { status: 401 })
     }
 
-    // Compute expected signature
-    const encoder = new TextEncoder();
-    const keyData = encoder.encode(paystackSecretKey);
-    const messageData = encoder.encode(body);
+    // Get the raw body
+    const body = await req.text()
     
-    const cryptoKey = await crypto.subtle.importKey(
+    // Verify the webhook signature
+    const secret = Deno.env.get('PAYSTACK_SECRET_KEY')
+    if (!secret) {
+      console.error('No Paystack secret key found')
+      return new Response('Server error', { status: 500 })
+    }
+
+    // Create HMAC signature
+    const encoder = new TextEncoder()
+    const key = await crypto.subtle.importKey(
       'raw',
-      keyData,
+      encoder.encode(secret),
       { name: 'HMAC', hash: 'SHA-512' },
       false,
       ['sign']
-    );
+    )
     
-    const signatureBuffer = await crypto.subtle.sign(
-      'HMAC',
-      cryptoKey,
-      messageData
-    );
-    
+    const signatureBuffer = await crypto.subtle.sign('HMAC', key, encoder.encode(body))
     const expectedSignature = Array.from(new Uint8Array(signatureBuffer))
       .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
+      .join('')
 
     if (signature !== expectedSignature) {
-      console.error('Invalid webhook signature');
-      return new Response(
-        JSON.stringify({ error: 'Invalid signature' }),
-        { status: 401 }
-      );
+      console.error('Invalid Paystack signature')
+      return new Response('Unauthorized', { status: 401 })
     }
 
-    const event = JSON.parse(body);
-    console.log('Webhook event received:', event.event);
+    // Parse the webhook payload
+    const event = JSON.parse(body)
+    console.log('Paystack webhook event:', event.type)
 
-    // Initialize Supabase client with service role for webhook operations
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    // Log the webhook event
+    await supabaseAdmin
+      .from('webhook_logs')
+      .insert({
+        event_type: event.type,
+        payload: event,
+        processed: false
+      })
 
     // Handle different event types
-    switch (event.event) {
-      case 'charge.success': {
-        const { reference, amount, customer, paid_at, channel } = event.data;
-        console.log('Processing successful charge:', reference);
-
-        // Check if payment already recorded
-        const { data: existingPayment } = await supabaseClient
-          .from('rent_payments')
-          .select('id')
-          .eq('transaction_reference', reference)
-          .maybeSingle();
-
-        if (existingPayment) {
-          console.log('Payment already recorded:', reference);
-          return new Response(
-            JSON.stringify({ message: 'Payment already recorded' }),
-            { status: 200 }
-          );
-        }
-
-        // Extract metadata to find lease
-        const metadata = event.data.metadata || {};
-        const customFields = metadata.custom_fields || [];
-        
-        // Try to find lease_id from metadata
-        let leaseId = null;
-        for (const field of customFields) {
-          if (field.variable_name === 'lease_id' && field.value) {
-            leaseId = field.value;
-            break;
-          }
-        }
-
-        if (!leaseId) {
-          console.error('No lease_id in webhook metadata');
-          return new Response(
-            JSON.stringify({ error: 'Missing lease information' }),
-            { status: 400 }
-          );
-        }
-
-        // Record the payment
-        const { data: payment, error: paymentError } = await supabaseClient
-          .from('rent_payments')
-          .insert({
-            lease_id: leaseId,
-            amount: amount / 100, // Convert from kobo
-            payment_method: 'paystack',
-            transaction_reference: reference,
-            status: 'paid',
-            paid_date: paid_at,
-            notes: `Paystack webhook - Channel: ${channel}, Customer: ${customer.email}`
-          })
-          .select()
-          .single();
-
-        if (paymentError) {
-          console.error('Error recording payment from webhook:', paymentError);
-          return new Response(
-            JSON.stringify({ error: 'Failed to record payment' }),
-            { status: 500 }
-          );
-        }
-
-        console.log('Payment recorded from webhook:', payment.id);
-        break;
-      }
-
-      case 'charge.failed': {
-        console.log('Payment failed:', event.data.reference);
-        // You could record failed attempts if needed
-        break;
-      }
-
-      default:
-        console.log('Unhandled event type:', event.event);
+    if (event.type === 'charge.success') {
+      await handleSuccessfulPayment(supabaseAdmin, event.data)
+    } else if (event.type === 'charge.failed') {
+      await handleFailedPayment(supabaseAdmin, event.data)
     }
 
-    return new Response(
-      JSON.stringify({ message: 'Webhook processed successfully' }),
-      { status: 200 }
-    );
+    return new Response('OK', { status: 200 })
 
   } catch (error) {
-    console.error('Error in paystack-webhook function:', error);
-    return new Response(
-      JSON.stringify({ 
-        error: 'Internal server error',
-        details: error.message 
-      }),
-      { status: 500 }
-    );
+    console.error('Webhook error:', error)
+    return new Response('Internal server error', { status: 500 })
   }
-});
+})
+
+async function handleSuccessfulPayment(supabaseAdmin: any, paymentData: any) {
+  try {
+    const { reference, metadata, amount, status } = paymentData
+
+    console.log('Processing successful payment:', reference)
+
+    // Check if this is a utility bill payment
+    if (metadata?.type === 'utility' && metadata?.bill_id) {
+      await processUtilityBillPayment(supabaseAdmin, reference, metadata, amount)
+    } else if (metadata?.type === 'rent' && metadata?.lease_id) {
+      await processRentPayment(supabaseAdmin, reference, metadata, amount)
+    }
+
+    // Mark webhook as processed
+    await supabaseAdmin
+      .from('webhook_logs')
+      .update({ processed: true })
+      .eq('payload->>reference', reference)
+
+  } catch (error) {
+    console.error('Error processing successful payment:', error)
+  }
+}
+
+async function processUtilityBillPayment(supabaseAdmin: any, reference: string, metadata: any, amount: number) {
+  try {
+    const { bill_id, tenant_id, landlord_id } = metadata
+
+    // Update the unit_bills table
+    const { error: billError } = await supabaseAdmin
+      .from('unit_bills')
+      .update({
+        status: 'paid',
+        paystack_reference: reference,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', bill_id)
+
+    if (billError) {
+      console.error('Error updating unit_bills:', billError)
+      return
+    }
+
+    // Create a payment record
+    const { error: paymentError } = await supabaseAdmin
+      .from('rent_payments')
+      .insert({
+        lease_id: null, // Utility bills don't have lease_id
+        amount: amount / 100, // Convert from kobo
+        payment_method: 'card',
+        transaction_reference: reference,
+        status: 'paid',
+        paid_date: new Date().toISOString(),
+        due_date: new Date().toISOString(),
+        notes: `Utility bill payment - Reference: ${reference}`
+      })
+
+    if (paymentError) {
+      console.error('Error creating payment record:', paymentError)
+    }
+
+    // Send notification to tenant
+    await supabaseAdmin
+      .from('notifications')
+      .insert({
+        user_id: tenant_id,
+        title: 'Payment Successful',
+        message: `Your utility bill payment of KES ${(amount / 100).toLocaleString()} has been processed successfully.`,
+        type: 'payment_success',
+        data: { bill_id, reference }
+      })
+
+    console.log('Utility bill payment processed successfully:', reference)
+
+  } catch (error) {
+    console.error('Error processing utility bill payment:', error)
+  }
+}
+
+async function processRentPayment(supabaseAdmin: any, reference: string, metadata: any, amount: number) {
+  try {
+    const { lease_id, tenant_id, landlord_id } = metadata
+
+    // Update the rent_payments table
+    const { error: paymentError } = await supabaseAdmin
+      .from('rent_payments')
+      .update({
+        status: 'paid',
+        paid_date: new Date().toISOString(),
+        transaction_reference: reference
+      })
+      .eq('lease_id', lease_id)
+      .eq('status', 'pending')
+
+    if (paymentError) {
+      console.error('Error updating rent payment:', paymentError)
+      return
+    }
+
+    // Update tenant balance
+    const { error: balanceError } = await supabaseAdmin
+      .from('tenant_info')
+      .update({
+        current_balance: 0,
+        payment_status: 'paid'
+      })
+      .eq('profile_id', tenant_id)
+
+    if (balanceError) {
+      console.error('Error updating tenant balance:', balanceError)
+    }
+
+    // Send notification to tenant
+    await supabaseAdmin
+      .from('notifications')
+      .insert({
+        user_id: tenant_id,
+        title: 'Rent Payment Successful',
+        message: `Your rent payment of KES ${(amount / 100).toLocaleString()} has been processed successfully.`,
+        type: 'payment_success',
+        data: { lease_id, reference }
+      })
+
+    console.log('Rent payment processed successfully:', reference)
+
+  } catch (error) {
+    console.error('Error processing rent payment:', error)
+  }
+}
+
+async function handleFailedPayment(supabaseAdmin: any, paymentData: any) {
+  try {
+    const { reference, metadata } = paymentData
+
+    console.log('Processing failed payment:', reference)
+
+    // Send notification to tenant about failed payment
+    if (metadata?.tenant_id) {
+      await supabaseAdmin
+        .from('notifications')
+        .insert({
+          user_id: metadata.tenant_id,
+          title: 'Payment Failed',
+          message: 'Your payment could not be processed. Please try again or contact support.',
+          type: 'payment_failed',
+          data: { reference }
+        })
+    }
+
+    // Mark webhook as processed
+    await supabaseAdmin
+      .from('webhook_logs')
+      .update({ processed: true })
+      .eq('payload->>reference', reference)
+
+  } catch (error) {
+    console.error('Error processing failed payment:', error)
+  }
+}

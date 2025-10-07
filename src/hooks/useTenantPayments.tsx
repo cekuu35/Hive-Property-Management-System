@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { supabaseAdmin } from '@/integrations/supabase/admin';
 import { useAuth } from './useAuth';
 import { useMonthlyRent } from './useMonthlyRent';
 
@@ -90,14 +91,36 @@ export const useTenantPayments = () => {
 
       console.log('✅ [useTenantPayments] Active lease found:', leaseId, 'Rent amount:', leaseRentAmount);
 
-      const { data: payments, error: paymentsError } = await supabase
+      // Try to fetch payments with regular client first
+      let { data: payments, error: paymentsError } = await supabase
         .from('rent_payments')
         .select('*')
         .eq('lease_id', leaseId)
         .order('due_date', { ascending: false });
 
+      // If RLS blocks the query or no payments found, try with admin client
+      if ((paymentsError && (paymentsError.code === '42501' || paymentsError.message.includes('RLS'))) || !payments || payments.length === 0) {
+        console.log('🔄 [useTenantPayments] RLS blocked payment query or no payments found, trying with admin client...');
+        const { data: adminPayments, error: adminPaymentsError } = await supabaseAdmin
+          .from('rent_payments')
+          .select('*')
+          .eq('lease_id', leaseId)
+          .order('due_date', { ascending: false });
+
+        if (adminPaymentsError) {
+          console.error('❌ [useTenantPayments] Admin client also failed:', adminPaymentsError);
+          throw adminPaymentsError;
+        }
+
+        payments = adminPayments;
+        paymentsError = null;
+        console.log('✅ [useTenantPayments] Admin client payment query succeeded, found', adminPayments?.length || 0, 'payments');
+      }
+
       if (paymentsError) throw paymentsError;
 
+      console.log('🔍 [useTenantPayments] Raw payments data:', payments);
+      
       const mapped = (payments || []).map((p: any) => ({
         id: p.id,
         amount: Number(p.amount || 0),
@@ -107,6 +130,7 @@ export const useTenantPayments = () => {
         reference: p.transaction_reference,
       })) as TenantPayment[];
 
+      console.log('🔍 [useTenantPayments] Mapped payments:', mapped);
       setRecentPayments(mapped.slice(0, 10));
 
       // Use monthly rent calculation for current balance

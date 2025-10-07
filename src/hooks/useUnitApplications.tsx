@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useTenants } from '@/hooks/useTenants';
 import { toast } from 'sonner';
 
 interface UnitApplication {
@@ -52,6 +53,7 @@ export const useUnitApplications = () => {
   const [vacantUnits, setVacantUnits] = useState<Unit[]>([]);
   const [loading, setLoading] = useState(true);
   const { profile } = useAuth();
+  const { createTenant } = useTenants();
 
   useEffect(() => {
     if (profile?.id) {
@@ -293,7 +295,7 @@ export const useUnitApplications = () => {
       // If application is approved, create tenant and lease
       if (status === 'approved' && data) {
         console.log('Creating tenant from application...');
-        await createTenantFromApplication(data);
+        await createTenantFromApplicationNew(data);
         console.log('Tenant created successfully');
       }
       
@@ -311,6 +313,69 @@ export const useUnitApplications = () => {
     } catch (error) {
       console.error('Error updating application status:', error);
       toast.error('Failed to update application');
+      throw error;
+    }
+  };
+
+  const createTenantFromApplicationNew = async (application: any) => {
+    try {
+      console.log('Creating tenant from application using useTenants hook:', application);
+      
+      // Get the property's landlord ID from the nested structure
+      const landlordId = application.units?.properties?.landlord_id;
+      
+      if (!landlordId) {
+        console.error('Could not find landlord_id in application data:', application);
+        throw new Error('Property landlord not found in application data');
+      }
+
+      console.log('Found Landlord ID:', landlordId);
+
+      // Get applicant's profile information including email
+      const { data: applicantProfile, error: applicantError } = await supabase
+        .from('profiles')
+        .select('id, user_id, first_name, last_name, phone, email')
+        .eq('id', application.tenant_id)
+        .single();
+
+      if (applicantError) {
+        console.error('Error fetching applicant profile:', applicantError);
+        throw applicantError;
+      }
+
+      console.log('Applicant profile:', applicantProfile);
+
+      // Use the applicant's email from their profile
+      const userEmail = applicantProfile.email || `tenant-${application.tenant_id.substring(0, 8)}@pending.com`;
+      console.log('Applicant email:', userEmail);
+
+      // Create tenant using the useTenants hook with isDirectCreation: false
+      const tenantData = {
+        first_name: applicantProfile?.first_name || 'N/A',
+        last_name: applicantProfile?.last_name || 'N/A',
+        email: userEmail,
+        phone: applicantProfile?.phone || undefined,
+        unit_id: application.unit_id,
+        lease_start: application.preferred_move_in_date || new Date().toISOString().split('T')[0],
+        lease_end: new Date(new Date(application.preferred_move_in_date || new Date().toISOString().split('T')[0]).getTime() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        rent_amount: application.units?.rent_amount || 0,
+        deposit_amount: application.units?.deposit_amount || 0,
+        isDirectCreation: false // This is an application approval, not direct creation
+      };
+
+      console.log('Creating tenant with data:', tenantData);
+      const result = await createTenant(tenantData);
+      
+      if (result.success) {
+        console.log('Tenant created successfully from application');
+        toast.success('Tenant created successfully from application!');
+      } else {
+        throw new Error('Failed to create tenant from application');
+      }
+      
+    } catch (error) {
+      console.error('Error creating tenant from application:', error);
+      toast.error('Failed to create tenant from application: ' + (error as Error).message);
       throw error;
     }
   };
@@ -435,7 +500,7 @@ export const useUnitApplications = () => {
           end_date: endDate,
           rent_amount: application.units?.rent_amount || 0,
           deposit_amount: (application.units?.deposit_amount ?? application.deposit_amount ?? application.units?.rent_amount ?? 0),
-          status: 'active'
+          status: 'active' // Application approvals create active leases immediately
         })
         .select()
         .single();

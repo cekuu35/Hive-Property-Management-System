@@ -297,6 +297,76 @@ export const useLandlordTenants = () => {
   // Calculate total security deposits
   const totalSecurityDeposits = activeTenants.reduce((sum, tenant) => sum + tenant.security_deposit, 0);
 
+  // Calculate occupancy rate based on units
+  const [occupancyRate, setOccupancyRate] = useState(0);
+  const [totalUnits, setTotalUnits] = useState(0);
+  const [occupiedUnits, setOccupiedUnits] = useState(0);
+
+  // Fetch occupancy data
+  useEffect(() => {
+    const fetchOccupancyData = async () => {
+      if (!profile?.id) return;
+
+      try {
+        // Get total units for this landlord
+        const { data: unitsData, error: unitsError } = await supabase
+          .from('units')
+          .select(`
+            id,
+            properties!units_property_id_fkey (
+              landlord_id
+            )
+          `)
+          .eq('properties.landlord_id', profile.id);
+
+        if (unitsError) {
+          console.error('Error fetching units:', unitsError);
+          return;
+        }
+
+        const totalUnitsCount = unitsData?.length || 0;
+        setTotalUnits(totalUnitsCount);
+
+        // Get occupied units (units with active leases)
+        const { data: occupiedUnitsData, error: occupiedError } = await supabase
+          .from('leases')
+          .select(`
+            unit_id,
+            status,
+            units!leases_unit_id_fkey (
+              properties!units_property_id_fkey (
+                landlord_id
+              )
+            )
+          `)
+          .eq('status', 'active')
+          .eq('units.properties.landlord_id', profile.id);
+
+        if (occupiedError) {
+          console.error('Error fetching occupied units:', occupiedError);
+          return;
+        }
+
+        const occupiedUnitsCount = occupiedUnitsData?.length || 0;
+        setOccupiedUnits(occupiedUnitsCount);
+
+        // Calculate occupancy rate
+        const rate = totalUnitsCount > 0 ? Math.round((occupiedUnitsCount / totalUnitsCount) * 100) : 0;
+        setOccupancyRate(rate);
+
+        console.log('📊 Occupancy calculation:', {
+          totalUnits: totalUnitsCount,
+          occupiedUnits: occupiedUnitsCount,
+          occupancyRate: rate
+        });
+      } catch (error) {
+        console.error('Error calculating occupancy:', error);
+      }
+    };
+
+    fetchOccupancyData();
+  }, [profile?.id]);
+
   return {
     tenants,
     loading,
@@ -306,6 +376,9 @@ export const useLandlordTenants = () => {
     terminatedTenants,
     totalMonthlyRent,
     totalSecurityDeposits,
+    occupancyRate,
+    totalUnits,
+    occupiedUnits,
     createTenant,
     updateTenant,
     deleteTenant,

@@ -1,7 +1,8 @@
 import { 
   Home, CreditCard, Wrench, FileText, MessageCircle, User,
   BarChart3, Building, Users, DollarSign, Settings, TrendingUp,
-  Clipboard, Calendar, Package, Shield, AlertTriangle, UserCheck, MapPin
+  Clipboard, Calendar, Package, Shield, AlertTriangle, UserCheck, MapPin,
+  Receipt, Bell
 } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import {
@@ -30,13 +31,22 @@ interface NavigationItem {
 const navigationConfig: Record<UserRole, NavigationItem[]> = {
   tenant: [
     { id: "overview", label: "Overview", icon: Home, path: "/dashboard" },
-    { id: "messages", label: "Messages", icon: MessageCircle, path: "/messages" },
+    { id: "browse-units", label: "Browse Units", icon: Building, path: "/dashboard?tab=browse-units" },
+    { id: "my-applications", label: "Applications", icon: FileText, path: "/dashboard?tab=my-applications" },
+    { id: "payments", label: "Payments", icon: CreditCard, path: "/dashboard?tab=payments" },
+    { id: "utility-bills", label: "Utility Bills", icon: Receipt, path: "/dashboard?tab=utility-bills" },
+    { id: "maintenance", label: "Maintenance", icon: Wrench, path: "/dashboard?tab=maintenance" },
+    { id: "visitors", label: "Visitors", icon: UserCheck, path: "/dashboard?tab=visitors" },
+    { id: "documents", label: "Documents", icon: FileText, path: "/dashboard?tab=documents" },
+    { id: "messages", label: "Messages", icon: MessageCircle, path: "/dashboard?tab=messages" },
+    { id: "profile", label: "Profile", icon: User, path: "/dashboard?tab=profile" },
   ],
   landlord: [
     { id: "dashboard", label: "Dashboard", icon: BarChart3, path: "/dashboard" },
     { id: "properties", label: "Properties", icon: Building, path: "/properties" },
     { id: "tenants", label: "Tenants", icon: Users, path: "/tenants" },
     { id: "financials", label: "Financials", icon: DollarSign, path: "/financials" },
+    { id: "utility-bills", label: "Utility Bills", icon: Receipt, path: "/utility-bills" },
     { id: "maintenance", label: "Maintenance", icon: Wrench, path: "/maintenance" },
     { id: "messages", label: "Messages", icon: MessageCircle, path: "/messages" },
     { id: "reports", label: "Reports", icon: TrendingUp, path: "/reports" },
@@ -68,11 +78,20 @@ interface AppSidebarProps {
 export const AppSidebar = ({ userRole, activeItemId, onSelect }: AppSidebarProps) => {
   const location = useLocation();
   const currentPath = location.pathname;
+  const searchParams = new URLSearchParams(location.search);
+  const currentTab = searchParams.get('tab');
   
   const navigationItems = navigationConfig[userRole] || [];
   
   const isItemActive = (id: string, path: string) => {
     if (activeItemId) return activeItemId === id;
+    
+    // For tenant dashboard, check if the tab matches
+    if (userRole === 'tenant' && currentPath === '/dashboard') {
+      const tabFromPath = path.split('tab=')[1];
+      return currentTab === tabFromPath || (id === 'overview' && !currentTab);
+    }
+    
     return currentPath === path;
   };
   const getNavClassName = (active: boolean) => 

@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -26,6 +25,7 @@ import { SessionsManagement } from './profile/SessionsManagement';
 import { PaymentMethodsManagement } from './profile/PaymentMethodsManagement';
 import { MessagesSection } from './MessagesSection';
 import { VisitorsSection } from './VisitorsSection';
+import { UtilityBillsSection } from './UtilityBillsSection';
 import { useMaintenanceRequests } from '@/hooks/useMaintenanceRequests';
 import { useApprovedLease } from '@/hooks/useApprovedLease';
 import { supabase } from '@/integrations/supabase/client';
@@ -49,7 +49,7 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
   const [maintenanceSearchTerm, setMaintenanceSearchTerm] = useState('');
   
   const { requests: maintenanceRequests, loading: maintenanceLoading, refetch } = useMaintenanceRequests();
-  const { approvedLease, hasApprovedLease, loading: leaseLoading } = useApprovedLease();
+  const { approvedLease, hasApprovedLease, loading: leaseLoading, refetch: refetchLease } = useApprovedLease();
   const { 
     recentPayments, 
     rentBalance: tenantRentBalance, 
@@ -57,7 +57,8 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
     currentRentDue,
     isOverdue,
     daysUntilDue,
-    lateFee
+    lateFee,
+    refetch: refetchPayments
   } = useTenantPayments();
   
   const { 
@@ -66,7 +67,7 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
     monthlyRentDue, 
     loading: rentFlowLoading 
   } = useRentFlow();
-  const { tenantInfo } = useTenantInfo();
+  const { tenantInfo, refetch: refetchTenantInfo } = useTenantInfo();
   const { conversations } = useMessages();
   const pendingRequestsCount = maintenanceRequests.filter(r => r.status === 'pending').length;
   const unreadCount = conversations.reduce((sum, c) => sum + (c.unread_count || 0), 0);
@@ -218,9 +219,25 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
   };
 
   const handlePaymentSuccess = () => {
-    // This would typically refresh payment data
-    setRentBalance(0); // Reset balance after successful payment
-    refetch(); // Refresh maintenance requests if needed
+    // Refresh all tenant data after successful payment
+    console.log('🔄 [TenantDashboard] Payment successful, refreshing data...');
+    
+    // Immediate refresh
+    refetch(); // Maintenance requests
+    refetchPayments(); // Payment data and balance
+    refetchLease(); // Lease information
+    refetchTenantInfo(); // Tenant info including balance
+    
+    // Add a delayed refresh to ensure database has been updated
+    setTimeout(() => {
+      console.log('🔄 [TenantDashboard] Delayed refresh after payment...');
+      refetch(); // Maintenance requests
+      refetchPayments(); // Payment data and balance
+      refetchLease(); // Lease information
+      refetchTenantInfo(); // Tenant info including balance
+      
+      console.log('✅ [TenantDashboard] Delayed refresh completed');
+    }, 2000); // 2 second delay
   };
 
   const handleViewRequest = (request: any) => {
@@ -263,53 +280,11 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
         <p className="text-muted-foreground">Here's what's happening with your rental</p>
       </div>
 
-      {/* Tabbed Interface */}
-      <Tabs value={activeTab} onValueChange={onTabChange} className="w-full">
-        <TabsList className={`grid w-full ${hasApprovedLease ? 'grid-cols-7' : 'grid-cols-9'} mb-6`}>
-          <TabsTrigger value="overview" className="flex items-center gap-2">
-            <Home className="h-4 w-4" />
-            Overview
-          </TabsTrigger>
-          {!hasApprovedLease && (
-            <>
-              <TabsTrigger value="browse-units" className="flex items-center gap-2">
-                <Building2 className="h-4 w-4" />
-                Browse Units
-              </TabsTrigger>
-              <TabsTrigger value="my-applications" className="flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                Applications
-              </TabsTrigger>
-            </>
-          )}
-          <TabsTrigger value="payments" className="flex items-center gap-2">
-            <CreditCard className="h-4 w-4" />
-            Payments
-          </TabsTrigger>
-          <TabsTrigger value="maintenance" className="flex items-center gap-2">
-            <Wrench className="h-4 w-4" />
-            Maintenance
-          </TabsTrigger>
-          <TabsTrigger value="visitors" className="flex items-center gap-2">
-            <UserCheck className="h-4 w-4" />
-            Visitors
-          </TabsTrigger>
-          <TabsTrigger value="documents" className="flex items-center gap-2">
-            <FileText className="h-4 w-4" />
-            Documents
-          </TabsTrigger>
-          <TabsTrigger value="messages" className="flex items-center gap-2">
-            <MessageCircle className="h-4 w-4" />
-            Messages
-          </TabsTrigger>
-          <TabsTrigger value="profile" className="flex items-center gap-2">
-            <User className="h-4 w-4" />
-            Profile
-          </TabsTrigger>
-        </TabsList>
+      {/* Content based on current tab */}
 
         {/* Overview Tab */}
-        <TabsContent value="overview" className="space-y-6">
+        {activeTab === "overview" && (
+          <div className="space-y-6">
           {/* Quick Stats */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <Card className={`${displayPaymentStatus === 'overdue' || isOverdue ? 'bg-gradient-to-r from-destructive to-destructive/80' : displayBalance > 0 ? 'bg-gradient-to-r from-warning to-warning/80' : 'bg-gradient-to-r from-success to-success/80'} text-primary-foreground`}>
@@ -440,24 +415,26 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
               </p>
             </CardContent>
           </Card>
-        </TabsContent>
-
-        {/* Browse Units Tab - Only show if no approved lease */}
-        {!hasApprovedLease && (
-          <TabsContent value="browse-units" className="space-y-6">
-            <UnitBrowsing />
-          </TabsContent>
+          </div>
         )}
 
-        {/* My Applications Tab - Only show if no approved lease */}
-        {!hasApprovedLease && (
-          <TabsContent value="my-applications" className="space-y-6">
+        {/* Browse Units Tab */}
+        {activeTab === "browse-units" && (
+          <div className="space-y-6">
+            <UnitBrowsing />
+          </div>
+        )}
+
+        {/* My Applications Tab */}
+        {activeTab === "my-applications" && (
+          <div className="space-y-6">
             <MyApplications />
-          </TabsContent>
+          </div>
         )}
 
         {/* Payments Tab */}
-        <TabsContent value="payments" className="space-y-6">
+        {activeTab === "payments" && (
+          <div className="space-y-6">
           {/* Header */}
           <div className="flex justify-between items-center">
             <div>
@@ -660,10 +637,19 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
+          </div>
+        )}
+
+        {/* Utility Bills Tab */}
+        {activeTab === "utility-bills" && (
+          <div className="space-y-6">
+            <UtilityBillsSection />
+          </div>
+        )}
 
         {/* Maintenance Tab */}
-        <TabsContent value="maintenance" className="space-y-6">
+        {activeTab === "maintenance" && (
+          <div className="space-y-6">
           <div className="flex justify-between items-center">
             <div>
               <h3 className="text-xl font-semibold">Maintenance Requests</h3>
@@ -887,32 +873,40 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
+          </div>
+        )}
 
         {/* Visitors Tab */}
-        <TabsContent value="visitors" className="space-y-6">
-          <VisitorsSection />
-        </TabsContent>
+        {activeTab === "visitors" && (
+          <div className="space-y-6">
+            <VisitorsSection />
+          </div>
+        )}
 
         {/* Documents Tab */}
-        <TabsContent value="documents" className="space-y-6">
-          <TenantDocuments />
-        </TabsContent>
+        {activeTab === "documents" && (
+          <div className="space-y-6">
+            <TenantDocuments />
+          </div>
+        )}
 
         {/* Messages Tab */}
-        <TabsContent value="messages" className="space-y-6">
-          <MessagesSection />
-        </TabsContent>
+        {activeTab === "messages" && (
+          <div className="space-y-6">
+            <MessagesSection />
+          </div>
+        )}
 
         {/* Profile Tab */}
-        <TabsContent value="profile" className="space-y-6">
+        {activeTab === "profile" && (
+          <div className="space-y-6">
           <ProfileEditForm />
           <CoTenantManagement />
           <PaymentMethodsManagement />
           <PasswordChangeForm />
           <SessionsManagement />
-        </TabsContent>
-      </Tabs>
+          </div>
+        )}
 
       {/* Modals */}
       <TenantPaymentModal

@@ -24,7 +24,8 @@ import {
 } from 'lucide-react';
 import { useLandlordTenants } from '@/hooks/useLandlordTenants';
 import { TenantCreationForm } from '../TenantCreationForm';
-// import { TenantEditForm } from '../TenantEditForm';
+import { TenantEditForm } from '../TenantEditForm';
+import { supabaseAdmin } from '@/integrations/supabase/admin';
 import { format } from 'date-fns';
 
 export const TenantManagementSection = () => {
@@ -34,6 +35,8 @@ export const TenantManagementSection = () => {
   const [showEditForm, setShowEditForm] = useState(false);
   const [showCredentials, setShowCredentials] = useState(false);
   const [tenantCredentials, setTenantCredentials] = useState<any>(null);
+  const [currentPassword, setCurrentPassword] = useState<string>('');
+  const [passwordLoading, setPasswordLoading] = useState(false);
   
   const {
     tenants,
@@ -44,6 +47,9 @@ export const TenantManagementSection = () => {
     terminatedTenants,
     totalMonthlyRent,
     totalSecurityDeposits,
+    occupancyRate,
+    totalUnits,
+    occupiedUnits,
     deleteTenant,
     refetch
   } = useLandlordTenants();
@@ -59,9 +65,55 @@ export const TenantManagementSection = () => {
     }
   };
 
-  const handleShowCredentials = (tenant: any) => {
+  const handleShowCredentials = async (tenant: any) => {
+    console.log('🔍 [TenantManagementSection] Showing credentials for tenant:', tenant);
+    console.log('🔍 [TenantManagementSection] Profile ID:', tenant?.tenant_info?.profile_id);
+    
     setSelectedTenant(tenant);
+    // Clear any previous credentials since we're viewing an existing tenant
+    setTenantCredentials(null);
+    setCurrentPassword('');
     setShowCredentials(true);
+    
+    // Try to get current password if tenant has a profile
+    if (tenant?.tenant_info?.profile_id) {
+      try {
+        setPasswordLoading(true);
+        
+        // First, get the user_id from the profiles table
+        const { data: profileData, error: profileError } = await supabaseAdmin
+          .from('profiles')
+          .select('user_id')
+          .eq('id', tenant.tenant_info.profile_id)
+          .single();
+
+        if (profileError || !profileData?.user_id) {
+          console.warn('⚠️ [TenantManagementSection] Profile not found:', profileError);
+          return;
+        }
+
+        console.log('🔍 [TenantManagementSection] Found user_id:', profileData.user_id);
+        
+        const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserById(
+          profileData.user_id
+        );
+
+        console.log('🔍 [TenantManagementSection] User data response:', userData);
+        console.log('🔍 [TenantManagementSection] User error:', userError);
+
+        if (!userError && userData?.user) {
+          setCurrentPassword('***HIDDEN***');
+        } else {
+          console.warn('⚠️ [TenantManagementSection] No user found or error:', userError);
+        }
+      } catch (error) {
+        console.error('❌ [TenantManagementSection] Error fetching user data:', error);
+      } finally {
+        setPasswordLoading(false);
+      }
+    } else {
+      console.warn('⚠️ [TenantManagementSection] No profile_id found for tenant');
+    }
   };
 
   const handleEditTenant = (tenant: any) => {
@@ -220,10 +272,10 @@ export const TenantManagementSection = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {tenants.length > 0 ? Math.round((activeTenants.length / tenants.length) * 100) : 0}%
+              {occupancyRate}%
             </div>
             <p className="text-xs text-muted-foreground">
-              Active tenants
+              {occupiedUnits} of {totalUnits} units occupied
             </p>
           </CardContent>
         </Card>
@@ -620,7 +672,7 @@ export const TenantManagementSection = () => {
             <DialogTitle>Edit Tenant Information</DialogTitle>
           </DialogHeader>
           {selectedTenant && (
-            /* <TenantEditForm
+            <TenantEditForm
               tenant={selectedTenant}
               onSuccess={handleEditSuccess}
               onCancel={handleEditCancel}
@@ -628,10 +680,7 @@ export const TenantManagementSection = () => {
                 console.log('Reset password for:', email);
                 // This will be handled by the TenantEditForm component
               }}
-            /> */
-            <div className="p-4">
-              <p className="text-muted-foreground">Tenant edit form is being updated. Please use the Tenant details view to manage tenant information.</p>
-            </div>
+            />
           )}
         </DialogContent>
       </Dialog>
@@ -689,7 +738,21 @@ export const TenantManagementSection = () => {
                   </div>
                 )}
                 
-                {!tenantCredentials?.password && (
+                {!tenantCredentials?.password && currentPassword && (
+                  <div>
+                    <Label className="text-sm font-medium text-muted-foreground">Current Password</Label>
+                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                      <p className="font-mono text-base font-semibold text-gray-800">
+                        {currentPassword}
+                      </p>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Password is hidden for security. Use "Edit Tenant" to reset and see new password.
+                    </p>
+                  </div>
+                )}
+                
+                {!tenantCredentials?.password && !currentPassword && (
                   <div>
                     <Label className="text-sm font-medium text-muted-foreground">Password Status</Label>
                     <p className="text-base">
@@ -698,6 +761,11 @@ export const TenantManagementSection = () => {
                         '❌ No account created yet'
                       }
                     </p>
+                    {passwordLoading && (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Checking password status...
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -743,3 +811,5 @@ export const TenantManagementSection = () => {
     </div>
   );
 };
+
+export default TenantManagementSection;

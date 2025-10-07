@@ -23,11 +23,7 @@ export const NotificationDropdown = () => {
     markAsRead,
     markAllAsRead,
     deleteNotification,
-    getNotificationsByType,
-    getUnreadByType,
-    markAsReadByType,
-    deleteByType,
-    getNotificationStats,
+    getNotificationIcon,
   } = useNotifications();
   
   const [activeTab, setActiveTab] = useState("all");
@@ -42,24 +38,21 @@ export const NotificationDropdown = () => {
     }
   };
 
-  const getNotificationIcon = (type: string) => {
+  const getNotificationIconByType = (type: string) => {
     switch (type) {
-      case 'payment':
+      case 'payment_success':
+      case 'payment_failed':
         return '💰';
-      case 'maintenance':
-      case 'maintenance_request':
-        return '🔧';
-      case 'lease':
+      case 'utility_bill':
         return '📄';
-      case 'security':
-        return '🛡️';
-      case 'visitor_request':
-      case 'visitor_response':
-        return '👥';
-      case 'message':
-        return '💬';
-      case 'general':
-        return '⚙️';
+      case 'warning':
+        return '⚠️';
+      case 'error':
+        return '🚨';
+      case 'success':
+        return '🎉';
+      case 'info':
+        return 'ℹ️';
       default:
         return '🔔';
     }
@@ -69,14 +62,25 @@ export const NotificationDropdown = () => {
     if (activeTab === "all") {
       return notifications;
     }
-    return getNotificationsByType(activeTab);
+    return notifications.filter(notification => {
+      switch (activeTab) {
+        case 'payment':
+          return notification.type === 'payment_success' || notification.type === 'payment_failed';
+        case 'maintenance':
+          return notification.type === 'utility_bill' || notification.type === 'warning';
+        case 'security':
+          return notification.type === 'error' || notification.type === 'info';
+        default:
+          return true;
+      }
+    });
   };
 
   const getUnreadCountForTab = (tab: string) => {
     if (tab === "all") {
       return unreadCount;
     }
-    return getUnreadByType(tab).length;
+    return getFilteredNotifications().filter(n => !n.read).length;
   };
 
   const renderNotificationItem = (notification: any) => (
@@ -90,7 +94,7 @@ export const NotificationDropdown = () => {
       <div className="flex items-start justify-between w-full">
         <div className="flex items-start gap-2 flex-1">
           <span className="text-lg">
-            {getNotificationIcon(notification.type)}
+            {getNotificationIconByType(notification.type)}
           </span>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
@@ -186,7 +190,12 @@ export const NotificationDropdown = () => {
               <Button 
                 variant="ghost" 
                 size="sm" 
-                onClick={() => deleteByType(activeTab)}
+                onClick={() => {
+                  const filteredNotifications = getFilteredNotifications();
+                  filteredNotifications.forEach(notification => {
+                    deleteNotification(notification.id);
+                  });
+                }}
                 className="h-auto p-1 text-xs text-destructive"
               >
                 <Trash2 className="h-3 w-3 mr-1" />
@@ -206,12 +215,10 @@ export const NotificationDropdown = () => {
               💰 {getUnreadCountForTab('payment') > 0 && `(${getUnreadCountForTab('payment')})`}
             </TabsTrigger>
             <TabsTrigger value="maintenance" className="text-xs">
-              🔧 {getUnreadCountForTab('maintenance') + getUnreadCountForTab('maintenance_request') > 0 && 
-                `(${getUnreadCountForTab('maintenance') + getUnreadCountForTab('maintenance_request')})`}
+              🔧 {getUnreadCountForTab('maintenance') > 0 && `(${getUnreadCountForTab('maintenance')})`}
             </TabsTrigger>
             <TabsTrigger value="security" className="text-xs">
-              🛡️ {getUnreadCountForTab('security') + getUnreadCountForTab('visitor_request') + getUnreadCountForTab('visitor_response') > 0 && 
-                `(${getUnreadCountForTab('security') + getUnreadCountForTab('visitor_request') + getUnreadCountForTab('visitor_response')})`}
+              🛡️ {getUnreadCountForTab('security') > 0 && `(${getUnreadCountForTab('security')})`}
             </TabsTrigger>
           </TabsList>
           

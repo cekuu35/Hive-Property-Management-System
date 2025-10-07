@@ -1,5 +1,5 @@
 import { 
-  Home, CreditCard, Wrench, FileText, MessageCircle, User, Building2
+  Home, CreditCard, Wrench, FileText, MessageCircle, User, Building2, Receipt, UserCheck
 } from "lucide-react";
 import {
   Sidebar,
@@ -23,7 +23,9 @@ const tenantTabs = [
   { id: "browse-units", label: "Browse Units", icon: Building2 },
   { id: "my-applications", label: "My Applications", icon: FileText },
   { id: "payments", label: "Rent & Payments", icon: CreditCard },
+  { id: "utility-bills", label: "Utility Bills", icon: Receipt },
   { id: "maintenance", label: "Maintenance", icon: Wrench },
+  { id: "visitors", label: "Visitors", icon: UserCheck },
   { id: "documents", label: "Documents", icon: FileText },
   { id: "messages", label: "Messages", icon: MessageCircle },
   { id: "profile", label: "Profile", icon: User },

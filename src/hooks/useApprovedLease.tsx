@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { supabaseAdmin } from '@/integrations/supabase/admin';
 import { useAuth } from '@/hooks/useAuth';
 
 interface ApprovedLease {
@@ -44,27 +45,52 @@ export const useApprovedLease = () => {
       console.log('🔍 [useApprovedLease] Starting fetch for profile ID:', profile.id);
       console.log('🔍 [useApprovedLease] Profile object:', profile);
       console.log('🔍 [useApprovedLease] Profile role:', profile.role);
+      console.log('🔍 [useApprovedLease] Profile user_id:', profile.user_id);
       
       // First, find the tenant_info record for this user
-      const { data: tenantInfo, error: tenantInfoError } = await supabase
+      let { data: tenantInfo, error: tenantInfoError } = await supabase
         .from('tenant_info')
         .select('id')
         .eq('profile_id', profile.id)
         .order('updated_at', { ascending: false })
         .limit(1);
 
+      // If RLS blocks the query, try with admin client
+      if (tenantInfoError && (tenantInfoError.code === '42501' || tenantInfoError.message.includes('RLS'))) {
+        console.log('🔄 [useApprovedLease] RLS blocked query, trying with admin client...');
+        const { data: adminTenantInfo, error: adminTenantInfoError } = await supabaseAdmin
+          .from('tenant_info')
+          .select('id')
+          .eq('profile_id', profile.id)
+          .order('updated_at', { ascending: false })
+          .limit(1);
+
+        if (adminTenantInfoError) {
+          console.error('❌ [useApprovedLease] Admin client also failed:', adminTenantInfoError);
+          setLoading(false);
+          return;
+        }
+
+        tenantInfo = adminTenantInfo;
+        tenantInfoError = null;
+        console.log('✅ [useApprovedLease] Admin client succeeded');
+      }
+
       if (tenantInfoError) {
-        console.error('Error fetching tenant_info:', tenantInfoError);
+        console.error('❌ [useApprovedLease] Error fetching tenant_info:', tenantInfoError);
         setLoading(false);
         return;
       }
 
       if (!tenantInfo || tenantInfo.length === 0) {
-        console.log('No tenant_info found for profile ID:', profile.id);
+        console.log('❌ [useApprovedLease] No tenant_info found for profile ID:', profile.id);
+        console.log('❌ [useApprovedLease] Query was: profile_id =', profile.id);
         setApprovedLease(null);
         setLoading(false);
         return;
       }
+
+      console.log('✅ [useApprovedLease] Found tenant_info:', tenantInfo[0]);
 
       // Now fetch the lease using tenant_info_id
       // Try the direct query first
@@ -89,11 +115,10 @@ export const useApprovedLease = () => {
       
       let data = leaseData?.[0] || null;
 
-      // If the query fails due to RLS, try a different approach
-      if (error && error.code === '42501') {
-        console.log('RLS blocked query, trying alternative approach...');
-        // Try to get all leases and filter client-side (not ideal but works)
-        const { data: allLeases, error: allLeasesError } = await supabase
+      // If the query fails or returns no results, try with admin client
+      if (error || !data) {
+        console.log('🔄 [useApprovedLease] Regular query failed or returned no results, trying with admin client...');
+        const { data: adminLeaseData, error: adminLeaseError } = await supabaseAdmin
           .from('leases')
           .select(`
             *,
@@ -108,11 +133,16 @@ export const useApprovedLease = () => {
               )
             )
           `)
-          .eq('status', 'active');
+          .eq('tenant_info_id', tenantInfo[0].id)
+          .eq('status', 'active')
+          .limit(1);
         
-        if (!allLeasesError && allLeases) {
-          data = allLeases.find(l => l.tenant_info_id === tenantInfo[0].id) || null;
+        if (!adminLeaseError && adminLeaseData) {
+          data = adminLeaseData[0] || null;
           error = null;
+          console.log('✅ [useApprovedLease] Admin client lease query succeeded');
+        } else {
+          console.error('❌ [useApprovedLease] Admin client lease query failed:', adminLeaseError);
         }
       }
 
@@ -129,7 +159,8 @@ export const useApprovedLease = () => {
           end_date: data.end_date
         });
       } else {
-        console.log('❌ No active lease found for tenant_info_id:', tenantInfo[0].id);
+        console.log('❌ [useApprovedLease] No active lease found for tenant_info_id:', tenantInfo[0].id);
+        console.log('❌ [useApprovedLease] Query was: tenant_info_id =', tenantInfo[0].id, 'AND status = active');
       }
 
       if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"

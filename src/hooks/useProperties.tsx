@@ -299,8 +299,14 @@ export const useProperties = () => {
     return propertyUnits.length > 0 ? (occupiedUnits / propertyUnits.length) * 100 : 0;
   };
 
+  // Create properties with nested units for the form
+  const propertiesWithUnits = properties.map(property => ({
+    ...property,
+    units: getPropertyUnits(property.id)
+  }));
+
   return {
-    properties,
+    properties: propertiesWithUnits,
     units,
     loading,
     createProperty,

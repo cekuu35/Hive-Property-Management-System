@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Loader2, CreditCard, Zap } from 'lucide-react';
-import { toast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
+import { usePaystackPayment } from '@/hooks/usePaystackPayment';
 import { supabase } from '@/integrations/supabase/client';
 
 // Declare Paystack type for TypeScript
@@ -23,7 +24,7 @@ interface TenantPaymentModalProps {
 
 export const TenantPaymentModal = ({ open, onOpenChange, rentAmount, dueDate, onPaymentSuccess }: TenantPaymentModalProps) => {
   const { profile, user } = useAuth();
-  const [loading, setLoading] = useState(false);
+  const { handlePaymentSuccess, loading } = usePaystackPayment();
   const [scriptLoaded, setScriptLoaded] = useState(false);
 
   // Load Paystack inline script
@@ -52,8 +53,6 @@ export const TenantPaymentModal = ({ open, onOpenChange, rentAmount, dueDate, on
       });
       return;
     }
-
-    setLoading(true);
 
     try {
       // Comprehensive lease lookup - try multiple approaches
@@ -143,11 +142,39 @@ export const TenantPaymentModal = ({ open, onOpenChange, rentAmount, dueDate, on
           ]
         },
         callback: function(response: any) {
-          // Redirect to callback URL with reference
-          window.location.href = `https://lovly-prop-ai-33-ten.vercel.app/payment/callback?reference=${response.reference}`;
+          // Handle payment success synchronously
+          console.log('Payment successful:', response);
+          
+          // Call the parent success handler immediately
+          onPaymentSuccess();
+          
+          // Close the modal
+          onOpenChange(false);
+          
+      // Process the payment asynchronously in the background
+      console.log('🔄 Processing payment in background with lease ID:', lease?.id);
+      handlePaymentSuccess(response, {
+        amount: rentAmount,
+        dueDate: dueDate,
+        leaseId: lease?.id
+      }).then(() => {
+        console.log('✅ Payment processing completed successfully');
+      }).catch(error => {
+        console.error('❌ Error processing payment in background:', error);
+        console.error('❌ Error details:', {
+          message: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : undefined,
+          error: error
+        });
+        // Show error toast if background processing fails
+        toast({
+          title: "Payment Processing Error",
+          description: "Payment was successful but there was an issue updating your account. Please contact support.",
+          variant: "destructive",
+        });
+      });
         },
         onClose: function() {
-          setLoading(false);
           toast({
             title: "Payment Cancelled",
             description: "You closed the payment window. Your payment was not completed.",
@@ -164,7 +191,6 @@ export const TenantPaymentModal = ({ open, onOpenChange, rentAmount, dueDate, on
         description: "Failed to initialize payment. Please try again.",
         variant: "destructive",
       });
-      setLoading(false);
     }
   };
 

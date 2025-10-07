@@ -1,0 +1,25 @@
+-- Add comprehensive list of utilities
+INSERT INTO utilities (name) VALUES 
+    ('Water'),
+    ('Electricity'),
+    ('Internet'),
+    ('Garbage Collection'),
+    ('Sewer'),
+    ('Gas'),
+    ('Security'),
+    ('Maintenance'),
+    ('Parking'),
+    ('Cable TV'),
+    ('Trash'),
+    ('Cleaning'),
+    ('Laundry'),
+    ('Heating'),
+    ('Cooling'),
+    ('Elevator'),
+    ('Gym'),
+    ('Pool'),
+    ('Garden'),
+    ('Pet Fee'),
+    ('Storage'),
+    ('Other')
+ON CONFLICT (name) DO NOTHING;

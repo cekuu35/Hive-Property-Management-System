@@ -1,54 +1,53 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
-import { useToast } from '@/hooks/use-toast';
+import { useAuth } from './useAuth';
+import { toast } from 'sonner';
 
 export interface Notification {
   id: string;
   user_id: string;
   title: string;
   message: string;
-  type: string;
-  read: boolean | null;
-  action_url: string | null;
+  type: 'info' | 'success' | 'warning' | 'error' | 'utility_bill' | 'payment_success' | 'payment_failed';
+  data?: any;
+  read: boolean;
   created_at: string;
 }
 
 export const useNotifications = () => {
+  const { profile } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
-  const { user } = useAuth();
-  const { toast } = useToast();
 
+  // Fetch notifications
   const fetchNotifications = async () => {
-    if (!user) return;
-    
+    if (!profile?.id) return;
+
     try {
+      setLoading(true);
+      setError(null);
+
       const { data, error } = await supabase
         .from('notifications')
         .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(20);
+        .eq('user_id', profile.id)
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
-      
+
       setNotifications(data || []);
-      const unread = data?.filter(n => !n.read)?.length || 0;
-      setUnreadCount(unread);
-    } catch (error) {
-      console.error('Error fetching notifications:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load notifications",
-        variant: "destructive",
-      });
+      setUnreadCount(data?.filter(n => !n.read).length || 0);
+    } catch (err) {
+      console.error('Error fetching notifications:', err);
+      setError('Failed to load notifications');
     } finally {
       setLoading(false);
     }
   };
 
+  // Mark notification as read
   const markAsRead = async (notificationId: string) => {
     try {
       const { error } = await supabase
@@ -59,24 +58,22 @@ export const useNotifications = () => {
       if (error) throw error;
 
       setNotifications(prev => 
-        prev.map(n => 
-          n.id === notificationId ? { ...n, read: true } : n
-        )
+        prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
       );
       setUnreadCount(prev => Math.max(0, prev - 1));
-    } catch (error) {
-      console.error('Error marking notification as read:', error);
+    } catch (err) {
+      console.error('Error marking notification as read:', err);
+      toast.error('Failed to mark notification as read');
     }
   };
 
+  // Mark all notifications as read
   const markAllAsRead = async () => {
-    if (!user) return;
-
     try {
       const { error } = await supabase
         .from('notifications')
         .update({ read: true })
-        .eq('user_id', user.id)
+        .eq('user_id', profile?.id)
         .eq('read', false);
 
       if (error) throw error;
@@ -85,11 +82,14 @@ export const useNotifications = () => {
         prev.map(n => ({ ...n, read: true }))
       );
       setUnreadCount(0);
-    } catch (error) {
-      console.error('Error marking all notifications as read:', error);
+      toast.success('All notifications marked as read');
+    } catch (err) {
+      console.error('Error marking all notifications as read:', err);
+      toast.error('Failed to mark all notifications as read');
     }
   };
 
+  // Delete notification
   const deleteNotification = async (notificationId: string) => {
     try {
       const { error } = await supabase
@@ -99,183 +99,106 @@ export const useNotifications = () => {
 
       if (error) throw error;
 
-      const notification = notifications.find(n => n.id === notificationId);
       setNotifications(prev => prev.filter(n => n.id !== notificationId));
-      
-      if (notification && !notification.read) {
-        setUnreadCount(prev => Math.max(0, prev - 1));
-      }
-    } catch (error) {
-      console.error('Error deleting notification:', error);
+      setUnreadCount(prev => {
+        const notification = notifications.find(n => n.id === notificationId);
+        return notification && !notification.read ? Math.max(0, prev - 1) : prev;
+      });
+    } catch (err) {
+      console.error('Error deleting notification:', err);
+      toast.error('Failed to delete notification');
     }
   };
 
-  useEffect(() => {
-    fetchNotifications();
+  // Get notification icon based on type
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case 'utility_bill':
+        return '📄';
+      case 'payment_success':
+        return '✅';
+      case 'payment_failed':
+        return '❌';
+      case 'warning':
+        return '⚠️';
+      case 'error':
+        return '🚨';
+      case 'success':
+        return '🎉';
+      default:
+        return 'ℹ️';
+    }
+  };
 
-    // Set up real-time subscription for new notifications
-    if (user) {
-      const channel = supabase
-        .channel('notifications')
-        .on('postgres_changes', {
+  // Get notification color based on type
+  const getNotificationColor = (type: string) => {
+    switch (type) {
+      case 'utility_bill':
+        return 'border-blue-200 bg-blue-50';
+      case 'payment_success':
+        return 'border-green-200 bg-green-50';
+      case 'payment_failed':
+        return 'border-red-200 bg-red-50';
+      case 'warning':
+        return 'border-yellow-200 bg-yellow-50';
+      case 'error':
+        return 'border-red-200 bg-red-50';
+      case 'success':
+        return 'border-green-200 bg-green-50';
+      default:
+        return 'border-gray-200 bg-gray-50';
+    }
+  };
+
+  // Auto-fetch notifications when profile changes
+  useEffect(() => {
+    if (profile?.id) {
+      fetchNotifications();
+    }
+  }, [profile?.id]);
+
+  // Set up real-time subscription for notifications
+  useEffect(() => {
+    if (!profile?.id) return;
+
+    const channel = supabase
+      .channel('notifications')
+      .on(
+        'postgres_changes',
+        {
           event: 'INSERT',
           schema: 'public',
           table: 'notifications',
-          filter: `user_id=eq.${user.id}`,
-        }, (payload) => {
+          filter: `user_id=eq.${profile.id}`
+        },
+        (payload) => {
           const newNotification = payload.new as Notification;
           setNotifications(prev => [newNotification, ...prev]);
           if (!newNotification.read) {
             setUnreadCount(prev => prev + 1);
+            toast.info(newNotification.title, {
+              description: newNotification.message
+            });
           }
-        })
-        .on('postgres_changes', {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${user.id}`,
-        }, () => {
-          fetchNotifications(); // Refresh on updates
-        })
-        .subscribe();
+        }
+      )
+      .subscribe();
 
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    }
-  }, [user]);
-
-  // Create a new notification
-  const createNotification = async (notification: {
-    title: string;
-    message: string;
-    type: string;
-    action_url?: string;
-    user_id?: string;
-  }) => {
-    try {
-      const { data, error } = await supabase
-        .from('notifications')
-        .insert({
-          user_id: notification.user_id || user?.id,
-          title: notification.title,
-          message: notification.message,
-          type: notification.type,
-          action_url: notification.action_url,
-          read: false,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Add to local state
-      setNotifications(prev => [data, ...prev]);
-      setUnreadCount(prev => prev + 1);
-
-      return data;
-    } catch (error) {
-      console.error('Error creating notification:', error);
-      toast({
-        title: "Error",
-        description: "Failed to create notification",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // Get notifications by type
-  const getNotificationsByType = (type: string) => {
-    return notifications.filter(n => n.type === type);
-  };
-
-  // Get unread notifications by type
-  const getUnreadByType = (type: string) => {
-    return notifications.filter(n => n.type === type && !n.read);
-  };
-
-  // Mark notifications as read by type
-  const markAsReadByType = async (type: string) => {
-    if (!user) return;
-
-    try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ read: true })
-        .eq('user_id', user.id)
-        .eq('type', type)
-        .eq('read', false);
-
-      if (error) throw error;
-
-      setNotifications(prev => 
-        prev.map(n => n.type === type ? { ...n, read: true } : n)
-      );
-      
-      const typeUnreadCount = notifications.filter(n => n.type === type && !n.read).length;
-      setUnreadCount(prev => Math.max(0, prev - typeUnreadCount));
-    } catch (error) {
-      console.error('Error marking notifications as read by type:', error);
-    }
-  };
-
-  // Delete notifications by type
-  const deleteByType = async (type: string) => {
-    if (!user) return;
-
-    try {
-      const { error } = await supabase
-        .from('notifications')
-        .delete()
-        .eq('user_id', user.id)
-        .eq('type', type);
-
-      if (error) throw error;
-
-      const typeNotifications = notifications.filter(n => n.type === type);
-      const typeUnreadCount = typeNotifications.filter(n => !n.read).length;
-      
-      setNotifications(prev => prev.filter(n => n.type !== type));
-      setUnreadCount(prev => Math.max(0, prev - typeUnreadCount));
-    } catch (error) {
-      console.error('Error deleting notifications by type:', error);
-    }
-  };
-
-  // Get notification statistics
-  const getNotificationStats = () => {
-    const stats = {
-      total: notifications.length,
-      unread: unreadCount,
-      byType: {} as Record<string, { total: number; unread: number }>
+    return () => {
+      supabase.removeChannel(channel);
     };
-
-    const types = ['payment', 'maintenance', 'lease', 'security', 'general', 'message', 'maintenance_request', 'visitor_request', 'visitor_response'];
-    
-    types.forEach(type => {
-      const typeNotifications = notifications.filter(n => n.type === type);
-      stats.byType[type] = {
-        total: typeNotifications.length,
-        unread: typeNotifications.filter(n => !n.read).length
-      };
-    });
-
-    return stats;
-  };
+  }, [profile?.id]);
 
   return {
     notifications,
-    loading,
     unreadCount,
+    loading,
+    error,
+    fetchNotifications,
     markAsRead,
     markAllAsRead,
     deleteNotification,
-    refetch: fetchNotifications,
-    createNotification,
-    getNotificationsByType,
-    getUnreadByType,
-    markAsReadByType,
-    deleteByType,
-    getNotificationStats,
+    getNotificationIcon,
+    getNotificationColor
   };
 };

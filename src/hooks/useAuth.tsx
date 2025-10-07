@@ -123,11 +123,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       if (tenantData && profileData) {
         console.log('User has multiple roles - tenant and', profileData.role);
         // For now, prioritize the profile role, but this will be handled by the role switcher
+        console.log('🔍 [useAuth] Setting profile for multi-role user:', profileData);
         setProfile(profileData as Profile);
       } else if (tenantData) {
         // User is only a tenant, create a minimal profile
         const tenantProfile = {
-          id: userId,
+          id: tenantData.profile_id, // Use the actual profile_id from tenant_info
           user_id: userId,
           role: 'tenant' as const,
           first_name: tenantData.first_name,
@@ -138,9 +139,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           emergency_contact_phone: tenantData.emergency_contact_phone,
           bio: null
         };
+        console.log('🔍 [useAuth] Setting tenant profile:', tenantProfile);
         setProfile(tenantProfile as Profile);
       } else if (profileData) {
         // User has only profile data
+        console.log('🔍 [useAuth] Setting profile for profile-only user:', profileData);
         setProfile(profileData as Profile);
       } else {
         console.log('No profile or tenant data found for user, creating profile...');
