@@ -67,7 +67,7 @@ export const TenantManagementSection = () => {
 
   const handleShowCredentials = async (tenant: any) => {
     console.log('🔍 [TenantManagementSection] Showing credentials for tenant:', tenant);
-    console.log('🔍 [TenantManagementSection] Profile ID:', tenant?.tenant_info?.profile_id);
+    console.log('🔍 [TenantManagementSection] Profile ID:', tenant?.profile_id);
     
     setSelectedTenant(tenant);
     // Clear any previous credentials since we're viewing an existing tenant
@@ -76,7 +76,7 @@ export const TenantManagementSection = () => {
     setShowCredentials(true);
     
     // Try to get current password if tenant has a profile
-    if (tenant?.tenant_info?.profile_id) {
+    if (tenant?.profile_id) {
       try {
         setPasswordLoading(true);
         
@@ -84,7 +84,7 @@ export const TenantManagementSection = () => {
         const { data: profileData, error: profileError } = await supabaseAdmin
           .from('profiles')
           .select('user_id')
-          .eq('id', tenant.tenant_info.profile_id)
+          .eq('id', tenant.profile_id)
           .single();
 
         if (profileError || !profileData?.user_id) {
@@ -112,7 +112,7 @@ export const TenantManagementSection = () => {
         setPasswordLoading(false);
       }
     } else {
-      console.warn('⚠️ [TenantManagementSection] No profile_id found for tenant');
+      console.warn('⚠️ [TenantManagementSection] No profile_id found for tenant - no account created');
     }
   };
 
@@ -754,32 +754,57 @@ export const TenantManagementSection = () => {
                 
                 {!tenantCredentials?.password && !currentPassword && (
                   <div>
-                    <Label className="text-sm font-medium text-muted-foreground">Password Status</Label>
-                    <p className="text-base">
-                      {selectedTenant?.tenant_info?.profile_id ? 
-                        '✅ Account exists - Use "Edit Tenant" to reset password' : 
-                        '❌ No account created yet'
-                      }
-                    </p>
+                    <Label className="text-sm font-medium text-muted-foreground">Account Status</Label>
+                    <div className="p-3 rounded-lg">
+                      {selectedTenant?.profile_id ? (
+                        <div className="bg-green-50 border border-green-200 p-3 rounded">
+                          <p className="text-green-800 font-medium">
+                            ✅ Account exists - Use "Edit Tenant" to reset password
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="bg-red-50 border border-red-200 p-3 rounded">
+                          <p className="text-red-800 font-medium">
+                            ❌ No account created yet
+                          </p>
+                          <p className="text-red-600 text-sm mt-1">
+                            This tenant was created before the account creation feature was added. 
+                            Use "Edit Tenant" to create an account and generate credentials.
+                          </p>
+                        </div>
+                      )}
+                    </div>
                     {passwordLoading && (
                       <p className="text-sm text-muted-foreground mt-1">
-                        Checking password status...
+                        Checking account status...
                       </p>
                     )}
                   </div>
                 )}
               </div>
 
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h4 className="font-medium text-blue-900 mb-2">Instructions for Tenant:</h4>
-                <ul className="text-sm text-blue-800 space-y-1">
-                  <li>• Go to the login page</li>
-                  <li>• Enter the email address above</li>
-                  <li>• Enter the password (if provided)</li>
-                  <li>• Change password on first login</li>
-                  <li>• Contact you if they need help</li>
-                </ul>
-              </div>
+              {selectedTenant?.profile_id ? (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h4 className="font-medium text-blue-900 mb-2">Instructions for Tenant:</h4>
+                  <ul className="text-sm text-blue-800 space-y-1">
+                    <li>• Go to the login page</li>
+                    <li>• Enter the email address above</li>
+                    <li>• Enter the password (if provided)</li>
+                    <li>• Change password on first login</li>
+                    <li>• Contact you if they need help</li>
+                  </ul>
+                </div>
+              ) : (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <h4 className="font-medium text-yellow-900 mb-2">Next Steps:</h4>
+                  <ul className="text-sm text-yellow-800 space-y-1">
+                    <li>• This tenant doesn't have a login account yet</li>
+                    <li>• Use "Edit Tenant" to create an account and generate credentials</li>
+                    <li>• Once created, share the credentials with the tenant</li>
+                    <li>• The tenant can then log in and access their portal</li>
+                  </ul>
+                </div>
+              )}
 
               <div className="flex gap-2 pt-4">
                 <Button

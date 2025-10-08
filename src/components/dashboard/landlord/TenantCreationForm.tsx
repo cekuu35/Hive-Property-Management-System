@@ -34,6 +34,7 @@ interface TenantCreationFormProps {
 
 export const TenantCreationForm = ({ onSuccess, onCancel }: TenantCreationFormProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [createdCredentials, setCreatedCredentials] = useState<{ email: string; password: string; tenantName: string } | null>(null);
   const { toast } = useToast();
   const { properties, units, loading: propertiesLoading } = useProperties();
   const { createTenant } = useTenants();
@@ -92,8 +93,11 @@ export const TenantCreationForm = ({ onSuccess, onCancel }: TenantCreationFormPr
       if (result.success) {
         toast({
           title: "Success",
-          description: "Tenant created successfully!",
+          description: "Tenant account created successfully!",
         });
+        if (result.credentials) {
+          setCreatedCredentials(result.credentials);
+        }
         reset();
         onSuccess?.(result.credentials);
       }
@@ -357,6 +361,58 @@ export const TenantCreationForm = ({ onSuccess, onCancel }: TenantCreationFormPr
             </Button>
           </div>
         </form>
+
+        {/* Credentials Display */}
+        {createdCredentials && (
+          <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+            <h3 className="text-lg font-semibold text-green-800 mb-3">
+              ✅ Tenant Account Created Successfully!
+            </h3>
+            <div className="space-y-2">
+              <p className="text-sm text-green-700">
+                <strong>Tenant Name:</strong> {createdCredentials.tenantName}
+              </p>
+              <p className="text-sm text-green-700">
+                <strong>Email:</strong> {createdCredentials.email}
+              </p>
+              <p className="text-sm text-green-700">
+                <strong>Temporary Password:</strong> 
+                <span className="font-mono bg-green-100 px-2 py-1 rounded ml-2">
+                  {createdCredentials.password}
+                </span>
+              </p>
+            </div>
+            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+              <p className="text-sm text-yellow-800">
+                <strong>⚠️ Important:</strong> Please share these credentials with the tenant. 
+                They should change their password after their first login.
+              </p>
+            </div>
+            <div className="mt-4 flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCreatedCredentials(null)}
+              >
+                Create Another Tenant
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(
+                    `Email: ${createdCredentials.email}\nPassword: ${createdCredentials.password}`
+                  );
+                  toast({
+                    title: "Copied!",
+                    description: "Credentials copied to clipboard",
+                  });
+                }}
+              >
+                Copy Credentials
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

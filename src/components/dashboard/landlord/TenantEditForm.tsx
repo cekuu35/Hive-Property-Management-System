@@ -115,9 +115,9 @@ export const TenantEditForm = ({ tenant, onSuccess, onCancel, onResetPassword }:
 
   const handleShowCurrentPassword = async () => {
     console.log('🔍 [TenantEditForm] Checking password for tenant:', tenant);
-    console.log('🔍 [TenantEditForm] Profile ID:', tenant?.tenant_info?.profile_id);
+    console.log('🔍 [TenantEditForm] Profile ID:', tenant?.profile_id);
     
-    if (!tenant?.tenant_info?.profile_id) {
+    if (!tenant?.profile_id) {
       toast.error('No profile ID found for this tenant. The tenant may not have an account yet.');
       return;
     }
@@ -129,7 +129,7 @@ export const TenantEditForm = ({ tenant, onSuccess, onCancel, onResetPassword }:
       const { data: profileData, error: profileError } = await supabaseAdmin
         .from('profiles')
         .select('user_id')
-        .eq('id', tenant.tenant_info.profile_id)
+        .eq('id', tenant.profile_id)
         .single();
 
       if (profileError || !profileData?.user_id) {
@@ -172,14 +172,14 @@ export const TenantEditForm = ({ tenant, onSuccess, onCancel, onResetPassword }:
   const handleResetPassword = async () => {
     console.log('🔍 [TenantEditForm] Resetting password for tenant:', tenant);
     console.log('🔍 [TenantEditForm] Email:', tenant?.tenant_info?.email);
-    console.log('🔍 [TenantEditForm] Profile ID:', tenant?.tenant_info?.profile_id);
+    console.log('🔍 [TenantEditForm] Profile ID:', tenant?.profile_id);
     
     if (!tenant?.tenant_info?.email) {
       toast.error('No email address found for this tenant');
       return;
     }
 
-    if (!tenant?.tenant_info?.profile_id) {
+    if (!tenant?.profile_id) {
       toast.error('No profile ID found for this tenant. The tenant may not have an account yet.');
       return;
     }
@@ -192,7 +192,7 @@ export const TenantEditForm = ({ tenant, onSuccess, onCancel, onResetPassword }:
       const { data: profileData, error: profileError } = await supabaseAdmin
         .from('profiles')
         .select('user_id')
-        .eq('id', tenant.tenant_info.profile_id)
+        .eq('id', tenant.profile_id)
         .single();
 
       if (profileError || !profileData?.user_id) {
@@ -235,6 +235,161 @@ export const TenantEditForm = ({ tenant, onSuccess, onCancel, onResetPassword }:
       toast.error(`Failed to reset password: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setResetPasswordLoading(false);
+    }
+  };
+
+  const handleCreateAccount = async () => {
+    console.log('🔍 [TenantEditForm] Creating account for tenant:', tenant);
+    
+    if (!tenant?.tenant_info?.email) {
+      toast.error('No email address found for this tenant');
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // First, check if an auth user already exists for this email
+      const { data: existingUsers, error: userCheckError } = await supabaseAdmin.auth.admin.listUsers();
+      
+      let existingUser = null;
+      if (!userCheckError && existingUsers?.users) {
+        existingUser = existingUsers.users.find(user => user.email === tenant.tenant_info.email);
+      }
+
+      let authUserId;
+      let tempPassword = '';
+
+      if (existingUser) {
+        console.log('✅ [TenantEditForm] Auth user already exists for this email:', existingUser.id);
+        authUserId = existingUser.id;
+        
+        // Generate a new password for existing user
+        tempPassword = Math.random().toString(36).slice(-8) + 'A1!';
+        
+        // Update the existing auth user's password
+        const { error: passwordUpdateError } = await supabaseAdmin.auth.admin.updateUserById(
+          authUserId,
+          { password: tempPassword }
+        );
+
+        if (passwordUpdateError) {
+          console.error('❌ [TenantEditForm] Error updating password:', passwordUpdateError);
+          throw passwordUpdateError;
+        }
+
+        console.log('✅ [TenantEditForm] Password updated for existing user');
+        
+        // Check if profile exists for this user
+        const { data: existingProfile, error: profileCheckError } = await supabaseAdmin
+          .from('profiles')
+          .select('id, user_id')
+          .eq('user_id', authUserId)
+          .single();
+
+        if (!existingProfile && !profileCheckError) {
+          // Create profile for existing user
+          const { data: profile, error: profileError } = await supabaseAdmin
+            .from('profiles')
+            .insert({
+              id: authUserId,
+              user_id: authUserId,
+              role: 'tenant',
+              first_name: tenant.tenant_info.first_name,
+              last_name: tenant.tenant_info.last_name,
+              phone: tenant.tenant_info.phone
+            })
+            .select()
+            .single();
+
+          if (profileError) {
+            console.error('❌ [TenantEditForm] Error creating profile for existing user:', profileError);
+            throw profileError;
+          }
+
+          console.log('✅ [TenantEditForm] Profile created for existing user:', profile.id);
+        } else if (existingProfile) {
+          console.log('✅ [TenantEditForm] Profile already exists for user:', existingProfile.id);
+        }
+      } else {
+        // Create new auth user and profile
+        tempPassword = Math.random().toString(36).slice(-8) + 'A1!';
+        
+        // Create Supabase auth user using admin client
+        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+          email: tenant.tenant_info.email,
+          password: tempPassword,
+          email_confirm: true, // Auto-confirm email
+          user_metadata: {
+            first_name: tenant.tenant_info.first_name,
+            last_name: tenant.tenant_info.last_name,
+            role: 'tenant'
+          }
+        });
+
+        if (authError) {
+          console.error('❌ [TenantEditForm] Error creating auth user:', authError);
+          throw authError;
+        }
+
+        if (!authData.user) {
+          throw new Error('Failed to create auth user');
+        }
+
+        authUserId = authData.user.id;
+        console.log('✅ [TenantEditForm] Auth user created:', authUserId);
+
+        // Create profile record for the tenant
+        const { data: profile, error: profileError } = await supabaseAdmin
+          .from('profiles')
+          .insert({
+            id: authUserId, // Use auth user ID as profile ID
+            user_id: authUserId,
+            role: 'tenant',
+            first_name: tenant.tenant_info.first_name,
+            last_name: tenant.tenant_info.last_name,
+            phone: tenant.tenant_info.phone
+          })
+          .select()
+          .single();
+
+        if (profileError) {
+          console.error('❌ [TenantEditForm] Error creating profile:', profileError);
+          // Clean up auth user if profile creation fails
+          await supabaseAdmin.auth.admin.deleteUser(authUserId);
+          throw profileError;
+        }
+
+        console.log('✅ [TenantEditForm] Profile created:', profile.id);
+      }
+
+      // Update tenant_info record with profile_id
+      const { error: tenantUpdateError } = await supabaseAdmin
+        .from('tenant_info')
+        .update({ profile_id: authUserId })
+        .eq('id', tenant.id);
+
+      if (tenantUpdateError) {
+        console.error('❌ [TenantEditForm] Error updating tenant_info:', tenantUpdateError);
+        throw tenantUpdateError;
+      }
+
+      console.log('✅ [TenantEditForm] Tenant info updated with profile_id');
+
+      // Show the credentials
+      setCurrentPassword(tempPassword);
+      setShowCurrentPassword(true);
+      
+      toast.success('Account created successfully! Credentials generated.');
+      
+      // Refresh the tenant data to show the new profile_id
+      onSuccess();
+      
+    } catch (error: any) {
+      console.error('❌ [TenantEditForm] Error creating account:', error);
+      toast.error(`Failed to create account: ${error.message || 'Unknown error'}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -488,6 +643,41 @@ export const TenantEditForm = ({ tenant, onSuccess, onCancel, onResetPassword }:
             />
           </CardContent>
         </Card>
+
+        {/* Create Account Section for Tenants Without Profiles */}
+        {!tenant?.profile_id && (
+          <Card className="border-orange-200 bg-orange-50">
+            <CardHeader>
+              <CardTitle className="text-orange-800 flex items-center gap-2">
+                <AlertCircle className="h-5 w-5" />
+                No Account Created
+              </CardTitle>
+              <CardDescription className="text-orange-700">
+                This tenant doesn't have a login account yet. Create one to generate credentials.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                type="button"
+                onClick={handleCreateAccount}
+                disabled={loading}
+                className="w-full bg-orange-600 hover:bg-orange-700"
+              >
+                {loading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Creating Account...
+                  </>
+                ) : (
+                  <>
+                    <Key className="h-4 w-4 mr-2" />
+                    Create Account & Generate Credentials
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Action Buttons */}
         <div className="flex gap-2 pt-4 border-t">

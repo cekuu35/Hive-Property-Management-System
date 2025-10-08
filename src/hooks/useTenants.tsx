@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { supabaseAdmin } from '@/integrations/supabase/admin';
 import { useAuth } from './useAuth';
 import { toast } from '@/hooks/use-toast';
 
@@ -145,8 +146,8 @@ export const useTenants = () => {
     }
   };
 
-  const createTenant = async (tenantData: CreateTenantData): Promise<boolean> => {
-    if (!user) return false;
+  const createTenant = async (tenantData: CreateTenantData): Promise<{ success: boolean; credentials?: { email: string; password: string; tenantName: string } }> => {
+    if (!user) return { success: false };
 
     try {
       console.log('🚀 [useTenants] Starting tenant creation:', tenantData);
@@ -167,11 +168,61 @@ export const useTenants = () => {
 
       console.log('👤 [useTenants] Landlord profile ID:', myProfile.id);
 
+      // Generate a temporary password
+      const tempPassword = Math.random().toString(36).slice(-8) + 'A1!'; // 8 chars + special chars
+      
+      // Create Supabase auth user using admin client
+      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        email: tenantData.email,
+        password: tempPassword,
+        email_confirm: true, // Auto-confirm email
+        user_metadata: {
+          first_name: tenantData.first_name,
+          last_name: tenantData.last_name,
+          role: 'tenant'
+        }
+      });
+
+      if (authError) {
+        console.error('❌ [useTenants] Error creating auth user:', authError);
+        throw authError;
+      }
+
+      if (!authData.user) {
+        throw new Error('Failed to create auth user');
+      }
+
+      console.log('✅ [useTenants] Auth user created:', authData.user.id);
+
+      // Create profile record for the tenant
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .insert({
+          id: authData.user.id, // Use auth user ID as profile ID
+          user_id: authData.user.id,
+          role: 'tenant',
+          first_name: tenantData.first_name,
+          last_name: tenantData.last_name,
+          phone: tenantData.phone
+        })
+        .select()
+        .single();
+
+      if (profileError) {
+        console.error('❌ [useTenants] Error creating profile:', profileError);
+        // Clean up auth user if profile creation fails
+        await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+        throw profileError;
+      }
+
+      console.log('✅ [useTenants] Profile created:', profile.id);
+
       // Create tenant info record with landlord link
       const { data: tenantInfo, error: tenantError } = await supabase
         .from('tenant_info')
         .insert({
           landlord_id: myProfile.id, // Link to landlord
+          profile_id: authData.user.id, // Link to profile
           first_name: tenantData.first_name,
           last_name: tenantData.last_name,
           email: tenantData.email,
@@ -185,6 +236,8 @@ export const useTenants = () => {
 
       if (tenantError) {
         console.error('❌ [useTenants] Error creating tenant_info:', tenantError);
+        // Clean up auth user and profile if tenant_info creation fails
+        await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
         throw tenantError;
       }
 
@@ -212,6 +265,8 @@ export const useTenants = () => {
 
       if (leaseError) {
         console.error('❌ [useTenants] Error creating lease:', leaseError);
+        // Clean up auth user, profile, and tenant_info if lease creation fails
+        await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
         throw leaseError;
       }
 
@@ -230,13 +285,19 @@ export const useTenants = () => {
 
       console.log('✅ [useTenants] Unit updated to occupied');
 
+      const credentials = {
+        email: tenantData.email,
+        password: tempPassword,
+        tenantName: `${tenantData.first_name} ${tenantData.last_name}`
+      };
+
       toast({
         title: "Success",
-        description: "Tenant and lease created successfully!",
+        description: "Tenant account created successfully!",
       });
 
       fetchTenants(); // Refresh the list
-      return true;
+      return { success: true, credentials };
     } catch (error: any) {
       console.error('❌ [useTenants] Error creating tenant:', error);
       toast({
@@ -244,7 +305,7 @@ export const useTenants = () => {
         description: error.message || "Failed to add tenant. Please try again.",
         variant: "destructive",
       });
-      return false;
+      return { success: false };
     }
   };
 
