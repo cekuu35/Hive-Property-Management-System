@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,10 +14,12 @@ import {
   Calendar,
   Zap,
   Wifi,
-  Droplets
+  Droplets,
+  RefreshCw
 } from 'lucide-react';
 import { useUtilityBills } from '@/hooks/useUtilityBills';
 import { format } from 'date-fns';
+import { useToast } from '@/hooks/use-toast';
 
 const getUtilityIcon = (utilityName: string) => {
   switch (utilityName.toLowerCase()) {
@@ -45,19 +47,108 @@ const getStatusBadge = (status: string) => {
 };
 
 export const UtilityBillsSection = () => {
-  const { bills, loading, error, payBill, getTotals } = useUtilityBills();
+  const { bills, loading, error, payBill, getTotals, fetchTenantBills } = useUtilityBills();
   const [payingBillId, setPayingBillId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [previousTotals, setPreviousTotals] = useState<any>(null);
+  const { toast } = useToast();
 
   const totals = getTotals();
+
+  // Detect balance changes and show toast
+  useEffect(() => {
+    if (previousTotals && !loading) {
+      const unpaidDifference = previousTotals.totalUnpaid - totals.totalUnpaid;
+      const paidDifference = totals.totalPaid - previousTotals.totalPaid;
+      
+      if (unpaidDifference > 0 || paidDifference > 0) {
+        toast({
+          title: "Balance Updated!",
+          description: `Your utility balance has been updated. ${unpaidDifference > 0 ? `KES ${unpaidDifference.toLocaleString()} paid.` : ''}`,
+        });
+      }
+    }
+    setPreviousTotals(totals);
+  }, [totals, previousTotals, loading, toast]);
+
+  // Auto-refresh bills every 30 seconds to catch webhook updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!loading && !refreshing) {
+        fetchTenantBills();
+      }
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, [loading, refreshing, fetchTenantBills]);
+
+  // Refresh when component becomes visible (user returns from payment)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && !loading && !refreshing) {
+        fetchTenantBills();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+    };
+  }, [loading, refreshing, fetchTenantBills]);
+
+  // Check for payment completion flag and refresh
+  useEffect(() => {
+    const checkPaymentFlag = () => {
+      const paymentProcessed = localStorage.getItem('utility_payment_processed');
+      const paymentTimestamp = localStorage.getItem('utility_payment_timestamp');
+      
+      if (paymentProcessed === 'true' && paymentTimestamp) {
+        const timeSincePayment = Date.now() - parseInt(paymentTimestamp);
+        // If payment was processed within the last 5 minutes, refresh
+        if (timeSincePayment < 300000) { // 5 minutes
+          fetchTenantBills();
+          // Clear the flag
+          localStorage.removeItem('utility_payment_processed');
+          localStorage.removeItem('utility_payment_timestamp');
+        }
+      }
+    };
+
+    // Check immediately when component mounts
+    checkPaymentFlag();
+
+    // Also check periodically
+    const interval = setInterval(checkPaymentFlag, 10000); // Every 10 seconds
+
+    return () => clearInterval(interval);
+  }, [fetchTenantBills]);
 
   const handlePayBill = async (billId: string) => {
     try {
       setPayingBillId(billId);
       await payBill(billId);
+      // Refresh bills after payment initiation
+      setTimeout(() => {
+        fetchTenantBills();
+      }, 2000); // Wait 2 seconds for webhook to process
     } catch (error) {
       console.error('Payment error:', error);
     } finally {
       setPayingBillId(null);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await fetchTenantBills();
+    } catch (error) {
+      console.error('Refresh error:', error);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -158,13 +249,27 @@ export const UtilityBillsSection = () => {
       {/* Bills Tabs */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Receipt className="h-5 w-5" />
-            Utility Bills
-          </CardTitle>
-          <CardDescription>
-            View and pay your utility bills
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Receipt className="h-5 w-5" />
+                Utility Bills
+              </CardTitle>
+              <CardDescription>
+                View and pay your utility bills
+              </CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={refreshing || loading}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              {refreshing ? 'Refreshing...' : 'Refresh'}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="unpaid" className="w-full">

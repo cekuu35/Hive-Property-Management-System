@@ -21,6 +21,7 @@ export interface LandlordTenant {
     tenant_status: string;
     current_balance: number;
     payment_status: string;
+    profile_id: string | null;
   };
   units?: {
     id: string;

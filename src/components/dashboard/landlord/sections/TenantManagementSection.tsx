@@ -20,13 +20,19 @@ import {
   Clock,
   Settings,
   User,
-  Key
+  Key,
+  XCircle,
+  Building
 } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useLandlordTenants } from '@/hooks/useLandlordTenants';
+import { useUnitApplications } from '@/hooks/useUnitApplications';
 import { TenantCreationForm } from '../TenantCreationForm';
 import { TenantEditForm } from '../TenantEditForm';
 import { supabaseAdmin } from '@/integrations/supabase/admin';
 import { format } from 'date-fns';
+import { validateAndCorrectProfileId, safeUpdateTenantProfileId } from '@/utils/profileValidation';
+import { toast } from 'sonner';
 
 export const TenantManagementSection = () => {
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -37,6 +43,7 @@ export const TenantManagementSection = () => {
   const [tenantCredentials, setTenantCredentials] = useState<any>(null);
   const [currentPassword, setCurrentPassword] = useState<string>('');
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const [selectedApartment, setSelectedApartment] = useState<string>('all');
   
   const {
     tenants,
@@ -54,6 +61,30 @@ export const TenantManagementSection = () => {
     refetch
   } = useLandlordTenants();
 
+  const {
+    applications,
+    loading: applicationsLoading,
+    updateApplicationStatus,
+    refetch: refetchApplications
+  } = useUnitApplications();
+
+  // Filter pending applications
+  const pendingApplications = applications.filter((app: any) => app.status === 'pending');
+
+  // Get unique apartments (properties) from tenants
+  const apartments = Array.from(
+    new Set(
+      tenants
+        .map(tenant => tenant.units?.properties?.name)
+        .filter(Boolean)
+    )
+  ).sort();
+
+  // Filter tenants by selected apartment
+  const filteredTenants = selectedApartment === 'all' 
+    ? tenants 
+    : tenants.filter(tenant => tenant.units?.properties?.name === selectedApartment);
+
   const handleCreateSuccess = (credentials?: any) => {
     console.log('🔄 Tenant created successfully, refreshing tenant list...');
     setShowCreateForm(false);
@@ -67,7 +98,8 @@ export const TenantManagementSection = () => {
 
   const handleShowCredentials = async (tenant: any) => {
     console.log('🔍 [TenantManagementSection] Showing credentials for tenant:', tenant);
-    console.log('🔍 [TenantManagementSection] Profile ID:', tenant?.profile_id);
+    console.log('🔍 [TenantManagementSection] Profile ID:', tenant?.tenant_info?.profile_id);
+    console.log('🔍 [TenantManagementSection] Email:', tenant?.tenant_info?.email);
     
     setSelectedTenant(tenant);
     // Clear any previous credentials since we're viewing an existing tenant
@@ -75,20 +107,43 @@ export const TenantManagementSection = () => {
     setCurrentPassword('');
     setShowCredentials(true);
     
-    // Try to get current password if tenant has a profile
-    if (tenant?.profile_id) {
+    // Try to get current password if tenant has a profile_id
+    if (tenant?.tenant_info?.profile_id) {
       try {
         setPasswordLoading(true);
         
-        // First, get the user_id from the profiles table
+        // Validate and correct the profile_id if needed
+        const validProfileId = await validateAndCorrectProfileId(tenant.tenant_info.profile_id);
+        
+        if (!validProfileId) {
+          console.warn('⚠️ [TenantManagementSection] Invalid profile ID found:', tenant.tenant_info.profile_id);
+          return;
+        }
+
+        // If the profile_id was corrected, update the tenant_info
+        if (validProfileId !== tenant.tenant_info.profile_id) {
+          console.log('🔧 [TenantManagementSection] Correcting profile_id from', tenant.tenant_info.profile_id, 'to', validProfileId);
+          await safeUpdateTenantProfileId(tenant.id, validProfileId);
+        }
+        
+        // First, try to find the profile by profile_id (more reliable than email)
         const { data: profileData, error: profileError } = await supabaseAdmin
           .from('profiles')
-          .select('user_id')
-          .eq('id', tenant.profile_id)
+          .select('id, user_id, email')
+          .eq('id', validProfileId)
           .single();
 
-        if (profileError || !profileData?.user_id) {
-          console.warn('⚠️ [TenantManagementSection] Profile not found:', profileError);
+        if (profileError) {
+          if (profileError.code === 'PGRST116') {
+            console.warn('⚠️ [TenantManagementSection] No profile found for profile_id:', tenant.tenant_info.profile_id);
+          } else {
+            console.warn('⚠️ [TenantManagementSection] Error fetching profile:', profileError);
+          }
+          return;
+        }
+
+        if (!profileData?.user_id) {
+          console.warn('⚠️ [TenantManagementSection] No user_id found in profile data');
           return;
         }
 
@@ -112,13 +167,38 @@ export const TenantManagementSection = () => {
         setPasswordLoading(false);
       }
     } else {
-      console.warn('⚠️ [TenantManagementSection] No profile_id found for tenant - no account created');
+      console.warn('⚠️ [TenantManagementSection] No profile_id found for tenant');
     }
   };
 
   const handleEditTenant = (tenant: any) => {
     setSelectedTenant(tenant);
     setShowEditForm(true);
+  };
+
+  const handleApproveApplication = async (applicationId: string) => {
+    try {
+      await updateApplicationStatus(applicationId, 'approved');
+      toast.success('Application approved successfully');
+      // Refresh both tenant list and applications list
+      refetch(); // Refresh tenant list to show the newly created tenant
+      refetchApplications(); // Refresh applications list to remove the approved application
+    } catch (error) {
+      console.error('Error approving application:', error);
+      toast.error('Failed to approve application');
+    }
+  };
+
+  const handleRejectApplication = async (applicationId: string) => {
+    try {
+      await updateApplicationStatus(applicationId, 'rejected');
+      toast.success('Application rejected');
+      // Refresh applications list to remove the rejected application
+      refetchApplications();
+    } catch (error) {
+      console.error('Error rejecting application:', error);
+      toast.error('Failed to reject application');
+    }
   };
 
   const handleEditSuccess = () => {
@@ -224,6 +304,64 @@ export const TenantManagementSection = () => {
         </div>
       </div>
 
+      {/* Pending Applications Section */}
+      {pendingApplications.length > 0 && (
+        <Card className="border-orange-200 bg-orange-50">
+          <CardHeader>
+            <CardTitle className="text-orange-800 flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              Pending Applications ({pendingApplications.length})
+            </CardTitle>
+            <CardDescription>
+              Review and approve tenant applications
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {pendingApplications.map((application: any) => (
+                <div key={application.id} className="flex items-center justify-between p-4 bg-white rounded-lg border">
+                  <div className="flex items-center gap-4">
+                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                      <span className="text-sm font-medium">
+                        {application.profiles?.first_name?.[0]}{application.profiles?.last_name?.[0]}
+                      </span>
+                    </div>
+                    <div>
+                      <div className="font-medium">
+                        {application.profiles?.first_name} {application.profiles?.last_name}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {application.properties?.name} - Unit {application.units?.unit_number}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Applied {format(new Date(application.created_at), 'MMM dd, yyyy')}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleRejectApplication(application.id)}
+                    >
+                      <XCircle className="h-4 w-4 mr-1" />
+                      Reject
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => handleApproveApplication(application.id)}
+                    >
+                      <CheckCircle className="h-4 w-4 mr-1" />
+                      Approve
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
@@ -281,12 +419,12 @@ export const TenantManagementSection = () => {
         </Card>
       </div>
 
-      {/* Tenants Table */}
+      {/* Tenants Table with Apartment Tabs */}
       <Card>
         <CardHeader>
-          <CardTitle>All Tenants</CardTitle>
+          <CardTitle>Tenant Management</CardTitle>
           <CardDescription>
-            Manage your tenants and their lease information
+            Manage your tenants by apartment or view all tenants
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -303,113 +441,76 @@ export const TenantManagementSection = () => {
               </Button>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Tenant</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead>Unit</TableHead>
-                  <TableHead>Rent</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Payment</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {tenants.map((tenant) => (
-                  <TableRow key={tenant.id}>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">
-                          {tenant.tenant_info.first_name} {tenant.tenant_info.last_name}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          ID: {tenant.id.slice(0, 8)}...
-                        </div>
+            <Tabs value={selectedApartment} onValueChange={setSelectedApartment} className="w-full">
+              <TabsList className="grid w-full grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                <TabsTrigger value="all" className="flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  All Tenants ({tenants.length})
+                </TabsTrigger>
+                {apartments.map((apartment) => {
+                  const apartmentTenantCount = tenants.filter(tenant => 
+                    tenant.units?.properties?.name === apartment
+                  ).length;
+                  return (
+                    <TabsTrigger 
+                      key={apartment} 
+                      value={apartment}
+                      className="flex items-center gap-2"
+                    >
+                      <Building className="h-4 w-4" />
+                      {apartment} ({apartmentTenantCount})
+                    </TabsTrigger>
+                  );
+                })}
+              </TabsList>
+              
+              <TabsContent value="all" className="mt-6">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold">All Tenants ({tenants.length})</h3>
+                  </div>
+                  <TenantsTable 
+                    tenants={tenants}
+                    onViewDetails={(tenant) => {
+                      setSelectedTenant(tenant);
+                      setShowTenantDetails(true);
+                    }}
+                    onShowCredentials={handleShowCredentials}
+                    onEditTenant={handleEditTenant}
+                    onDeleteTenant={handleDeleteTenant}
+                    getStatusBadge={getStatusBadge}
+                    getPaymentStatusBadge={getPaymentStatusBadge}
+                  />
+                </div>
+              </TabsContent>
+              
+              {apartments.map((apartment) => {
+                const apartmentTenants = tenants.filter(tenant => 
+                  tenant.units?.properties?.name === apartment
+                );
+                return (
+                  <TabsContent key={apartment} value={apartment} className="mt-6">
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-lg font-semibold">{apartment} ({apartmentTenants.length} tenants)</h3>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="text-sm">{tenant.tenant_info.email}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {tenant.tenant_info.phone}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {tenant.units ? (
-                        <div>
-                          <div className="font-medium">Unit {tenant.units.unit_number}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {tenant.units.properties?.name}
-                          </div>
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">Not assigned</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">KES {tenant.rent_amount.toLocaleString()}</div>
-                        <div className="text-sm text-muted-foreground">
-                          Deposit: KES {tenant.security_deposit.toLocaleString()}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {getStatusBadge(tenant.status)}
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        {getPaymentStatusBadge(tenant.tenant_info.payment_status)}
-                        <div className="text-sm text-muted-foreground">
-                          Balance: KES {tenant.tenant_info.current_balance.toLocaleString()}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedTenant(tenant);
-                            setShowTenantDetails(true);
-                          }}
-                          title="View Details"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleShowCredentials(tenant)}
-                          title="View Credentials"
-                        >
-                          <Key className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEditTenant(tenant)}
-                          title="Edit Tenant"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteTenant(tenant.id)}
-                          title="Delete Tenant"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                      <TenantsTable 
+                        tenants={apartmentTenants}
+                        onViewDetails={(tenant) => {
+                          setSelectedTenant(tenant);
+                          setShowTenantDetails(true);
+                        }}
+                        onShowCredentials={handleShowCredentials}
+                        onEditTenant={handleEditTenant}
+                        onDeleteTenant={handleDeleteTenant}
+                        getStatusBadge={getStatusBadge}
+                        getPaymentStatusBadge={getPaymentStatusBadge}
+                      />
+                    </div>
+                  </TabsContent>
+                );
+              })}
+            </Tabs>
           )}
         </CardContent>
       </Card>
@@ -756,7 +857,7 @@ export const TenantManagementSection = () => {
                   <div>
                     <Label className="text-sm font-medium text-muted-foreground">Account Status</Label>
                     <div className="p-3 rounded-lg">
-                      {selectedTenant?.profile_id ? (
+                      {selectedTenant?.tenant_info?.profile_id ? (
                         <div className="bg-green-50 border border-green-200 p-3 rounded">
                           <p className="text-green-800 font-medium">
                             ✅ Account exists - Use "Edit Tenant" to reset password
@@ -783,7 +884,7 @@ export const TenantManagementSection = () => {
                 )}
               </div>
 
-              {selectedTenant?.profile_id ? (
+              {selectedTenant?.tenant_info?.profile_id ? (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                   <h4 className="font-medium text-blue-900 mb-2">Instructions for Tenant:</h4>
                   <ul className="text-sm text-blue-800 space-y-1">
@@ -834,6 +935,154 @@ export const TenantManagementSection = () => {
         </DialogContent>
       </Dialog>
     </div>
+  );
+};
+
+// TenantsTable Component
+interface TenantsTableProps {
+  tenants: any[];
+  onViewDetails: (tenant: any) => void;
+  onShowCredentials: (tenant: any) => void;
+  onEditTenant: (tenant: any) => void;
+  onDeleteTenant: (tenantId: string) => void;
+  getStatusBadge: (status: string) => JSX.Element;
+  getPaymentStatusBadge: (status: string) => JSX.Element;
+}
+
+const TenantsTable = ({ 
+  tenants, 
+  onViewDetails, 
+  onShowCredentials, 
+  onEditTenant, 
+  onDeleteTenant, 
+  getStatusBadge, 
+  getPaymentStatusBadge 
+}: TenantsTableProps) => {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Tenant</TableHead>
+          <TableHead>Contact</TableHead>
+          <TableHead>Unit</TableHead>
+          <TableHead>Rent</TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead>Payment</TableHead>
+          <TableHead>Actions</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {tenants
+          .sort((a, b) => {
+            // First sort by property name
+            const propertyA = a.units?.properties?.name || '';
+            const propertyB = b.units?.properties?.name || '';
+            
+            if (propertyA !== propertyB) {
+              return propertyA.localeCompare(propertyB);
+            }
+            
+            // Then sort by unit number
+            const unitNumA = parseInt(a.units?.unit_number || '0') || a.units?.unit_number || '';
+            const unitNumB = parseInt(b.units?.unit_number || '0') || b.units?.unit_number || '';
+            
+            if (typeof unitNumA === 'number' && typeof unitNumB === 'number') {
+              return unitNumA - unitNumB;
+            }
+            
+            return String(unitNumA).localeCompare(String(unitNumB));
+          })
+          .map((tenant) => (
+            <TableRow key={tenant.id}>
+              <TableCell>
+                <div>
+                  <div className="font-medium">
+                    {tenant.tenant_info.first_name} {tenant.tenant_info.last_name}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    ID: {tenant.id.slice(0, 8)}...
+                  </div>
+                </div>
+              </TableCell>
+              <TableCell>
+                <div>
+                  <div className="text-sm">{tenant.tenant_info.email}</div>
+                  <div className="text-sm text-muted-foreground">
+                    {tenant.tenant_info.phone}
+                  </div>
+                </div>
+              </TableCell>
+              <TableCell>
+                {tenant.units ? (
+                  <div>
+                    <div className="font-medium">Unit {tenant.units.unit_number}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {tenant.units.properties?.name}
+                    </div>
+                  </div>
+                ) : (
+                  <span className="text-muted-foreground">Not assigned</span>
+                )}
+              </TableCell>
+              <TableCell>
+                <div>
+                  <div className="font-medium">KES {tenant.rent_amount.toLocaleString()}</div>
+                  <div className="text-sm text-muted-foreground">
+                    Deposit: KES {tenant.security_deposit.toLocaleString()}
+                  </div>
+                </div>
+              </TableCell>
+              <TableCell>
+                {getStatusBadge(tenant.status)}
+              </TableCell>
+              <TableCell>
+                <div className="space-y-1">
+                  {getPaymentStatusBadge(tenant.tenant_info.payment_status)}
+                  <div className="text-sm text-muted-foreground">
+                    Balance: KES {tenant.tenant_info.current_balance.toLocaleString()}
+                  </div>
+                </div>
+              </TableCell>
+              <TableCell>
+                <div className="flex items-center space-x-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onViewDetails(tenant)}
+                    title="View Details"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onShowCredentials(tenant)}
+                    title="View Credentials"
+                  >
+                    <Key className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onEditTenant(tenant)}
+                    title="Edit Tenant"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onDeleteTenant(tenant.id)}
+                    title="Delete Tenant"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+      </TableBody>
+    </Table>
   );
 };
 

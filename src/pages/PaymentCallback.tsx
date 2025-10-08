@@ -123,6 +123,10 @@ export const PaymentCallback = () => {
         description: `Your ${(bill as any).utilities.name} bill of KES ${(bill as any).amount.toLocaleString()} has been processed.`,
       });
 
+      // Set a flag to indicate payment was processed
+      localStorage.setItem('utility_payment_processed', 'true');
+      localStorage.setItem('utility_payment_timestamp', Date.now().toString());
+
       // Redirect to dashboard after 3 seconds
       setTimeout(() => {
         navigate('/dashboard');

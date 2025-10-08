@@ -128,44 +128,40 @@ export const useReports = () => {
 
       if (expensesError) throw expensesError;
 
-      // Calculate occupancy metrics based on active leases, not unit status
+      // Calculate occupancy metrics using a simpler approach
       const allUnits = properties?.flatMap(prop => prop.units || []) || [];
       const totalUnits = allUnits.length;
       
-      // Debug logging
-      console.log('Total units found:', totalUnits);
-      console.log('Sample unit data:', allUnits.slice(0, 2));
-      
-      // Get all active leases across all units
-      const activeLeases = allUnits.flatMap(unit => 
-        unit.leases?.filter((lease: any) => {
-          const now = new Date();
-          const startDate = new Date(lease.start_date);
-          const endDate = new Date(lease.end_date);
-          
-          // Debug individual lease
-          console.log('Checking lease:', {
-            status: lease.status,
-            start_date: lease.start_date,
-            end_date: lease.end_date,
-            isActive: lease.status === 'active',
-            isCurrent: startDate <= now && endDate >= now
-          });
-          
-          return lease.status === 'active' && 
-                 startDate <= now && 
-                 endDate >= now;
-        }) || []
-      );
-      
-      console.log('Active leases found:', activeLeases.length);
-      console.log('Sample active lease:', activeLeases[0]);
-      
-      const occupiedUnits = activeLeases.length;
+      // Get occupied units by counting active leases directly from the database
+      const { data: activeLeasesData, error: leasesError } = await supabase
+        .from('leases')
+        .select(`
+          unit_id,
+          status,
+          units!leases_unit_id_fkey (
+            properties!units_property_id_fkey (
+              landlord_id
+            )
+          )
+        `)
+        .eq('status', 'active')
+        .eq('units.properties.landlord_id', profile.id);
+
+      if (leasesError) {
+        console.error('Error fetching active leases for occupancy:', leasesError);
+      }
+
+      const occupiedUnits = activeLeasesData?.length || 0;
       const vacantUnits = totalUnits - occupiedUnits;
       const occupancyRate = totalUnits > 0 ? Math.round((occupiedUnits / totalUnits) * 100) : 0;
       
-      console.log('Occupancy calculation:', { totalUnits, occupiedUnits, vacantUnits, occupancyRate });
+      console.log('📊 Occupancy calculation (Reports):', { 
+        totalUnits, 
+        occupiedUnits, 
+        vacantUnits, 
+        occupancyRate,
+        activeLeasesCount: activeLeasesData?.length || 0
+      });
 
       // Calculate financial metrics
       const currentYear = new Date().getFullYear();
@@ -231,36 +227,32 @@ export const useReports = () => {
         });
       }
 
-      // Property breakdown for occupancy based on active leases
-      const propertyBreakdown = properties?.map(property => {
-        const units = property.units || [];
-        const total = units.length;
-        
-        // Count units with active leases
-        const occupied = units.filter((unit: any) => {
-          const activeLeases = unit.leases?.filter((lease: any) => {
-            const now = new Date();
-            const startDate = new Date(lease.start_date);
-            const endDate = new Date(lease.end_date);
-            
-            return lease.status === 'active' && 
-                   startDate <= now && 
-                   endDate >= now;
-          }) || [];
-          return activeLeases.length > 0;
-        }).length;
-        
-        const rate = total > 0 ? Math.round((occupied / total) * 100) : 0;
-        
-        console.log(`Property ${property.name}:`, { total, occupied, rate });
-        
-        return {
-          property: property.name,
-          occupied,
-          total,
-          rate
-        };
-      }) || [];
+      // Property breakdown for occupancy - get occupied units per property
+      const propertyBreakdown = await Promise.all(
+        properties?.map(async (property) => {
+          const units = property.units || [];
+          const total = units.length;
+          
+          // Get occupied units for this property by checking active leases
+          const { data: propertyLeases } = await supabase
+            .from('leases')
+            .select('unit_id')
+            .eq('status', 'active')
+            .in('unit_id', units.map((unit: any) => unit.id));
+          
+          const occupied = propertyLeases?.length || 0;
+          const rate = total > 0 ? Math.round((occupied / total) * 100) : 0;
+          
+          console.log(`Property ${property.name}:`, { total, occupied, rate });
+          
+          return {
+            property: property.name,
+            occupied,
+            total,
+            rate
+          };
+        }) || []
+      );
 
       // Maintenance statistics (current year)
       const currentYearMaintenanceRequests = landlordMaintenanceRequests.filter(req => {

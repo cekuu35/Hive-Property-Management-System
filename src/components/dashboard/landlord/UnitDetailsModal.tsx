@@ -51,18 +51,28 @@ export const UnitDetailsModal = ({ unit, open, onOpenChange, onEdit }: UnitDetai
     setLoading(true);
 
     try {
+      console.log('🔍 [UnitDetailsModal] Fetching details for unit:', unit.id);
+      
       // Fetch active lease
-      const { data: lease } = await supabase
+      const { data: lease, error: leaseError } = await supabase
         .from('leases')
         .select('*')
         .eq('unit_id', unit.id)
         .eq('status', 'active')
         .single();
 
+      if (leaseError) {
+        console.log('❌ [UnitDetailsModal] No active lease found for unit:', unit.id, leaseError);
+      } else {
+        console.log('✅ [UnitDetailsModal] Found active lease:', lease.id, 'Tenant Info ID:', lease.tenant_info_id);
+      }
+
       setLeaseData(lease);
 
       // Fetch tenant profile if lease exists
       if (lease?.tenant_id || lease?.tenant_info_id) {
+        let tenantFound = false;
+        
         // First try to get from profiles table using tenant_id
         if (lease.tenant_id) {
           const { data: tenant } = await supabase
@@ -73,18 +83,23 @@ export const UnitDetailsModal = ({ unit, open, onOpenChange, onEdit }: UnitDetai
           
           if (tenant) {
             setTenantProfile(tenant);
+            tenantFound = true;
           }
         }
         
         // If no profile found, try tenant_info table
-        if (!tenantProfile && lease.tenant_info_id) {
-          const { data: tenantInfo } = await supabase
+        if (!tenantFound && lease.tenant_info_id) {
+          console.log('🔍 [UnitDetailsModal] Trying tenant_info table with ID:', lease.tenant_info_id);
+          const { data: tenantInfo, error: tenantInfoError } = await supabase
             .from('tenant_info')
             .select('*')
             .eq('id', lease.tenant_info_id)
             .maybeSingle();
           
-          if (tenantInfo) {
+          if (tenantInfoError) {
+            console.log('❌ [UnitDetailsModal] Error fetching tenant_info:', tenantInfoError);
+          } else if (tenantInfo) {
+            console.log('✅ [UnitDetailsModal] Found tenant_info:', tenantInfo.first_name, tenantInfo.last_name);
             // Transform tenant_info to match profile structure
             setTenantProfile({
               id: tenantInfo.id,
@@ -93,6 +108,51 @@ export const UnitDetailsModal = ({ unit, open, onOpenChange, onEdit }: UnitDetai
               phone: tenantInfo.phone,
               avatar_url: tenantInfo.avatar_url,
               email: tenantInfo.email
+            });
+            tenantFound = true;
+          } else {
+            console.log('❌ [UnitDetailsModal] No tenant_info found for ID:', lease.tenant_info_id);
+          }
+        }
+        
+        // If still no tenant found, try to get from profiles using tenant_info_id as profile_id
+        if (!tenantFound && lease.tenant_info_id) {
+          console.log('🔍 [UnitDetailsModal] Trying profiles table with tenant_info_id as profile_id:', lease.tenant_info_id);
+          const { data: tenant, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', lease.tenant_info_id)
+            .maybeSingle();
+          
+          if (profileError) {
+            console.log('❌ [UnitDetailsModal] Error fetching from profiles:', profileError);
+          } else if (tenant) {
+            console.log('✅ [UnitDetailsModal] Found tenant in profiles:', tenant.first_name, tenant.last_name);
+            setTenantProfile(tenant);
+            tenantFound = true;
+          } else {
+            console.log('❌ [UnitDetailsModal] No tenant found in profiles table');
+          }
+        }
+        
+        // Final fallback: if still no tenant found, create a basic tenant object from tenant_info
+        if (!tenantFound && lease.tenant_info_id) {
+          console.log('🔍 [UnitDetailsModal] Creating fallback tenant object from tenant_info');
+          const { data: tenantInfo } = await supabase
+            .from('tenant_info')
+            .select('first_name, last_name, email, phone')
+            .eq('id', lease.tenant_info_id)
+            .single();
+          
+          if (tenantInfo) {
+            console.log('✅ [UnitDetailsModal] Created fallback tenant object:', tenantInfo.first_name, tenantInfo.last_name);
+            setTenantProfile({
+              id: lease.tenant_info_id,
+              first_name: tenantInfo.first_name,
+              last_name: tenantInfo.last_name,
+              email: tenantInfo.email,
+              phone: tenantInfo.phone,
+              avatar_url: null
             });
           }
         }
@@ -333,7 +393,7 @@ Maintenance Summary:
           </TabsContent>
 
           <TabsContent value="tenant" className="space-y-4">
-            {leaseData && tenantProfile ? (
+            {leaseData ? (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -342,39 +402,68 @@ Maintenance Summary:
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Tenant Name</p>
-                      <p className="font-medium">{tenantProfile.first_name} {tenantProfile.last_name}</p>
+                  {tenantProfile ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm text-muted-foreground">Tenant Name</p>
+                          <p className="font-medium">{tenantProfile.first_name} {tenantProfile.last_name}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Phone</p>
+                          <p className="font-medium">{tenantProfile.phone || 'Not provided'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Email</p>
+                          <p className="font-medium">{tenantProfile.email || 'Not provided'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Lease Start</p>
+                          <p className="font-medium">{format(new Date(leaseData.start_date), 'MMM d, yyyy')}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Lease End</p>
+                          <p className="font-medium">{format(new Date(leaseData.end_date), 'MMM d, yyyy')}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Monthly Rent</p>
+                          <p className="font-medium">KES {leaseData.rent_amount?.toLocaleString()}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Security Deposit</p>
+                          <p className="font-medium">KES {leaseData.deposit_amount?.toLocaleString()}</p>
+                        </div>
+                      </div>
+                      {leaseData.lease_document_url && (
+                        <Button variant="outline" asChild>
+                          <a href={leaseData.lease_document_url} target="_blank" rel="noopener noreferrer">
+                            <FileText className="h-4 w-4 mr-2" />
+                            View Lease Document
+                          </a>
+                        </Button>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-center py-4">
+                      <User className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                      <h3 className="text-lg font-semibold mb-2">Tenant Information Not Available</h3>
+                      <p className="text-muted-foreground mb-4">
+                        This unit has an active lease but tenant profile information could not be loaded.
+                      </p>
+                      <div className="bg-muted p-4 rounded-lg text-left">
+                        <p className="text-sm font-medium mb-2">Lease Information:</p>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <span className="text-muted-foreground">Lease Start:</span>
+                          <span>{format(new Date(leaseData.start_date), 'MMM d, yyyy')}</span>
+                          <span className="text-muted-foreground">Lease End:</span>
+                          <span>{format(new Date(leaseData.end_date), 'MMM d, yyyy')}</span>
+                          <span className="text-muted-foreground">Monthly Rent:</span>
+                          <span>KES {leaseData.rent_amount?.toLocaleString()}</span>
+                          <span className="text-muted-foreground">Security Deposit:</span>
+                          <span>KES {leaseData.deposit_amount?.toLocaleString()}</span>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Phone</p>
-                      <p className="font-medium">{tenantProfile.phone || 'Not provided'}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Lease Start</p>
-                      <p className="font-medium">{format(new Date(leaseData.start_date), 'MMM d, yyyy')}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Lease End</p>
-                      <p className="font-medium">{format(new Date(leaseData.end_date), 'MMM d, yyyy')}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Monthly Rent</p>
-                      <p className="font-medium">KES {leaseData.rent_amount?.toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Security Deposit</p>
-                      <p className="font-medium">KES {leaseData.deposit_amount?.toLocaleString()}</p>
-                    </div>
-                  </div>
-                  {leaseData.lease_document_url && (
-                    <Button variant="outline" asChild>
-                      <a href={leaseData.lease_document_url} target="_blank" rel="noopener noreferrer">
-                        <FileText className="h-4 w-4 mr-2" />
-                        View Lease Document
-                      </a>
-                    </Button>
                   )}
                 </CardContent>
               </Card>

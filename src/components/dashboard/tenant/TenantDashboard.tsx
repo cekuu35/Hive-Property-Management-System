@@ -26,6 +26,7 @@ import { PaymentMethodsManagement } from './profile/PaymentMethodsManagement';
 import { MessagesSection } from './MessagesSection';
 import { VisitorsSection } from './VisitorsSection';
 import { UtilityBillsSection } from './UtilityBillsSection';
+import { TenantNotices } from './TenantNotices';
 import { useMaintenanceRequests } from '@/hooks/useMaintenanceRequests';
 import { useApprovedLease } from '@/hooks/useApprovedLease';
 import { supabase } from '@/integrations/supabase/client';
@@ -401,20 +402,8 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
             </CardContent>
           </Card>
 
-          {/* Important Notice */}
-          <Card className="border-warning bg-warning/5">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-warning">
-                <AlertCircle className="h-5 w-5" />
-                Important Notice
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm">
-                Your rent payment for February is due in 5 days. Please ensure payment is made on time to avoid late fees.
-              </p>
-            </CardContent>
-          </Card>
+          {/* Real-time Notices */}
+          <TenantNotices maxNotices={3} />
           </div>
         )}
 

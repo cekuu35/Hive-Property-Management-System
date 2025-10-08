@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { User, Mail, Phone, Shield, Bell, CreditCard, Users, Settings, Save, Plus, Trash2, Loader2 } from 'lucide-react';
 import { useSettings } from '@/hooks/useSettings';
+import { DataIntegrityCheck } from '../DataIntegrityCheck';
 
 export const SettingsSection = () => {
   const {
@@ -498,6 +499,8 @@ export const SettingsSection = () => {
               </div>
             </CardContent>
           </Card>
+
+          <DataIntegrityCheck />
         </TabsContent>
       </Tabs>
     </div>

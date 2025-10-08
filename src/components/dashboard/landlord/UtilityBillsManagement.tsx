@@ -359,8 +359,32 @@ export const UtilityBillsManagement = () => {
                         </SelectTrigger>
                         <SelectContent>
                           {properties && properties.length > 0 ? (
-                            properties.map(property => 
-                              (property as any).units?.map((unit: any) => {
+                            properties
+                              .map(property => 
+                                (property as any).units?.map((unit: any) => ({
+                                  ...unit,
+                                  propertyName: property.name
+                                }))
+                              )
+                              .flat()
+                              .filter(Boolean)
+                              .sort((a: any, b: any) => {
+                                // First sort by property name
+                                if (a.propertyName !== b.propertyName) {
+                                  return a.propertyName.localeCompare(b.propertyName);
+                                }
+                                
+                                // Then sort by unit number
+                                const unitNumA = parseInt(a.unit_number) || a.unit_number;
+                                const unitNumB = parseInt(b.unit_number) || b.unit_number;
+                                
+                                if (typeof unitNumA === 'number' && typeof unitNumB === 'number') {
+                                  return unitNumA - unitNumB;
+                                }
+                                
+                                return String(unitNumA).localeCompare(String(unitNumB));
+                              })
+                              .map((unit: any) => {
                                 // Find tenant for this unit
                                 const unitTenant = tenants.find(tenant => 
                                   tenant.units?.id === unit.id
@@ -374,7 +398,7 @@ export const UtilityBillsManagement = () => {
                                   <SelectItem key={unit.id} value={unit.id}>
                                     <div className="flex flex-col">
                                       <span className="font-medium">
-                                        {property.name} - Unit {unit.unit_number}
+                                        {unit.propertyName} - Unit {unit.unit_number}
                                       </span>
                                       <span className={`text-xs ${unitTenant ? 'text-green-600' : 'text-muted-foreground'}`}>
                                         {unitTenant ? `👤 ${tenantName}` : '🏠 Vacant'}
@@ -383,7 +407,6 @@ export const UtilityBillsManagement = () => {
                                   </SelectItem>
                                 );
                               })
-                            ).flat().filter(Boolean)
                           ) : (
                             <SelectItem value="no-units" disabled>
                               No units available - Add properties first

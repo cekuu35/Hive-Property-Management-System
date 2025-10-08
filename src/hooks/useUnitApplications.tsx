@@ -66,6 +66,7 @@ export const useUnitApplications = () => {
     }
   }, [profile?.id, profile?.role]);
 
+
   const fetchTenantApplications = async () => {
     try {
       const { data, error } = await supabase
@@ -97,6 +98,8 @@ export const useUnitApplications = () => {
 
   const fetchLandlordApplications = async () => {
     try {
+      console.log('🔍 [useUnitApplications] Fetching landlord applications for profile:', profile?.id);
+      
       const { data, error } = await supabase
         .from('unit_applications')
         .select(`
@@ -123,16 +126,23 @@ export const useUnitApplications = () => {
         `)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ [useUnitApplications] Error fetching applications:', error);
+        throw error;
+      }
+      
+      console.log('📋 [useUnitApplications] Raw applications data:', data);
       
       // Filter applications for this landlord's properties
       const landlordApplications = (data || []).filter((app: any) => 
         app.properties?.landlord_id === profile?.id
       );
       
+      console.log('🏠 [useUnitApplications] Filtered applications for landlord:', landlordApplications);
+      
       setApplications(landlordApplications as UnitApplication[]);
     } catch (error) {
-      console.error('Error fetching applications:', error);
+      console.error('❌ [useUnitApplications] Error fetching applications:', error);
       toast.error('Failed to load applications');
     }
   };
@@ -294,9 +304,25 @@ export const useUnitApplications = () => {
       
       // If application is approved, create tenant and lease
       if (status === 'approved' && data) {
-        console.log('Creating tenant from application...');
-        await createTenantFromApplicationNew(data);
-        console.log('Tenant created successfully');
+        console.log('🚀 [useUnitApplications] Creating tenant from approved application...');
+        try {
+          await createTenantFromApplicationSimple(data);
+          console.log('✅ [useUnitApplications] Tenant and lease created successfully from application');
+        } catch (tenantError) {
+          console.error('❌ [useUnitApplications] Failed to create tenant from application:', tenantError);
+          // Revert application status if tenant creation failed
+          await supabase
+            .from('unit_applications')
+            .update({ 
+              status: 'pending',
+              reviewed_at: null,
+              reviewed_by: null
+            })
+            .eq('id', applicationId);
+          
+          toast.error('Failed to create tenant record. Application status reverted to pending.');
+          throw tenantError;
+        }
       }
       
       setApplications(prev => prev.map(app => app.id === applicationId ? data as UnitApplication : app));
@@ -313,6 +339,136 @@ export const useUnitApplications = () => {
     } catch (error) {
       console.error('Error updating application status:', error);
       toast.error('Failed to update application');
+      throw error;
+    }
+  };
+
+  const createTenantFromApplicationSimple = async (application: any) => {
+    try {
+      console.log('Creating tenant from application:', application);
+      
+      // Get applicant's profile information
+      const { data: applicantProfile, error: applicantError } = await supabase
+        .from('profiles')
+        .select('id, user_id, first_name, last_name, phone, email')
+        .eq('id', application.tenant_id)
+        .single();
+
+      if (applicantError) {
+        console.error('Error fetching applicant profile:', applicantError);
+        throw applicantError;
+      }
+
+      console.log('Applicant profile:', applicantProfile);
+
+      // Check if tenant already exists
+      const { data: existingTenant } = await supabase
+        .from('tenant_info')
+        .select('id')
+        .eq('profile_id', application.tenant_id)
+        .single();
+
+      if (existingTenant) {
+        console.log('Tenant already exists, skipping creation');
+        return;
+      }
+
+      // Create tenant_info record
+      const { data: tenantInfo, error: tenantError } = await supabase
+        .from('tenant_info')
+        .insert({
+          profile_id: application.tenant_id,
+          first_name: applicantProfile.first_name || 'N/A',
+          last_name: applicantProfile.last_name || 'N/A',
+          email: applicantProfile.email || `tenant-${application.tenant_id.substring(0, 8)}@example.com`,
+          phone: applicantProfile.phone || null,
+          landlord_id: application.units?.properties?.landlord_id,
+          tenant_status: 'active',
+          current_balance: application.units?.rent_amount || 0,
+          payment_status: 'unpaid',
+          auth_user_id: applicantProfile.user_id,
+          move_in_date: application.preferred_move_in_date || new Date().toISOString().split('T')[0],
+          emergency_contact_name: null,
+          emergency_contact_phone: null,
+          notes: 'Created from approved application',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (tenantError) {
+        console.error('Error creating tenant_info:', tenantError);
+        throw tenantError;
+      }
+
+      console.log('Tenant info created:', tenantInfo.id);
+
+      // Create lease record
+      const leaseStartDate = application.preferred_move_in_date || new Date().toISOString().split('T')[0];
+      const leaseEndDate = new Date(new Date(leaseStartDate).getTime() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+      const { data: lease, error: leaseError } = await supabase
+        .from('leases')
+        .insert({
+          tenant_id: tenantInfo.id,
+          tenant_info_id: tenantInfo.id,
+          unit_id: application.unit_id,
+          start_date: leaseStartDate,
+          end_date: leaseEndDate,
+          rent_amount: application.units?.rent_amount || 0,
+          deposit_amount: application.units?.deposit_amount || 0,
+          status: 'active',
+          lease_document_url: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (leaseError) {
+        console.error('Error creating lease:', leaseError);
+        throw leaseError;
+      }
+
+      console.log('Lease created:', lease.id);
+
+      // Update unit status to occupied
+      const { error: unitUpdateError } = await supabase
+        .from('units')
+        .update({ 
+          status: 'occupied',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', application.unit_id);
+
+      if (unitUpdateError) {
+        console.error('Error updating unit status:', unitUpdateError);
+        // Don't throw error here as lease was created successfully
+      } else {
+        console.log('Unit status updated to occupied');
+      }
+
+      // Send notification to tenant
+      await supabase
+        .from('notifications')
+        .insert({
+          user_id: application.tenant_id,
+          title: 'Application Approved!',
+          message: `Your application for Unit ${application.units?.unit_number} at ${application.units?.properties?.name} has been approved. Your lease has been created and you can now access your tenant portal.`,
+          type: 'application_approved',
+          data: { 
+            application_id: application.id,
+            unit_id: application.unit_id,
+            lease_id: lease.id
+          }
+        });
+
+      toast.success('Tenant and lease created successfully from application!');
+      
+    } catch (error) {
+      console.error('Error creating tenant from application:', error);
+      toast.error('Failed to create tenant from application: ' + (error as Error).message);
       throw error;
     }
   };

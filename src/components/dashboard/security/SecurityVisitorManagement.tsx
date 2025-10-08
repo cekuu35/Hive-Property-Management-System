@@ -187,8 +187,26 @@ export const SecurityVisitorManagement = () => {
   // Filter requests by type
   const tenantRequests = requests.filter(r => !r.security_id && r.status === 'pending');
   const securityRequests = requests.filter(r => r.security_id);
-  const approvedRequests = requests.filter(r => r.status === 'approved');
+  
+  // Filter approved requests that haven't been registered as visitors yet
+  const approvedRequests = requests.filter(r => {
+    if (r.status !== 'approved') return false;
+    
+    // Check if this request has already been registered as a visitor
+    const alreadyRegistered = visitors.some(v => v.visitor_request_id === r.id);
+    return !alreadyRegistered;
+  });
+  
   const activeVisitors = visitors.filter(v => v.status === 'active');
+  
+  // Filter approved requests that have already been registered as visitors
+  const registeredRequests = requests.filter(r => {
+    if (r.status !== 'approved') return false;
+    
+    // Check if this request has already been registered as a visitor
+    const alreadyRegistered = visitors.some(v => v.visitor_request_id === r.id);
+    return alreadyRegistered;
+  });
 
   if (requestsLoading || visitorsLoading || unitsLoading) {
     return (
@@ -597,6 +615,72 @@ export const SecurityVisitorManagement = () => {
                   </Button>
                 </div>
               ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Registered Requests - Already Checked In */}
+      {registeredRequests.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5" />
+              Registered Visitors
+            </CardTitle>
+            <CardDescription>Approved requests that have been checked in</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {registeredRequests.map((request) => {
+                // Find the corresponding visitor record
+                const visitor = visitors.find(v => v.visitor_request_id === request.id);
+                return (
+                  <div key={request.id} className="flex items-center justify-between p-4 border rounded-lg bg-muted/50">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-medium">{request.visitor_name}</h3>
+                        <Badge className="bg-green-100 text-green-800">
+                          Checked In
+                        </Badge>
+                        {visitor && (
+                          <Badge className={getVisitorStatusColor(visitor.status)}>
+                            {visitor.status}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Visiting: {request.tenant?.first_name} {request.tenant?.last_name}
+                      </p>
+                      <p className="text-sm text-muted-foreground">Purpose: {request.purpose}</p>
+                      {visitor && (
+                        <p className="text-sm text-muted-foreground">
+                          Checked in: {format(new Date(visitor.time_in), 'MMM d, yyyy h:mm a')}
+                        </p>
+                      )}
+                      {request.visitor_phone && (
+                        <p className="text-sm text-muted-foreground">Phone: {request.visitor_phone}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {visitor && visitor.status === 'active' && (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleCheckOut(visitor.id)}
+                        >
+                          Check Out
+                        </Button>
+                      )}
+                      {visitor && visitor.status === 'checked_out' && (
+                        <Badge variant="outline" className="text-muted-foreground">
+                          Already Checked Out
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </CardContent>
         </Card>

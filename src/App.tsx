@@ -37,6 +37,16 @@ const App = () => (
                 } 
               />
               <Route 
+                path="/applications" 
+                element={
+                  <ProtectedRoute>
+                    <ErrorBoundary>
+                      <Dashboard activeSection="applications" />
+                    </ErrorBoundary>
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
                 path="/test-role-switching" 
                 element={
                   <ProtectedRoute>

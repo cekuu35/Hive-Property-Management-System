@@ -2,9 +2,24 @@ import { LoginForm } from "@/components/auth/LoginForm";
 import { useAuth } from "@/hooks/useAuth";
 import { Navigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
 
 const Index = () => {
   const { user, loading } = useAuth();
+  const [showLogin, setShowLogin] = useState(false);
+
+  // Add a small delay to prevent flickering during logout transition
+  useEffect(() => {
+    if (!loading && !user) {
+      const timer = setTimeout(() => {
+        setShowLogin(true);
+      }, 100); // Small delay to ensure smooth transition
+      
+      return () => clearTimeout(timer);
+    } else if (user) {
+      setShowLogin(false);
+    }
+  }, [loading, user]);
 
   if (loading) {
     return (
@@ -21,7 +36,12 @@ const Index = () => {
     return <Navigate to="/dashboard" replace />;
   }
 
-  return <LoginForm />;
+  // Show login form with smooth transition
+  return (
+    <div className={`transition-opacity duration-200 ${showLogin ? 'opacity-100' : 'opacity-0'}`}>
+      <LoginForm />
+    </div>
+  );
 };
 
 export default Index;

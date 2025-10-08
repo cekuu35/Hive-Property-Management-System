@@ -61,7 +61,27 @@ export const TenantCreationForm = ({ onSuccess, onCancel }: TenantCreationFormPr
   const propertyForUnit = selectedUnit ? properties.find(p => p.id === selectedUnit.property_id) : null;
 
   // Get vacant units
-  const availableUnits = units.filter(unit => unit.status === 'vacant');
+  const availableUnits = units
+    .filter(unit => unit.status === 'vacant')
+    .sort((a, b) => {
+      // First sort by property name
+      const propertyA = properties.find(p => p.id === a.property_id);
+      const propertyB = properties.find(p => p.id === b.property_id);
+      
+      if (propertyA?.name !== propertyB?.name) {
+        return (propertyA?.name || '').localeCompare(propertyB?.name || '');
+      }
+      
+      // Then sort by unit number (treating as numbers if possible)
+      const unitNumA = parseInt(a.unit_number) || a.unit_number;
+      const unitNumB = parseInt(b.unit_number) || b.unit_number;
+      
+      if (typeof unitNumA === 'number' && typeof unitNumB === 'number') {
+        return unitNumA - unitNumB;
+      }
+      
+      return String(unitNumA).localeCompare(String(unitNumB));
+    });
 
   // Auto-fill rent and deposit when unit is selected
   useEffect(() => {

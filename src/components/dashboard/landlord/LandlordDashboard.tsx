@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Building, Users, DollarSign, TrendingUp, AlertTriangle, Plus, Loader2, Receipt } from 'lucide-react';
+import { Building, Users, DollarSign, TrendingUp, AlertTriangle, Plus, Loader2, Receipt, FileText } from 'lucide-react';
 import { PropertiesSection } from './sections/PropertiesSection';
 import { TenantsSection } from './sections/TenantsSection';
 import { FinancialsSection } from './sections/FinancialsSection';
@@ -10,14 +10,16 @@ import { ReportsSection } from './sections/ReportsSection';
 import { SettingsSection } from './sections/SettingsSection';
 import { MessagesSection } from './sections/MessagesSection';
 import { UtilityBillsManagement } from './UtilityBillsManagement';
+import { UnitApplicationsSection } from './UnitApplicationsSection';
 import { PropertyForm } from './PropertyForm';
 import { useFinancials } from '@/hooks/useFinancials';
 import { useMaintenanceRequests } from '@/hooks/useMaintenanceRequests';
 import { useProperties } from '@/hooks/useProperties';
 import { useTenants } from '@/hooks/useTenants';
 import { MetricCard } from '../MetricCard';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
+import { quickProfileIdCheck } from '@/utils/dataIntegrityCheck';
 
 interface LandlordDashboardProps {
   activeSection?: string;
@@ -29,6 +31,7 @@ const LandlordDashboard = ({ activeSection = 'dashboard', onSectionChange }: Lan
     switch (activeSection) {
       case 'properties': return <PropertiesSection />;
       case 'tenants': return <TenantsSection />;
+      case 'applications': return <UnitApplicationsSection />;
       case 'financials': return <FinancialsSection />;
       case 'utility-bills': return <UtilityBillsManagement />;
       case 'maintenance': return <MaintenanceSection />;
@@ -53,6 +56,27 @@ const DashboardOverview = ({ onSectionChange }: { onSectionChange?: (section: st
   const { tenants, loading: tenantsLoading } = useTenants();
   const [propertyFormOpen, setPropertyFormOpen] = useState(false);
 
+  // Run data integrity check on component mount
+  useEffect(() => {
+    const runIntegrityCheck = async () => {
+      try {
+        console.log('🔍 [DashboardOverview] Running data integrity check...');
+        const isDataValid = await quickProfileIdCheck();
+        
+        if (!isDataValid) {
+          console.warn('⚠️ [DashboardOverview] Data integrity issues detected and fixed automatically');
+          toast.info('Data integrity check completed - any issues have been automatically fixed');
+        } else {
+          console.log('✅ [DashboardOverview] Data integrity check passed');
+        }
+      } catch (error) {
+        console.error('❌ [DashboardOverview] Error during data integrity check:', error);
+      }
+    };
+
+    runIntegrityCheck();
+  }, []);
+
   const maintenanceStats = getStats();
 
   const handleCreateProperty = async (propertyData: any) => {
@@ -72,6 +96,9 @@ const DashboardOverview = ({ onSectionChange }: { onSectionChange?: (section: st
         break;
       case 'manage-tenants':
         onSectionChange?.('tenants');
+        break;
+      case 'view-applications':
+        onSectionChange?.('applications');
         break;
       case 'view-financials':
         onSectionChange?.('financials');
@@ -185,6 +212,14 @@ const DashboardOverview = ({ onSectionChange }: { onSectionChange?: (section: st
             >
               <Users className="h-6 w-6" />
               <span>Manage Tenants</span>
+            </Button>
+            <Button 
+              className="h-auto p-4 flex flex-col items-center gap-2" 
+              variant="outline"
+              onClick={() => handleQuickAction('view-applications')}
+            >
+              <FileText className="h-6 w-6" />
+              <span>Applications</span>
             </Button>
             <Button 
               className="h-auto p-4 flex flex-col items-center gap-2" 

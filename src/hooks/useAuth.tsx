@@ -196,8 +196,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       // Set logout flag FIRST to block all auth state changes
       isLoggingOut.current = true;
       
-      // Clear Supabase session immediately - don't wait for response
-      supabase.auth.signOut({ scope: 'local' });
+      // Clear local state immediately for smooth transition
+      setUser(null);
+      setProfile(null);
+      setLoading(false);
       
       // Clear all local storage auth data
       localStorage.removeItem('supabase.auth.token');
@@ -207,10 +209,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
       });
       
-      // Clear local state
-      setUser(null);
-      setProfile(null);
-      setLoading(false);
+      // Clear Supabase session (non-blocking)
+      supabase.auth.signOut({ scope: 'local' }).catch(console.error);
       
       console.log('Logout complete, redirecting...');
       
@@ -221,6 +221,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       console.error('Unexpected error during sign out:', error);
       // Force logout anyway
       isLoggingOut.current = true;
+      setUser(null);
+      setProfile(null);
+      setLoading(false);
       localStorage.clear();
       window.location.replace('/');
     }

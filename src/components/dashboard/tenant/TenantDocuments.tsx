@@ -13,6 +13,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
+import { TenantNotices } from './TenantNotices';
 
 interface Document {
   id: string;
@@ -395,6 +396,9 @@ export const TenantDocuments = ({ className }: TenantDocumentsProps) => {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Important Notices */}
+      <TenantNotices maxNotices={5} />
 
       {/* Filters */}
       <div className="flex gap-4 items-center">

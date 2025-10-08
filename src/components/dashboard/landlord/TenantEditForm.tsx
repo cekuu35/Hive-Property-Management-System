@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { toast } from 'sonner';
 import { supabaseAdmin } from '@/integrations/supabase/admin';
 import { Key, AlertCircle, CheckCircle, Eye } from 'lucide-react';
+import { safeUpdateTenantProfileId, validateAndCorrectProfileId } from '@/utils/profileValidation';
 
 const editTenantSchema = z.object({
   first_name: z.string().min(1, 'First name is required'),
@@ -42,6 +43,39 @@ export const TenantEditForm = ({ tenant, onSuccess, onCancel, onResetPassword }:
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [currentPassword, setCurrentPassword] = useState<string>('');
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const [hasAccount, setHasAccount] = useState<boolean | null>(null);
+
+  // Check if tenant has an account
+  const checkAccountStatus = async () => {
+    if (!tenant?.tenant_info?.email) return;
+    
+    try {
+      const { data: profileData, error: profileError } = await supabaseAdmin
+        .from('profiles')
+        .select('id, user_id, email')
+        .eq('email', tenant.tenant_info.email)
+        .single();
+
+      if (profileError) {
+        if (profileError.code === 'PGRST116') {
+          setHasAccount(false);
+        } else {
+          console.error('❌ [TenantEditForm] Error checking account status:', profileError);
+          setHasAccount(null);
+        }
+      } else {
+        setHasAccount(true);
+      }
+    } catch (error) {
+      console.error('❌ [TenantEditForm] Error checking account status:', error);
+      setHasAccount(null);
+    }
+  };
+
+  // Check account status on component mount
+  useEffect(() => {
+    checkAccountStatus();
+  }, [tenant?.tenant_info?.email]);
 
   const {
     register,
@@ -115,26 +149,57 @@ export const TenantEditForm = ({ tenant, onSuccess, onCancel, onResetPassword }:
 
   const handleShowCurrentPassword = async () => {
     console.log('🔍 [TenantEditForm] Checking password for tenant:', tenant);
-    console.log('🔍 [TenantEditForm] Profile ID:', tenant?.profile_id);
+    console.log('🔍 [TenantEditForm] Profile ID:', tenant?.tenant_info?.profile_id);
+    console.log('🔍 [TenantEditForm] Email:', tenant?.tenant_info?.email);
     
-    if (!tenant?.profile_id) {
-      toast.error('No profile ID found for this tenant. The tenant may not have an account yet.');
+    if (!tenant?.tenant_info?.email) {
+      toast.error('No email address found for this tenant');
+      return;
+    }
+
+    if (!tenant?.tenant_info?.profile_id) {
+      toast.error('No profile ID found for this tenant. Please create an account first.');
       return;
     }
 
     try {
       setPasswordLoading(true);
       
-      // First, get the user_id from the profiles table
+      // Validate and correct the profile_id if needed
+      const validProfileId = await validateAndCorrectProfileId(tenant.tenant_info.profile_id);
+      
+      if (!validProfileId) {
+        toast.error('Invalid profile ID found. Please create an account first.');
+        return;
+      }
+
+      // If the profile_id was corrected, update the tenant_info
+      if (validProfileId !== tenant.tenant_info.profile_id) {
+        console.log('🔧 [TenantEditForm] Correcting profile_id from', tenant.tenant_info.profile_id, 'to', validProfileId);
+        await safeUpdateTenantProfileId(tenant.id, validProfileId);
+      }
+      
+      // First, try to find the profile by profile_id (more reliable than email)
       const { data: profileData, error: profileError } = await supabaseAdmin
         .from('profiles')
-        .select('user_id')
-        .eq('id', tenant.profile_id)
+        .select('id, user_id, email')
+        .eq('id', validProfileId)
         .single();
 
-      if (profileError || !profileData?.user_id) {
-        console.error('❌ [TenantEditForm] Error fetching profile:', profileError);
-        toast.error('Profile not found. The tenant may not have a complete account setup.');
+      if (profileError) {
+        if (profileError.code === 'PGRST116') {
+          console.log('🔍 [TenantEditForm] No profile found for profile_id:', tenant.tenant_info.profile_id);
+          toast.error('No account found for this tenant. Please create an account first.');
+          return;
+        }
+        console.error('❌ [TenantEditForm] Error fetching profile by profile_id:', profileError);
+        toast.error('Error fetching profile. Please try again.');
+        return;
+      }
+
+      if (!profileData?.user_id) {
+        console.error('❌ [TenantEditForm] No user_id found in profile data');
+        toast.error('Profile data incomplete. Please create an account first.');
         return;
       }
 
@@ -172,15 +237,15 @@ export const TenantEditForm = ({ tenant, onSuccess, onCancel, onResetPassword }:
   const handleResetPassword = async () => {
     console.log('🔍 [TenantEditForm] Resetting password for tenant:', tenant);
     console.log('🔍 [TenantEditForm] Email:', tenant?.tenant_info?.email);
-    console.log('🔍 [TenantEditForm] Profile ID:', tenant?.profile_id);
+    console.log('🔍 [TenantEditForm] Profile ID:', tenant?.tenant_info?.profile_id);
     
     if (!tenant?.tenant_info?.email) {
       toast.error('No email address found for this tenant');
       return;
     }
 
-    if (!tenant?.profile_id) {
-      toast.error('No profile ID found for this tenant. The tenant may not have an account yet.');
+    if (!tenant?.tenant_info?.profile_id) {
+      toast.error('No profile ID found for this tenant. Please create an account first.');
       return;
     }
 
@@ -188,16 +253,41 @@ export const TenantEditForm = ({ tenant, onSuccess, onCancel, onResetPassword }:
       setResetPasswordLoading(true);
       setPasswordResetSuccess(false);
 
-      // First, get the user_id from the profiles table
+      // Validate and correct the profile_id if needed
+      const validProfileId = await validateAndCorrectProfileId(tenant.tenant_info.profile_id);
+      
+      if (!validProfileId) {
+        toast.error('Invalid profile ID found. Please create an account first.');
+        return;
+      }
+
+      // If the profile_id was corrected, update the tenant_info
+      if (validProfileId !== tenant.tenant_info.profile_id) {
+        console.log('🔧 [TenantEditForm] Correcting profile_id from', tenant.tenant_info.profile_id, 'to', validProfileId);
+        await safeUpdateTenantProfileId(tenant.id, validProfileId);
+      }
+
+      // First, try to find the profile by profile_id (more reliable than email)
       const { data: profileData, error: profileError } = await supabaseAdmin
         .from('profiles')
-        .select('user_id')
-        .eq('id', tenant.profile_id)
+        .select('id, user_id, email')
+        .eq('id', validProfileId)
         .single();
 
-      if (profileError || !profileData?.user_id) {
-        console.error('❌ [TenantEditForm] Error fetching profile:', profileError);
-        toast.error('Profile not found. The tenant may not have a complete account setup.');
+      if (profileError) {
+        if (profileError.code === 'PGRST116') {
+          console.log('🔍 [TenantEditForm] No profile found for profile_id:', tenant.tenant_info.profile_id);
+          toast.error('No account found for this tenant. Please create an account first.');
+          return;
+        }
+        console.error('❌ [TenantEditForm] Error fetching profile by profile_id:', profileError);
+        toast.error('Error fetching profile. Please try again.');
+        return;
+      }
+
+      if (!profileData?.user_id) {
+        console.error('❌ [TenantEditForm] No user_id found in profile data');
+        toast.error('Profile data incomplete. Please create an account first.');
         return;
       }
 
@@ -250,15 +340,21 @@ export const TenantEditForm = ({ tenant, onSuccess, onCancel, onResetPassword }:
       setLoading(true);
 
       // First, check if an auth user already exists for this email
+      console.log('🔍 [TenantEditForm] Checking for existing auth user with email:', tenant.tenant_info.email);
+      
       const { data: existingUsers, error: userCheckError } = await supabaseAdmin.auth.admin.listUsers();
       
       let existingUser = null;
       if (!userCheckError && existingUsers?.users) {
         existingUser = existingUsers.users.find(user => user.email === tenant.tenant_info.email);
+        console.log('🔍 [TenantEditForm] Found existing user:', existingUser ? existingUser.id : 'None');
+      } else {
+        console.log('🔍 [TenantEditForm] Error fetching users or no users found:', userCheckError);
       }
 
       let authUserId;
       let tempPassword = '';
+      let profileId; // Declare profileId at function level
 
       if (existingUser) {
         console.log('✅ [TenantEditForm] Auth user already exists for this email:', existingUser.id);
@@ -280,16 +376,48 @@ export const TenantEditForm = ({ tenant, onSuccess, onCancel, onResetPassword }:
 
         console.log('✅ [TenantEditForm] Password updated for existing user');
         
-        // Check if profile exists for this user
+        // Check if profile already exists for this user_id
+        console.log('🔍 [TenantEditForm] Checking for existing profile for user:', authUserId);
+        
         const { data: existingProfile, error: profileCheckError } = await supabaseAdmin
           .from('profiles')
-          .select('id, user_id')
+          .select('id, user_id, role, first_name, last_name')
           .eq('user_id', authUserId)
           .single();
 
-        if (!existingProfile && !profileCheckError) {
-          // Create profile for existing user
-          const { data: profile, error: profileError } = await supabaseAdmin
+        console.log('🔍 [TenantEditForm] Profile check result:', { 
+          existingProfile, 
+          profileCheckError,
+          errorCode: profileCheckError?.code,
+          errorMessage: profileCheckError?.message
+        });
+
+        if (existingProfile) {
+          console.log('✅ [TenantEditForm] Profile already exists, updating info:', existingProfile.id);
+          
+          // Update the existing profile with tenant info
+          const { error: updateError } = await supabaseAdmin
+            .from('profiles')
+            .update({
+              role: 'tenant',
+              first_name: tenant.tenant_info.first_name,
+              last_name: tenant.tenant_info.last_name,
+              phone: tenant.tenant_info.phone
+            })
+            .eq('id', existingProfile.id);
+
+          if (updateError) {
+            console.error('❌ [TenantEditForm] Error updating existing profile:', updateError);
+            throw updateError;
+          }
+
+          console.log('✅ [TenantEditForm] Profile updated successfully');
+          profileId = existingProfile.id; // Set profileId for existing profile
+        } else if (profileCheckError && profileCheckError.code === 'PGRST116') {
+          // No profile exists, create new one
+          console.log('🔍 [TenantEditForm] No profile found (PGRST116), creating new one for user:', authUserId);
+          
+          const { data: newProfile, error: insertError } = await supabaseAdmin
             .from('profiles')
             .insert({
               id: authUserId,
@@ -302,14 +430,17 @@ export const TenantEditForm = ({ tenant, onSuccess, onCancel, onResetPassword }:
             .select()
             .single();
 
-          if (profileError) {
-            console.error('❌ [TenantEditForm] Error creating profile for existing user:', profileError);
-            throw profileError;
+          if (insertError) {
+            console.error('❌ [TenantEditForm] Error creating profile for existing user:', insertError);
+            throw insertError;
           }
 
-          console.log('✅ [TenantEditForm] Profile created for existing user:', profile.id);
-        } else if (existingProfile) {
-          console.log('✅ [TenantEditForm] Profile already exists for user:', existingProfile.id);
+          console.log('✅ [TenantEditForm] Profile created for existing user:', newProfile.id);
+          profileId = newProfile.id; // Set profileId for new profile
+        } else {
+          // Some other error occurred
+          console.error('❌ [TenantEditForm] Unexpected error checking profile:', profileCheckError);
+          throw profileCheckError;
         }
       } else {
         // Create new auth user and profile
@@ -339,48 +470,96 @@ export const TenantEditForm = ({ tenant, onSuccess, onCancel, onResetPassword }:
         authUserId = authData.user.id;
         console.log('✅ [TenantEditForm] Auth user created:', authUserId);
 
-        // Create profile record for the tenant
-        const { data: profile, error: profileError } = await supabaseAdmin
+        // Check if profile already exists for this user_id (in case it was created elsewhere)
+        console.log('🔍 [TenantEditForm] Checking for existing profile for new user:', authUserId);
+        
+        const { data: existingProfile, error: profileCheckError } = await supabaseAdmin
           .from('profiles')
-          .insert({
-            id: authUserId, // Use auth user ID as profile ID
-            user_id: authUserId,
-            role: 'tenant',
-            first_name: tenant.tenant_info.first_name,
-            last_name: tenant.tenant_info.last_name,
-            phone: tenant.tenant_info.phone
-          })
-          .select()
+          .select('id, user_id, role, first_name, last_name')
+          .eq('user_id', authUserId)
           .single();
 
-        if (profileError) {
-          console.error('❌ [TenantEditForm] Error creating profile:', profileError);
-          // Clean up auth user if profile creation fails
+        console.log('🔍 [TenantEditForm] Profile check result for new user:', { 
+          existingProfile, 
+          profileCheckError,
+          errorCode: profileCheckError?.code,
+          errorMessage: profileCheckError?.message
+        });
+
+        if (existingProfile) {
+          console.log('✅ [TenantEditForm] Profile already exists for new user, updating:', existingProfile.id);
+          
+          // Update the existing profile with tenant info
+          const { error: updateError } = await supabaseAdmin
+            .from('profiles')
+            .update({
+              role: 'tenant',
+              first_name: tenant.tenant_info.first_name,
+              last_name: tenant.tenant_info.last_name,
+              phone: tenant.tenant_info.phone
+            })
+            .eq('id', existingProfile.id);
+
+          if (updateError) {
+            console.error('❌ [TenantEditForm] Error updating existing profile for new user:', updateError);
+            throw updateError;
+          }
+
+          console.log('✅ [TenantEditForm] Profile updated for new user successfully');
+          profileId = existingProfile.id; // Set profileId for existing profile in new user case
+        } else if (profileCheckError && profileCheckError.code === 'PGRST116') {
+          // No profile exists, create new one
+          console.log('🔍 [TenantEditForm] No profile found for new user, creating one:', authUserId);
+          
+          const { data: profile, error: profileError } = await supabaseAdmin
+            .from('profiles')
+            .insert({
+              id: authUserId, // Use auth user ID as profile ID
+              user_id: authUserId,
+              role: 'tenant',
+              first_name: tenant.tenant_info.first_name,
+              last_name: tenant.tenant_info.last_name,
+              phone: tenant.tenant_info.phone
+            })
+            .select()
+            .single();
+
+          if (profileError) {
+            console.error('❌ [TenantEditForm] Error creating profile for new user:', profileError);
+            // Clean up auth user if profile creation fails
+            await supabaseAdmin.auth.admin.deleteUser(authUserId);
+            throw profileError;
+          }
+
+          console.log('✅ [TenantEditForm] Profile created for new user:', profile.id);
+          profileId = profile.id; // Set profileId for new profile
+        } else {
+          // Some other error occurred
+          console.error('❌ [TenantEditForm] Unexpected error checking profile for new user:', profileCheckError);
+          // Clean up auth user
           await supabaseAdmin.auth.admin.deleteUser(authUserId);
-          throw profileError;
+          throw profileCheckError;
         }
-
-        console.log('✅ [TenantEditForm] Profile created:', profile.id);
       }
 
-      // Update tenant_info record with profile_id
-      const { error: tenantUpdateError } = await supabaseAdmin
-        .from('tenant_info')
-        .update({ profile_id: authUserId })
-        .eq('id', tenant.id);
+      // Update tenant_info record with profile_id (use safe validation to prevent mismatches)
+      const updateSuccess = await safeUpdateTenantProfileId(tenant.id, profileId);
 
-      if (tenantUpdateError) {
-        console.error('❌ [TenantEditForm] Error updating tenant_info:', tenantUpdateError);
-        throw tenantUpdateError;
+      if (!updateSuccess) {
+        console.error('❌ [TenantEditForm] Failed to update tenant_info with profile_id');
+        throw new Error('Failed to update tenant profile_id - validation failed');
       }
 
-      console.log('✅ [TenantEditForm] Tenant info updated with profile_id');
+      console.log('✅ [TenantEditForm] Tenant info updated with validated profile_id:', profileId);
 
       // Show the credentials
       setCurrentPassword(tempPassword);
       setShowCurrentPassword(true);
       
       toast.success('Account created successfully! Credentials generated.');
+      
+      // Refresh account status
+      setHasAccount(true);
       
       // Refresh the tenant data to show the new profile_id
       onSuccess();
@@ -645,7 +824,7 @@ export const TenantEditForm = ({ tenant, onSuccess, onCancel, onResetPassword }:
         </Card>
 
         {/* Create Account Section for Tenants Without Profiles */}
-        {!tenant?.profile_id && (
+        {hasAccount === false && (
           <Card className="border-orange-200 bg-orange-50">
             <CardHeader>
               <CardTitle className="text-orange-800 flex items-center gap-2">
