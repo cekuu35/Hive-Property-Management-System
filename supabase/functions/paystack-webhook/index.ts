@@ -127,22 +127,60 @@ async function processUtilityBillPayment(supabaseAdmin: any, reference: string, 
       return
     }
 
-    // Create a payment record
-    const { error: paymentError } = await supabaseAdmin
-      .from('rent_payments')
-      .insert({
-        lease_id: null, // Utility bills don't have lease_id
-        amount: amount / 100, // Convert from kobo
-        payment_method: 'card',
-        transaction_reference: reference,
-        status: 'paid',
-        paid_date: new Date().toISOString(),
-        due_date: new Date().toISOString(),
-        notes: `Utility bill payment - Reference: ${reference}`
-      })
+    // Find the tenant's active lease for payment record
+    let leaseId = null
+    const { data: lease } = await supabaseAdmin
+      .from('leases')
+      .select('id')
+      .eq('tenant_id', tenant_id)
+      .eq('status', 'active')
+      .single()
 
-    if (paymentError) {
-      console.error('Error creating payment record:', paymentError)
+    if (lease) {
+      leaseId = lease.id
+    } else {
+      // Try to find via tenant_info if direct tenant_id lookup fails
+      const { data: tenantInfo } = await supabaseAdmin
+        .from('tenant_info')
+        .select('id')
+        .eq('profile_id', tenant_id)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+
+      if (tenantInfo && tenantInfo.length > 0) {
+        const { data: leaseByTenantInfo } = await supabaseAdmin
+          .from('leases')
+          .select('id')
+          .eq('tenant_info_id', tenantInfo[0].id)
+          .eq('status', 'active')
+          .single()
+
+        if (leaseByTenantInfo) {
+          leaseId = leaseByTenantInfo.id
+        }
+      }
+    }
+
+    // Create a payment record only if we found a lease
+    if (leaseId) {
+      const { error: paymentError } = await supabaseAdmin
+        .from('rent_payments')
+        .insert({
+          lease_id: leaseId,
+          amount: amount / 100, // Convert from kobo
+          payment_method: 'card',
+          transaction_reference: reference,
+          status: 'paid',
+          paid_date: new Date().toISOString(),
+          due_date: new Date().toISOString(),
+          notes: `Utility bill payment - Reference: ${reference}`
+        })
+
+      if (paymentError) {
+        console.error('Error creating payment record:', paymentError)
+      }
+    } else {
+      console.log('No active lease found for tenant, skipping payment record creation')
     }
 
     // Send notification to tenant
