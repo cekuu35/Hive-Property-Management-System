@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { 
   Calendar, MapPin, DollarSign, FileText, Clock, 
-  CheckCircle, XCircle, AlertCircle, Home, Eye, CreditCard
+  CheckCircle, XCircle, AlertCircle, Home, Eye, CreditCard, Building2
 } from 'lucide-react';
 import { useUnitApplications } from '@/hooks/useUnitApplications';
 import { format } from 'date-fns';
@@ -12,7 +12,11 @@ import { DepositPaymentModal } from './DepositPaymentModal';
 import { ApplicationDetailsModal } from './ApplicationDetailsModal';
 import { useState } from 'react';
 
-export const MyApplications = () => {
+interface MyApplicationsProps {
+  onTabChange?: (tab: string) => void;
+}
+
+export const MyApplications = ({ onTabChange }: MyApplicationsProps) => {
   const { applications, loading, withdrawApplication, paySecurityDeposit } = useUnitApplications();
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
@@ -78,7 +82,10 @@ export const MyApplications = () => {
           <p className="text-muted-foreground mb-4">
             You haven't submitted any unit applications yet. Browse available units to get started.
           </p>
-          <Button>Browse Units</Button>
+          <Button onClick={() => onTabChange?.('browse-units')}>
+            <Building2 className="h-4 w-4 mr-2" />
+            Browse Units
+          </Button>
         </CardContent>
       </Card>
     );

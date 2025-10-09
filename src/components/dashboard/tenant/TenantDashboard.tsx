@@ -417,7 +417,7 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
         {/* My Applications Tab */}
         {activeTab === "my-applications" && (
           <div className="space-y-6">
-            <MyApplications />
+            <MyApplications onTabChange={onTabChange} />
           </div>
         )}
 
