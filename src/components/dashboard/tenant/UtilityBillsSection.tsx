@@ -20,6 +20,7 @@ import {
 import { useUtilityBills } from '@/hooks/useUtilityBills';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { UtilityBillPaymentModal } from './UtilityBillPaymentModal';
 
 const getUtilityIcon = (utilityName: string) => {
   switch (utilityName.toLowerCase()) {
@@ -47,10 +48,12 @@ const getStatusBadge = (status: string) => {
 };
 
 export const UtilityBillsSection = () => {
-  const { bills, loading, error, payBill, getTotals, fetchTenantBills } = useUtilityBills();
+  const { bills, loading, error, prepareBillPayment, handleBillPaymentSuccess, getTotals, fetchTenantBills } = useUtilityBills();
   const [payingBillId, setPayingBillId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [previousTotals, setPreviousTotals] = useState<any>(null);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [paymentData, setPaymentData] = useState<any>(null);
   const { toast } = useToast();
 
   const totals = getTotals();
@@ -129,16 +132,28 @@ export const UtilityBillsSection = () => {
   const handlePayBill = async (billId: string) => {
     try {
       setPayingBillId(billId);
-      await payBill(billId);
-      // Refresh bills after payment initiation
-      setTimeout(() => {
-        fetchTenantBills();
-      }, 2000); // Wait 2 seconds for webhook to process
+      const paymentInfo = await prepareBillPayment(billId);
+      setPaymentData(paymentInfo);
+      setPaymentModalOpen(true);
     } catch (error) {
-      console.error('Payment error:', error);
+      console.error('Payment preparation error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to prepare payment. Please try again.",
+        variant: "destructive"
+      });
     } finally {
       setPayingBillId(null);
     }
+  };
+
+  const handlePaymentSuccess = async (reference: string, billId: string) => {
+    const success = await handleBillPaymentSuccess(reference, billId);
+    if (success) {
+      setPaymentModalOpen(false);
+      setPaymentData(null);
+    }
+    return success;
   };
 
   const handleRefresh = async () => {
@@ -444,6 +459,17 @@ export const UtilityBillsSection = () => {
           </Tabs>
         </CardContent>
       </Card>
+
+      {/* Payment Modal */}
+      <UtilityBillPaymentModal
+        isOpen={paymentModalOpen}
+        onClose={() => {
+          setPaymentModalOpen(false);
+          setPaymentData(null);
+        }}
+        paymentData={paymentData}
+        onSuccess={handlePaymentSuccess}
+      />
     </div>
   );
 };

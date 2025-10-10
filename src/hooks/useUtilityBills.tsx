@@ -245,33 +245,76 @@ export const useUtilityBills = () => {
     }
   };
 
-  // Pay a bill (tenant only)
-  const payBill = async (billId: string) => {
+  // Prepare bill payment data (tenant only) - returns data for Paystack modal
+  const prepareBillPayment = async (billId: string) => {
     try {
+      // Find the bill
+      const bill = bills.find(b => b.id === billId);
+      if (!bill) {
+        throw new Error('Bill not found');
+      }
+
+      // Get user profile for email
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) {
+        throw new Error('User email not found');
+      }
+
+      // Generate payment reference
+      const reference = `utility_${billId}_${Date.now()}`;
+
+      return {
+        billId: bill.id,
+        amount: bill.amount,
+        email: user.email,
+        reference: reference,
+        utilityName: bill.utilities?.name || 'Utility',
+        dueDate: bill.due_date
+      };
+    } catch (err) {
+      console.error('Error preparing bill payment:', err);
+      toast.error(err instanceof Error ? err.message : 'Failed to prepare payment');
+      throw err;
+    }
+  };
+
+  // Handle successful bill payment
+  const handleBillPaymentSuccess = async (reference: string, billId: string) => {
+    try {
+      console.log('Processing utility bill payment:', { reference, billId });
+
       const { data: { session } } = await supabase.auth.getSession();
+      const supabaseUrl = "https://kozhlejudselgtmohdfm.supabase.co";
       
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://kozhlejudselgtmohdfm.supabase.co";
-      
-      const response = await fetch(`${supabaseUrl}/functions/v1/utility-bills/api/paystack/initiate-bill-payment`, {
+      // Call verify-payment edge function to update bill status
+      const verifyResponse = await fetch(`${supabaseUrl}/functions/v1/verify-payment`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`
         },
-        body: JSON.stringify({ bill_id: billId })
+        body: JSON.stringify({
+          reference: reference,
+          type: 'utility',
+          bill_id: billId
+        })
       });
 
-      const result = await response.json();
+      const verifyResult = await verifyResponse.json();
 
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to initiate payment');
+      if (!verifyResponse.ok || !verifyResult.success) {
+        throw new Error(verifyResult.error || 'Payment verification failed');
       }
 
-      // Redirect to Paystack
-      window.location.href = result.authorization_url;
+      toast.success(`Payment successful! Your ${verifyResult.bill?.utility_name || 'utility'} bill has been paid.`);
+      
+      // Refresh bills to show updated status
+      await fetchTenantBills();
+      
+      return true;
     } catch (err) {
-      console.error('Error paying bill:', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to initiate payment');
+      console.error('Error processing bill payment:', err);
+      toast.error(err instanceof Error ? err.message : 'Failed to process payment');
       throw err;
     }
   };
@@ -351,7 +394,8 @@ export const useUtilityBills = () => {
     createBill,
     updateBill,
     deleteBill,
-    payBill,
+    prepareBillPayment,
+    handleBillPaymentSuccess,
     fetchTenantBills,
     fetchLandlordBills,
     fetchUtilities,
