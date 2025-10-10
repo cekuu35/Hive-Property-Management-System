@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { supabaseAdmin } from '@/integrations/supabase/admin';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -65,54 +64,40 @@ export const PaymentCallback = () => {
 
   const processUtilityBillPayment = async (billId: string) => {
     try {
-      // Get bill details using supabaseAdmin to bypass RLS
-      const { data: bill, error: billError } = await supabaseAdmin
-        .from('unit_bills')
-        .select(`
-          id,
-          amount,
-          due_date,
-          status,
-          utilities!unit_bills_utility_id_fkey (name),
-          units!unit_bills_unit_id_fkey (
-            unit_number,
-            properties!units_property_id_fkey (name)
-          )
-        `)
-        .eq('id', billId)
-        .single();
-
-      if (billError || !bill) {
-        throw new Error('Utility bill not found');
-      }
-
-      if ((bill as any).status === 'paid') {
-        setStatus('success');
-        setMessage('This utility bill has already been paid!');
-        return;
-      }
-
-      // Update bill status to paid using supabaseAdmin
-      const { error: updateError } = await supabaseAdmin
-        .from('unit_bills')
-        .update({
-          status: 'paid',
-          paystack_reference: reference,
-          updated_at: new Date().toISOString()
+      // Verify payment with Paystack first
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://kozhlejudselgtmohdfm.supabase.co";
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // Call verify-payment edge function which has admin privileges
+      const verifyResponse = await fetch(`${supabaseUrl}/functions/v1/verify-payment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          reference: reference,
+          type: 'utility',
+          bill_id: billId
         })
-        .eq('id', billId);
+      });
 
-      if (updateError) {
-        throw new Error('Failed to update bill status');
+      const verifyResult = await verifyResponse.json();
+
+      if (!verifyResponse.ok || !verifyResult.success) {
+        throw new Error(verifyResult.error || 'Payment verification failed');
       }
+
+      // Get updated bill details for display
+      const bill = verifyResult.bill;
 
       setPaymentDetails({
-        amount: (bill as any).amount,
+        amount: bill.amount,
         reference: reference,
         date: new Date().toLocaleDateString(),
         type: 'utility',
-        utility: (bill as any).utilities.name,
-        unit: `${(bill as any).units.properties.name} - Unit ${(bill as any).units.unit_number}`
+        utility: bill.utility_name,
+        unit: bill.unit_info
       });
 
       setStatus('success');
@@ -120,12 +105,8 @@ export const PaymentCallback = () => {
 
       toast({
         title: "Payment Successful!",
-        description: `Your ${(bill as any).utilities.name} bill of KES ${(bill as any).amount.toLocaleString()} has been processed.`,
+        description: `Your ${bill.utility_name} bill of KES ${bill.amount.toLocaleString()} has been processed.`,
       });
-
-      // Set a flag to indicate payment was processed
-      localStorage.setItem('utility_payment_processed', 'true');
-      localStorage.setItem('utility_payment_timestamp', Date.now().toString());
 
       // Redirect to dashboard after 3 seconds
       setTimeout(() => {
@@ -155,7 +136,7 @@ export const PaymentCallback = () => {
       tenantInfoId = leaseByProfile.tenant_info_id;
     } else {
       // Try to find via tenant_info
-      const { data: tenantInfo } = await supabaseAdmin
+      const { data: tenantInfo } = await supabase
         .from('tenant_info')
         .select('id')
         .eq('profile_id', profile.id)
@@ -163,7 +144,7 @@ export const PaymentCallback = () => {
         .limit(1);
 
       if (tenantInfo && tenantInfo.length > 0) {
-        const { data: leaseData } = await supabaseAdmin
+        const { data: leaseData } = await supabase
           .from('leases')
           .select('id, tenant_info_id, rent_amount')
           .eq('tenant_info_id', tenantInfo[0].id)
@@ -187,11 +168,12 @@ export const PaymentCallback = () => {
       (leaseByProfile?.rent_amount || 0);
 
     // Record the payment in rent_payments table
-    const { data: paymentRecord, error: paymentError } = await supabaseAdmin
+    const { data: paymentRecord, error: paymentError } = await supabase
       .from('rent_payments')
       .insert({
         lease_id: leaseId,
         amount: amount,
+        due_date: new Date().toISOString().split('T')[0], // Current date as due date
         paid_date: new Date().toISOString(),
         status: 'paid',
         payment_method: 'paystack',
@@ -207,7 +189,7 @@ export const PaymentCallback = () => {
     }
 
     // Update tenant_info balance
-    const { error: balanceError } = await supabaseAdmin
+    const { error: balanceError } = await supabase
       .from('tenant_info')
       .update({
         current_balance: 0, // Set balance to 0 after payment
