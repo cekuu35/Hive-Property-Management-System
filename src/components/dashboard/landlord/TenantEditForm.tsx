@@ -340,13 +340,14 @@ export const TenantEditForm = ({ tenant, onSuccess, onCancel, onResetPassword }:
       setLoading(true);
 
       // First, check if an auth user already exists for this email
-      console.log('🔍 [TenantEditForm] Checking for existing auth user with email:', tenant.tenant_info.email);
+      const tenantEmail = tenant?.tenant_info?.email;
+      console.log('🔍 [TenantEditForm] Checking for existing auth user with email:', tenantEmail);
       
       const { data: existingUsers, error: userCheckError } = await supabaseAdmin.auth.admin.listUsers();
       
       let existingUser = null;
-      if (!userCheckError && existingUsers?.users) {
-        existingUser = existingUsers.users.find(user => user.email === tenant.tenant_info.email);
+      if (!userCheckError && existingUsers?.users && tenantEmail) {
+        existingUser = existingUsers.users.find(user => user.email === tenantEmail);
         console.log('🔍 [TenantEditForm] Found existing user:', existingUser ? existingUser.id : 'None');
       } else {
         console.log('🔍 [TenantEditForm] Error fetching users or no users found:', userCheckError);

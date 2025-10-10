@@ -52,7 +52,15 @@ export async function checkAndFixAllProfileIds(): Promise<{
     console.log(`📋 [DataIntegrityCheck] Checking ${tenants.length} tenants with profile_id`);
 
     for (const tenant of tenants) {
-      const detail = {
+      const detail: {
+        tenantId: any;
+        tenantName: string;
+        email: any;
+        originalProfileId: any;
+        correctedProfileId: string | null;
+        status: 'valid' | 'fixed' | 'error';
+        error?: string;
+      } = {
         tenantId: tenant.id,
         tenantName: `${tenant.first_name} ${tenant.last_name}`,
         email: tenant.email,

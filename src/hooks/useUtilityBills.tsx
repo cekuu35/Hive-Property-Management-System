@@ -6,13 +6,16 @@ import { toast } from 'sonner';
 export interface UtilityBill {
   id: string;
   unit_id: string;
-  utility_name: string;
+  utility_id: string;
   month: string;
   amount: number;
   due_date: string;
   status: 'unpaid' | 'paid' | 'overdue';
   paystack_reference?: string;
   created_at: string;
+  utilities?: {
+    name: string;
+  };
 }
 
 export interface LandlordBill extends UtilityBill {

@@ -41,7 +41,7 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <ErrorBoundary>
-                      <Dashboard activeSection="applications" />
+                      <Dashboard />
                     </ErrorBoundary>
                   </ProtectedRoute>
                 } 

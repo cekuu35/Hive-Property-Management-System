@@ -163,9 +163,9 @@ export const useTenantNotices = () => {
     const notices: TenantNotice[] = [];
     const today = new Date();
 
-    // Get unpaid utility bills
+    // Get unpaid utility bills - cast to any to avoid type errors
     const { data: unpaidBills } = await supabase
-      .from('unit_bills')
+      .from('unit_bills' as any)
       .select(`
         id,
         amount,
@@ -177,11 +177,11 @@ export const useTenantNotices = () => {
           properties!units_property_id_fkey (name)
         )
       `)
-      .eq('tenant_info_id', tenantInfoId)
+      .eq('tenant_id', tenantInfoId)
       .eq('status', 'unpaid');
 
-    if (unpaidBills) {
-      for (const bill of unpaidBills) {
+    if (unpaidBills && Array.isArray(unpaidBills)) {
+      for (const bill of unpaidBills as any[]) {
         const dueDate = new Date(bill.due_date);
         const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
         const isOverdue = daysUntilDue < 0;

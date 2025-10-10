@@ -93,12 +93,12 @@ export const CreateBillModal = ({ open, onOpenChange, onSuccess }: CreateBillMod
         .find(u => u.id === watchedUnitId);
       
       if (unit) {
-        // Find tenant for this unit
+        // Find tenant for this unit - check if tenant has an active lease for this unit
         const tenant = tenants.find(t => 
-          t.tenant_info.unit_id === watchedUnitId
+          t.units?.id === watchedUnitId
         );
         
-        if (tenant) {
+        if (tenant && tenant.tenant_info) {
           setValue('tenant_id', tenant.tenant_info.id);
           setSelectedTenant(tenant.tenant_info.id);
         } else {
