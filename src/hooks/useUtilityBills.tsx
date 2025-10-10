@@ -299,6 +299,43 @@ export const useUtilityBills = () => {
     fetchUtilities();
   }, [profile?.id, profile?.role]);
 
+  // Subscribe to real-time updates on unit_bills table
+  useEffect(() => {
+    if (!profile?.id) return;
+
+    console.log('🔔 [useUtilityBills] Setting up realtime subscription');
+
+    const channel = supabase
+      .channel('unit_bills_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+          schema: 'public',
+          table: 'unit_bills'
+        },
+        (payload) => {
+          console.log('🔔 [useUtilityBills] Realtime update received:', payload);
+          
+          // Refresh bills when any change occurs
+          if (profile?.role === 'tenant') {
+            console.log('🔄 Refreshing tenant bills due to realtime update');
+            fetchTenantBills();
+          } else if (profile?.role === 'landlord') {
+            console.log('🔄 Refreshing landlord bills due to realtime update');
+            fetchLandlordBills();
+          }
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription on unmount
+    return () => {
+      console.log('🔕 [useUtilityBills] Cleaning up realtime subscription');
+      supabase.removeChannel(channel);
+    };
+  }, [profile?.id, profile?.role]);
+
   return {
     // Data
     bills,
