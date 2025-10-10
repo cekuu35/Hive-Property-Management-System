@@ -163,55 +163,63 @@ export const useTenantNotices = () => {
     const notices: TenantNotice[] = [];
     const today = new Date();
 
-    // Get unpaid utility bills - cast to any to avoid type errors
-    const { data: unpaidBills } = await supabase
-      .from('unit_bills' as any)
-      .select(`
-        id,
-        amount,
-        due_date,
-        status,
-        utilities!unit_bills_utility_id_fkey (name),
-        units!unit_bills_unit_id_fkey (
-          unit_number,
-          properties!units_property_id_fkey (name)
-        )
-      `)
-      .eq('tenant_id', tenantInfoId)
-      .eq('status', 'unpaid');
+    try {
+      // Get unpaid utility bills with simplified query and explicit type casting
+      const { data: unpaidBills, error } = await (supabase as any)
+        .from('unit_bills')
+        .select('id, amount, due_date, status, utility_id, unit_id')
+        .eq('tenant_id', tenantInfoId)
+        .eq('status', 'unpaid');
 
-    if (unpaidBills && Array.isArray(unpaidBills)) {
-      for (const bill of unpaidBills as any[]) {
-        const dueDate = new Date(bill.due_date);
-        const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        const isOverdue = daysUntilDue < 0;
+      if (error) {
+        console.error('Error fetching utility bills:', error);
+        return notices;
+      }
 
-        if (isOverdue) {
-          notices.push({
-            id: `utility_overdue_${bill.id}`,
-            title: 'Utility Bill Overdue',
-            message: `Your ${bill.utilities?.name} bill for ${bill.units?.properties?.name} Unit ${bill.units?.unit_number} is overdue by ${Math.abs(daysUntilDue)} days.`,
-            type: 'utility_overdue',
-            priority: 'high',
-            due_date: bill.due_date,
-            amount: bill.amount,
-            created_at: new Date().toISOString(),
-            is_read: false
-          });
-        } else if (daysUntilDue <= 3) {
-          notices.push({
-            id: `utility_due_${bill.id}`,
-            title: 'Utility Bill Due Soon',
-            message: `Your ${bill.utilities?.name} bill for ${bill.units?.properties?.name} Unit ${bill.units?.unit_number} is due in ${daysUntilDue} day${daysUntilDue === 1 ? '' : 's'}.`,
-            type: 'utility_due',
-            priority: 'medium',
-            due_date: bill.due_date,
-            amount: bill.amount,
-            created_at: new Date().toISOString(),
-            is_read: false
-          });
+      if (unpaidBills && Array.isArray(unpaidBills)) {
+        for (const bill of unpaidBills) {
+          // Fetch utility name separately
+          const { data: utility } = await (supabase as any)
+            .from('utilities')
+            .select('name')
+            .eq('id', bill.utility_id)
+            .single();
+
+          const dueDate = new Date(bill.due_date);
+          const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+          const isOverdue = daysUntilDue < 0;
+
+          const utilityName = utility?.name || 'Utility';
+
+          if (isOverdue) {
+            notices.push({
+              id: `utility_overdue_${bill.id}`,
+              title: 'Utility Bill Overdue',
+              message: `Your ${utilityName} bill is overdue by ${Math.abs(daysUntilDue)} days.`,
+              type: 'utility_overdue',
+              priority: 'high',
+              due_date: bill.due_date,
+              amount: bill.amount,
+              created_at: new Date().toISOString(),
+              is_read: false
+            });
+          } else if (daysUntilDue <= 3) {
+            notices.push({
+              id: `utility_due_${bill.id}`,
+              title: 'Utility Bill Due Soon',
+              message: `Your ${utilityName} bill is due in ${daysUntilDue} day${daysUntilDue === 1 ? '' : 's'}.`,
+              type: 'utility_due',
+              priority: 'medium',
+              due_date: bill.due_date,
+              amount: bill.amount,
+              created_at: new Date().toISOString(),
+              is_read: false
+            });
+          }
         }
       }
+    } catch (err) {
+      console.error('Error generating utility notices:', err);
     }
 
     return notices;
@@ -220,27 +228,31 @@ export const useTenantNotices = () => {
   const generateMaintenanceNotices = async (tenantInfoId: string): Promise<TenantNotice[]> => {
     const notices: TenantNotice[] = [];
 
-    // Get pending maintenance requests
-    const { data: pendingRequests } = await supabase
-      .from('maintenance_requests')
-      .select('id, title, description, status, created_at')
-      .eq('tenant_info_id', tenantInfoId)
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false })
-      .limit(3);
+    try {
+      // Get pending maintenance requests with explicit type casting
+      const { data: pendingRequests } = await (supabase as any)
+        .from('maintenance_requests')
+        .select('id, title, description, status, created_at')
+        .eq('tenant_info_id', tenantInfoId)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .limit(3);
 
-    if (pendingRequests) {
-      for (const request of pendingRequests) {
-        notices.push({
-          id: `maintenance_${request.id}`,
-          title: 'Maintenance Request Pending',
-          message: `Your maintenance request "${request.title}" is still pending review.`,
-          type: 'maintenance',
-          priority: 'low',
-          created_at: request.created_at,
-          is_read: false
-        });
+      if (pendingRequests) {
+        for (const request of pendingRequests) {
+          notices.push({
+            id: `maintenance_${request.id}`,
+            title: 'Maintenance Request Pending',
+            message: `Your maintenance request "${request.title}" is still pending review.`,
+            type: 'maintenance',
+            priority: 'low',
+            created_at: request.created_at,
+            is_read: false
+          });
+        }
       }
+    } catch (err) {
+      console.error('Error generating maintenance notices:', err);
     }
 
     return notices;

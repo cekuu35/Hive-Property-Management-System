@@ -52,13 +52,22 @@ export const TenantPaymentModal = ({ open, onOpenChange, rentAmount, dueDate, on
     try {
       setLoading(true);
       
-      // Comprehensive lease lookup - try multiple approaches
+      // Comprehensive lease lookup - get landlord_id through unit -> property relationship
       let { data: lease } = await supabase
         .from('leases')
-        .select('id, landlord_id')
+        .select(`
+          id,
+          unit_id,
+          units!inner (
+            property_id,
+            properties!inner (
+              landlord_id
+            )
+          )
+        `)
         .eq('tenant_id', profile?.id)
         .eq('status', 'active')
-        .maybeSingle();
+        .maybeSingle() as any;
 
       if (!lease && profile?.id) {
         // Fallback: Try by tenant_info.profile_id -> tenant_info.id -> leases.tenant_info_id
@@ -71,10 +80,19 @@ export const TenantPaymentModal = ({ open, onOpenChange, rentAmount, dueDate, on
         if (tenantInfo) {
           const { data: leaseByTenantInfo } = await supabase
             .from('leases')
-            .select('id, landlord_id')
+            .select(`
+              id,
+              unit_id,
+              units!inner (
+                property_id,
+                properties!inner (
+                  landlord_id
+                )
+              )
+            `)
             .eq('tenant_info_id', tenantInfo.id)
             .eq('status', 'active')
-            .maybeSingle();
+            .maybeSingle() as any;
           
           lease = leaseByTenantInfo;
         }
@@ -113,7 +131,7 @@ export const TenantPaymentModal = ({ open, onOpenChange, rentAmount, dueDate, on
           type: 'rent',
           lease_id: lease.id,
           tenant_id: profile?.id,
-          landlord_id: lease.landlord_id
+          landlord_id: lease.units?.properties?.landlord_id
         },
         onSuccess: function() {
           // Background processing
