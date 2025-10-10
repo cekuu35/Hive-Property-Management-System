@@ -37,10 +37,20 @@ Deno.serve(async (req) => {
       error: userError,
     } = await supabaseClient.auth.getUser();
 
+    console.log('Authentication check:', {
+      hasUser: !!user,
+      userError: userError?.message,
+      authHeader: req.headers.get('Authorization')?.substring(0, 20) + '...'
+    });
+
     if (userError || !user) {
       console.error('Authentication error:', userError);
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
+        JSON.stringify({ 
+          error: 'Unauthorized',
+          details: userError?.message || 'No user found',
+          authHeader: req.headers.get('Authorization')?.substring(0, 20) + '...'
+        }),
         { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           status: 401 
@@ -115,37 +125,73 @@ Deno.serve(async (req) => {
     if (type === 'utility' && bill_id) {
       console.log('Processing utility bill payment:', bill_id);
 
-      // Get bill details
-      const { data: bill, error: billError } = await supabaseAdmin
-        .from('unit_bills')
-        .select(`
-          id,
-          amount,
-          status,
-          utilities!unit_bills_utility_id_fkey (name),
-          units!unit_bills_unit_id_fkey (
-            unit_number,
-            properties!units_property_id_fkey (name)
-          )
-        `)
-        .eq('id', bill_id)
-        .single();
+      // For utility bills, we can process without strict user authentication
+      // since the payment is already verified by Paystack
+      try {
+        // Get bill details
+        const { data: bill, error: billError } = await supabaseAdmin
+          .from('unit_bills')
+          .select(`
+            id,
+            amount,
+            status,
+            utilities!unit_bills_utility_id_fkey (name),
+            units!unit_bills_unit_id_fkey (
+              unit_number,
+              properties!units_property_id_fkey (name)
+            )
+          `)
+          .eq('id', bill_id)
+          .single();
 
-      if (billError || !bill) {
-        console.error('Bill not found:', billError);
-        return new Response(
-          JSON.stringify({ success: false, error: 'Utility bill not found' }),
-          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+        if (billError || !bill) {
+          console.error('Bill not found:', billError);
+          return new Response(
+            JSON.stringify({ success: false, error: 'Utility bill not found' }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
 
-      // Check if already paid
-      if (bill.status === 'paid') {
-        console.log('Bill already marked as paid');
+        // Check if already paid
+        if (bill.status === 'paid') {
+          console.log('Bill already marked as paid');
+          return new Response(
+            JSON.stringify({
+              success: true,
+              already_paid: true,
+              bill: {
+                amount: bill.amount,
+                utility_name: bill.utilities?.name,
+                unit_info: `${bill.units?.properties?.name} - Unit ${bill.units?.unit_number}`
+              }
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Update bill status to paid
+        const { error: updateError } = await supabaseAdmin
+          .from('unit_bills')
+          .update({
+            status: 'paid',
+            paystack_reference: reference,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', bill_id);
+
+        if (updateError) {
+          console.error('Failed to update bill:', updateError);
+          return new Response(
+            JSON.stringify({ success: false, error: 'Failed to update bill status' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        console.log('Bill updated successfully:', bill_id);
+
         return new Response(
           JSON.stringify({
             success: true,
-            already_paid: true,
             bill: {
               amount: bill.amount,
               utility_name: bill.utilities?.name,
@@ -154,39 +200,13 @@ Deno.serve(async (req) => {
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
-      }
-
-      // Update bill status to paid
-      const { error: updateError } = await supabaseAdmin
-        .from('unit_bills')
-        .update({
-          status: 'paid',
-          paystack_reference: reference,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', bill_id);
-
-      if (updateError) {
-        console.error('Failed to update bill:', updateError);
+      } catch (error) {
+        console.error('Error processing utility bill:', error);
         return new Response(
-          JSON.stringify({ success: false, error: 'Failed to update bill status' }),
+          JSON.stringify({ success: false, error: 'Failed to process utility bill payment' }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-
-      console.log('Bill updated successfully:', bill_id);
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          bill: {
-            amount: bill.amount,
-            utility_name: bill.utilities?.name,
-            unit_info: `${bill.units?.properties?.name} - Unit ${bill.units?.unit_number}`
-          }
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
     }
 
     // Handle rent payment (existing logic)

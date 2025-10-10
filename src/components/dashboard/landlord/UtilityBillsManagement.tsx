@@ -58,9 +58,11 @@ export const UtilityBillsManagement = () => {
 
   // Debug logging
   console.log('🔍 [UtilityBillsManagement] Debug Info:');
+  console.log('Landlord bills data:', landlordBills);
+  console.log('Landlord bills count:', landlordBills?.length);
+  console.log('Sample bill structure:', landlordBills?.[0]);
   console.log('Properties data:', properties);
   console.log('Properties count:', properties?.length);
-  console.log('Properties with units:', properties?.map(p => ({ name: p.name, unitsCount: p.units?.length })));
   console.log('Tenants data:', tenants);
   console.log('Tenants count:', tenants?.length);
   console.log('Utilities data:', utilities);
@@ -601,60 +603,88 @@ export const UtilityBillsManagement = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredBills.map((bill) => (
-                    <TableRow key={bill.id}>
-                    <TableCell className="font-medium">{(bill as any).utilities?.name || 'Unknown'}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Building2 className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <div className="font-medium">{(bill as any).units?.properties?.name || 'Unknown Property'}</div>
-                          <div className="text-sm text-muted-foreground">Unit {(bill as any).units?.unit_number || 'Unknown'}</div>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {(bill as any).tenant_info ? (
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-muted-foreground" />
-                          {(bill as any).tenant_info.first_name} {(bill as any).tenant_info.last_name}
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">No tenant</span>
-                      )}
-                    </TableCell>
-                      <TableCell>{bill.month}</TableCell>
-                      <TableCell className="font-medium">
-                        KES {bill.amount.toLocaleString()}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
-                          {format(new Date(bill.due_date), 'MMM dd, yyyy')}
-                        </div>
-                      </TableCell>
-                      <TableCell>{getStatusBadge(bill.status)}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openEditDialog(bill)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDeleteBill(bill.id)}
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  filteredBills.map((bill) => {
+                    // Debug logging for each bill
+                    console.log('Bill data:', {
+                      id: bill.id,
+                      tenant_id: (bill as any).tenant_id,
+                      tenant_info: (bill as any).tenant_info,
+                      unit_id: (bill as any).units?.id,
+                      unit_number: (bill as any).units?.unit_number
+                    });
+
+                    return (
+                      <TableRow key={bill.id}>
+                        <TableCell className="font-medium">{(bill as any).utilities?.name || 'Unknown'}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Building2 className="h-4 w-4 text-muted-foreground" />
+                            <div>
+                              <div className="font-medium">{(bill as any).units?.properties?.name || 'Unknown Property'}</div>
+                              <div className="text-sm text-muted-foreground">Unit {(bill as any).units?.unit_number || 'Unknown'}</div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {(bill as any).tenant_info ? (
+                            <div className="flex items-center gap-2">
+                              <User className="h-4 w-4 text-muted-foreground" />
+                              <div>
+                                <div className="font-medium">
+                                  {(bill as any).tenant_info.first_name} {(bill as any).tenant_info.last_name}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  Tenant ID: {(bill as any).tenant_id || 'N/A'}
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <User className="h-4 w-4 text-muted-foreground" />
+                              <div>
+                                <span className="text-muted-foreground">
+                                  {(bill as any).tenant_id ? 'Tenant data not found' : 'No tenant assigned'}
+                                </span>
+                                <div className="text-xs text-red-500">
+                                  {(bill as any).tenant_id ? `Missing tenant ID: ${(bill as any).tenant_id}` : `Bill ID: ${bill.id}`}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>{bill.month}</TableCell>
+                        <TableCell className="font-medium">
+                          KES {bill.amount.toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                            {format(new Date(bill.due_date), 'MMM dd, yyyy')}
+                          </div>
+                        </TableCell>
+                        <TableCell>{getStatusBadge(bill.status)}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openEditDialog(bill)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDeleteBill(bill.id)}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>

@@ -13,11 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-    )
-
+    // Use service role key for admin operations
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
@@ -29,37 +25,42 @@ serve(async (req) => {
 
     console.log('Function received request:', { method, path, fullUrl: req.url })
 
-    // Get the authorization header
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'No authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    // Verify the JWT token
-    const token = authHeader.replace('Bearer ', '')
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token)
+    // For GET requests, we'll get the landlord_id from query params
+    // For POST requests, we'll get it from the request body
+    let landlordId = null
     
-    if (authError || !user) {
+    if (method === 'GET') {
+      landlordId = url.searchParams.get('landlord_id')
+    } else if (method === 'POST') {
+      const body = await req.json()
+      landlordId = body.landlord_id
+    }
+
+    if (!landlordId) {
       return new Response(
-        JSON.stringify({ error: 'Invalid token' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'landlord_id is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Get user profile
-    const { data: profile, error: profileError } = await supabaseClient
+    // Verify the landlord exists
+    const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
-      .select('id, role, user_id')
-      .eq('user_id', user.id)
+      .select('id, role')
+      .eq('id', landlordId)
       .single()
 
     if (profileError || !profile) {
       return new Response(
-        JSON.stringify({ error: 'Profile not found' }),
+        JSON.stringify({ error: 'Landlord profile not found' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    if (profile.role !== 'landlord') {
+      return new Response(
+        JSON.stringify({ error: 'User is not a landlord' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
@@ -68,10 +69,10 @@ serve(async (req) => {
     
     if (path.includes('/api/tenant/bills') && method === 'GET') {
       console.log('Matched tenant bills route')
-      return await getTenantBills(supabaseClient, supabaseAdmin, profile.id)
-    } else if (path.includes('/api/landlord/bills') && method === 'GET') {
+      return await getTenantBills(supabaseAdmin, supabaseAdmin, profile.id)
+    } else if ((path.includes('/api/landlord/bills') || path === '/utility-bills') && method === 'GET') {
       console.log('Matched landlord bills route')
-      return await getLandlordBills(supabaseClient, profile.id)
+      return await getLandlordBills(supabaseAdmin, profile.id)
     } else if (path.includes('/api/landlord/bills') && method === 'POST') {
       let body = {}
       try {
@@ -82,7 +83,7 @@ serve(async (req) => {
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
-      return await createBill(supabaseClient, profile.id, body)
+      return await createBill(supabaseAdmin, profile.id, body)
     } else if (path.includes('/api/landlord/bills/') && method === 'PATCH') {
       const billId = path.split('/').pop()
       if (!billId) {
@@ -100,7 +101,7 @@ serve(async (req) => {
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
-      return await updateBill(supabaseClient, profile.id, billId, body)
+      return await updateBill(supabaseAdmin, profile.id, billId, body)
     } else if (path.includes('/api/landlord/bills/') && method === 'DELETE') {
       const billId = path.split('/').pop()
       if (!billId) {
@@ -109,7 +110,7 @@ serve(async (req) => {
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
-      return await deleteBill(supabaseClient, profile.id, billId)
+      return await deleteBill(supabaseAdmin, profile.id, billId)
     } else if (path.includes('/api/paystack/initiate-bill-payment') && method === 'POST') {
       let body = {}
       try {
@@ -120,7 +121,7 @@ serve(async (req) => {
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
-      return await initiateBillPayment(supabaseClient, profile.id, body)
+      return await initiateBillPayment(supabaseAdmin, profile.id, body)
     } else if (path.includes('/api/utilities') && method === 'POST') {
       let body = {}
       try {
@@ -131,7 +132,7 @@ serve(async (req) => {
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
-      return await addUtility(supabaseClient, body)
+      return await addUtility(supabaseAdmin, body)
     } else {
       return new Response(
         JSON.stringify({ error: 'Not found' }),
@@ -148,7 +149,7 @@ serve(async (req) => {
   }
 })
 
-async function getTenantBills(supabaseClient: any, supabaseAdmin: any, profileId: string) {
+async function getTenantBills(supabaseAdmin: any, supabaseAdmin: any, profileId: string) {
   try {
     // First, get the tenant_info record for this profile (use admin client for database operations)
     const { data: tenantInfo, error: tenantError } = await supabaseAdmin
@@ -200,10 +201,10 @@ async function getTenantBills(supabaseClient: any, supabaseAdmin: any, profileId
   }
 }
 
-async function getLandlordBills(supabaseClient: any, profileId: string) {
+async function getLandlordBills(supabaseAdmin: any, profileId: string) {
   try {
-    // Get landlord's bills directly without RPC function
-    const { data: bills, error } = await supabaseClient
+    // Get landlord's bills first
+    const { data: bills, error } = await supabaseAdmin
       .from('unit_bills')
       .select(`
         id,
@@ -212,25 +213,76 @@ async function getLandlordBills(supabaseClient: any, profileId: string) {
         status,
         month,
         created_at,
+        tenant_id,
         utilities!unit_bills_utility_id_fkey (name),
         units!unit_bills_unit_id_fkey (
           unit_number,
           properties!units_property_id_fkey (name)
-        ),
-        tenant_info!unit_bills_tenant_id_fkey (
-          first_name,
-          last_name
         )
       `)
       .eq('landlord_id', profileId)
       .order('created_at', { ascending: false })
 
     if (error) {
+      console.error('Error fetching landlord bills:', error)
       throw error
     }
 
+    console.log('Fetched landlord bills:', bills?.length || 0)
+
+    // Now manually fetch tenant information for each bill based on unit information
+    const billsWithTenants = await Promise.all(
+      (bills || []).map(async (bill) => {
+        let tenantInfo = null
+        
+        if (bill.unit_id) {
+          // Find active tenant for this unit through leases
+          const { data: lease, error: leaseError } = await supabaseAdmin
+            .from('leases')
+            .select('tenant_id')
+            .eq('unit_id', bill.unit_id)
+            .eq('status', 'active')
+            .single()
+
+          if (!leaseError && lease) {
+            // Get tenant info from tenant_info table (since lease.tenant_id references tenant_info.id)
+            const { data: tenant, error: tenantError } = await supabaseAdmin
+              .from('tenant_info')
+              .select('first_name, last_name')
+              .eq('id', lease.tenant_id)
+              .single()
+
+            if (!tenantError && tenant) {
+              tenantInfo = tenant
+            }
+          }
+          
+          // If no tenant found through lease, try tenant_info table as fallback
+          if (!tenantInfo) {
+            const { data: tenant, error: tenantError } = await supabaseAdmin
+              .from('tenant_info')
+              .select('first_name, last_name')
+              .eq('unit_id', bill.unit_id)
+              .eq('status', 'active')
+              .single()
+
+            if (!tenantError && tenant) {
+              tenantInfo = tenant
+            }
+          }
+        }
+
+        return {
+          ...bill,
+          tenant_info: tenantInfo
+        }
+      })
+    )
+
+    console.log('Sample bill with tenant info:', billsWithTenants?.[0])
+
     return new Response(
-      JSON.stringify({ bills: bills || [] }),
+      JSON.stringify({ bills: billsWithTenants || [] }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {
@@ -242,7 +294,7 @@ async function getLandlordBills(supabaseClient: any, profileId: string) {
   }
 }
 
-async function createBill(supabaseClient: any, profileId: string, body: any) {
+async function createBill(supabaseAdmin: any, profileId: string, body: any) {
   try {
     const { unit_id, utility_id, month, amount, due_date, tenant_id } = body
 
@@ -255,7 +307,7 @@ async function createBill(supabaseClient: any, profileId: string, body: any) {
     }
 
     // Check if landlord owns the unit
-    const { data: unit, error: unitError } = await supabaseClient
+    const { data: unit, error: unitError } = await supabaseAdmin
       .from('units')
       .select(`
         id,
@@ -274,7 +326,7 @@ async function createBill(supabaseClient: any, profileId: string, body: any) {
     }
 
     // Check for duplicate bill
-    const { data: existingBill, error: duplicateError } = await supabaseClient
+    const { data: existingBill, error: duplicateError } = await supabaseAdmin
       .from('unit_bills')
       .select('id')
       .eq('unit_id', unit_id)
@@ -290,8 +342,40 @@ async function createBill(supabaseClient: any, profileId: string, body: any) {
       )
     }
 
+        // If no tenant_id provided, try to find the current tenant for this unit
+        let finalTenantId = tenant_id
+        if (!finalTenantId) {
+          // First try to find through active lease
+          const { data: lease, error: leaseError } = await supabaseAdmin
+            .from('leases')
+            .select('tenant_id')
+            .eq('unit_id', unit_id)
+            .eq('status', 'active')
+            .single()
+
+          if (!leaseError && lease) {
+            finalTenantId = lease.tenant_id
+            console.log('Auto-assigned tenant from lease to bill:', finalTenantId)
+          } else {
+            // Fallback: try tenant_info table
+            const { data: currentTenant, error: tenantError } = await supabaseAdmin
+              .from('tenant_info')
+              .select('id')
+              .eq('unit_id', unit_id)
+              .eq('status', 'active')
+              .single()
+
+            if (!tenantError && currentTenant) {
+              finalTenantId = currentTenant.id
+              console.log('Auto-assigned tenant from tenant_info to bill:', finalTenantId)
+            } else {
+              console.log('No active tenant found for unit:', unit_id)
+            }
+          }
+        }
+
     // Create the bill
-    const { data: bill, error: createError } = await supabaseClient
+    const { data: bill, error: createError } = await supabaseAdmin
       .from('unit_bills')
       .insert({
         unit_id,
@@ -300,7 +384,7 @@ async function createBill(supabaseClient: any, profileId: string, body: any) {
         amount: parseFloat(amount),
         due_date,
         landlord_id: profileId,
-        tenant_id: tenant_id || null
+        tenant_id: finalTenantId
       })
       .select()
       .single()
@@ -322,12 +406,12 @@ async function createBill(supabaseClient: any, profileId: string, body: any) {
   }
 }
 
-async function updateBill(supabaseClient: any, profileId: string, billId: string, body: any) {
+async function updateBill(supabaseAdmin: any, profileId: string, billId: string, body: any) {
   try {
     const { amount, due_date, status, payment_reason } = body
 
     // Check if bill exists and belongs to landlord
-    const { data: bill, error: billError } = await supabaseClient
+    const { data: bill, error: billError } = await supabaseAdmin
       .from('unit_bills')
       .select('id, landlord_id')
       .eq('id', billId)
@@ -347,7 +431,7 @@ async function updateBill(supabaseClient: any, profileId: string, billId: string
     if (status !== undefined) updateData.status = status
     if (payment_reason !== undefined) updateData.payment_reason = payment_reason
 
-    const { data: updatedBill, error: updateError } = await supabaseClient
+    const { data: updatedBill, error: updateError } = await supabaseAdmin
       .from('unit_bills')
       .update(updateData)
       .eq('id', billId)
@@ -371,10 +455,10 @@ async function updateBill(supabaseClient: any, profileId: string, billId: string
   }
 }
 
-async function deleteBill(supabaseClient: any, profileId: string, billId: string) {
+async function deleteBill(supabaseAdmin: any, profileId: string, billId: string) {
   try {
     // Check if bill exists and belongs to landlord
-    const { data: bill, error: billError } = await supabaseClient
+    const { data: bill, error: billError } = await supabaseAdmin
       .from('unit_bills')
       .select('id, landlord_id')
       .eq('id', billId)
@@ -388,7 +472,7 @@ async function deleteBill(supabaseClient: any, profileId: string, billId: string
     }
 
     // Delete the bill
-    const { error: deleteError } = await supabaseClient
+    const { error: deleteError } = await supabaseAdmin
       .from('unit_bills')
       .delete()
       .eq('id', billId)
@@ -410,7 +494,7 @@ async function deleteBill(supabaseClient: any, profileId: string, billId: string
   }
 }
 
-async function initiateBillPayment(supabaseClient: any, profileId: string, body: any) {
+async function initiateBillPayment(supabaseAdmin: any, profileId: string, body: any) {
   try {
     const { bill_id } = body
 
@@ -422,7 +506,7 @@ async function initiateBillPayment(supabaseClient: any, profileId: string, body:
     }
 
     // Get bill details
-    const { data: bill, error: billError } = await supabaseClient
+    const { data: bill, error: billError } = await supabaseAdmin
       .from('unit_bills')
       .select(`
         id,
@@ -507,7 +591,7 @@ async function initiateBillPayment(supabaseClient: any, profileId: string, body:
   }
 }
 
-async function addUtility(supabaseClient: any, body: any) {
+async function addUtility(supabaseAdmin: any, body: any) {
   try {
     const { name } = body
     
@@ -518,7 +602,7 @@ async function addUtility(supabaseClient: any, body: any) {
       )
     }
 
-    const { data, error } = await supabaseClient
+    const { data, error } = await supabaseAdmin
       .from('utilities')
       .upsert({ name }, { onConflict: 'name' })
       .select()

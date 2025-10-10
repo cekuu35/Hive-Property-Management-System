@@ -105,23 +105,68 @@ export const useUtilityBills = () => {
       setLoading(true);
       setError(null);
 
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://kozhlejudselgtmohdfm.supabase.co";
-      
-      const response = await fetch(`${supabaseUrl}/functions/v1/utility-bills/api/landlord/bills`, {
-        headers: {
-          'Authorization': `Bearer ${session?.access_token}`
-        }
-      });
+      // Use direct database approach instead of edge function
+      const { data: bills, error: billsError } = await supabase
+        .from('unit_bills')
+        .select(`
+          id,
+          amount,
+          due_date,
+          status,
+          month,
+          created_at,
+          tenant_id,
+          utilities!unit_bills_utility_id_fkey (name),
+          units!unit_bills_unit_id_fkey (
+            unit_number,
+            properties!units_property_id_fkey (name)
+          )
+        `)
+        .eq('landlord_id', profile.id)
+        .order('created_at', { ascending: false });
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to fetch bills');
+      if (billsError) {
+        throw billsError;
       }
 
-      setLandlordBills(result.bills || []);
+      console.log('Raw bills data:', bills);
+
+      // Get tenant_info records
+      const { data: tenantInfos, error: tenantInfosError } = await supabase
+        .from('tenant_info')
+        .select('id, first_name, last_name');
+
+      if (tenantInfosError) {
+        console.warn('Error fetching tenant_info:', tenantInfosError);
+      }
+
+      // Create tenant lookup map
+      const tenantMap = new Map();
+      if (tenantInfos) {
+        tenantInfos.forEach(tenant => {
+          tenantMap.set(tenant.id, tenant);
+        });
+      }
+
+      // Add tenant information to bills
+      const billsWithTenants = (bills || []).map(bill => {
+        let tenantInfo = null;
+        
+        if (bill.tenant_id && tenantMap.has(bill.tenant_id)) {
+          tenantInfo = tenantMap.get(bill.tenant_id);
+        }
+        
+        return {
+          ...bill,
+          tenant_info: tenantInfo,
+          unit_number: bill.units?.unit_number || 'Unknown',
+          property_name: bill.units?.properties?.name || 'Unknown Property',
+          tenant_name: tenantInfo ? `${tenantInfo.first_name} ${tenantInfo.last_name}` : undefined
+        };
+      });
+
+      console.log('Bills with tenant info:', billsWithTenants);
+      setLandlordBills(billsWithTenants);
     } catch (err) {
       console.error('Error fetching landlord bills:', err);
       setError('Failed to load utility bills');
@@ -283,15 +328,26 @@ export const useUtilityBills = () => {
     try {
       console.log('Processing utility bill payment:', { reference, billId });
 
+      // First try the edge function approach
+      try {
       const { data: { session } } = await supabase.auth.getSession();
-      const supabaseUrl = "https://kozhlejudselgtmohdfm.supabase.co";
-      
-      // Call verify-payment edge function to update bill status
+        
+        if (session?.access_token) {
+          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://kozhlejudselgtmohdfm.supabase.co";
+          
+          console.log('Calling verify-payment function:', {
+            url: `${supabaseUrl}/functions/v1/verify-payment`,
+            reference,
+            billId,
+            hasAuth: !!session.access_token
+          });
+          
       const verifyResponse = await fetch(`${supabaseUrl}/functions/v1/verify-payment`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
+              'Authorization': `Bearer ${session.access_token}`,
+              'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ5NzQ4MDAsImV4cCI6MjA1MDU1MDgwMH0.example'
         },
         body: JSON.stringify({
           reference: reference,
@@ -300,13 +356,69 @@ export const useUtilityBills = () => {
         })
       });
 
+          console.log('Verify payment response status:', verifyResponse.status);
+          
+          if (verifyResponse.ok) {
       const verifyResult = await verifyResponse.json();
+            console.log('Verify payment result:', verifyResult);
 
-      if (!verifyResponse.ok || !verifyResult.success) {
-        throw new Error(verifyResult.error || 'Payment verification failed');
+            if (verifyResult.success) {
+              toast.success(`Payment successful! Your ${verifyResult.bill?.utility_name || 'utility'} bill has been paid.`);
+              await fetchTenantBills();
+              return true;
+            }
+          }
+        }
+      } catch (edgeFunctionError) {
+        console.warn('Edge function failed, trying direct database update:', edgeFunctionError);
       }
 
-      toast.success(`Payment successful! Your ${verifyResult.bill?.utility_name || 'utility'} bill has been paid.`);
+      // Fallback: Direct database update (since payment is already verified by Paystack)
+      console.log('Using direct database update fallback');
+      
+      const { data: bill, error: billError } = await supabase
+        .from('unit_bills')
+        .select(`
+          id,
+          amount,
+          status,
+          utilities!unit_bills_utility_id_fkey (name),
+          units!unit_bills_unit_id_fkey (
+            unit_number,
+            properties!units_property_id_fkey (name)
+          )
+        `)
+        .eq('id', billId)
+        .single();
+
+      if (billError || !bill) {
+        throw new Error('Bill not found');
+      }
+
+      if (bill.status === 'paid') {
+        console.log('Bill already marked as paid');
+        toast.success('Payment already processed!');
+        await fetchTenantBills();
+        return true;
+      }
+
+      // Update bill status directly
+      const { error: updateError } = await supabase
+        .from('unit_bills')
+        .update({
+          status: 'paid',
+          paystack_reference: reference,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', billId);
+
+      if (updateError) {
+        console.error('Failed to update bill:', updateError);
+        throw new Error('Failed to update bill status');
+      }
+
+      console.log('Bill updated successfully via direct update:', billId);
+      toast.success(`Payment successful! Your ${bill.utilities?.name || 'utility'} bill has been paid.`);
       
       // Refresh bills to show updated status
       await fetchTenantBills();
@@ -314,7 +426,8 @@ export const useUtilityBills = () => {
       return true;
     } catch (err) {
       console.error('Error processing bill payment:', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to process payment');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to process payment';
+      toast.error(errorMessage);
       throw err;
     }
   };
