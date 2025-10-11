@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { 
   CreditCard, Wrench, FileText, MessageCircle, AlertCircle, Calendar, Home, Receipt, Settings, Bell,
   Download, Upload, Phone, Shield, User, Mail, MapPin, DollarSign, Clock, CheckCircle, XCircle,
-  Send, Plus, Search, Filter, Eye, Edit, Trash2, UserCheck, Star, Building2
+  Send, Plus, Search, Filter, Eye, Edit, Trash2, UserCheck, Star, Building2, RefreshCw
 } from 'lucide-react';
 import { TenantPaymentModal } from './TenantPaymentModal';
 import { MaintenanceRequestModal } from '@/components/dashboard/maintenance/MaintenanceRequestModal';
@@ -18,6 +18,7 @@ import { MaintenanceRequestView } from './MaintenanceRequestView';
 import { TenantDocuments } from './TenantDocuments';
 import { UnitBrowsing } from './UnitBrowsing';
 import { MyApplications } from './MyApplications';
+import { PaymentHistory } from './PaymentHistory';
 import { ProfileEditForm } from './profile/ProfileEditForm';
 import { CoTenantManagement } from './profile/CoTenantManagement';
 import { PasswordChangeForm } from './profile/PasswordChangeForm';
@@ -73,11 +74,16 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
   const pendingRequestsCount = maintenanceRequests.filter(r => r.status === 'pending').length;
   const unreadCount = conversations.reduce((sum, c) => sum + (c.unread_count || 0), 0);
   
-  // Use the higher value between tenantRentBalance and tenantInfo.current_balance
-  // This ensures we show the correct balance regardless of data source
+  // Use calculated balance from monthly rent hook as the primary source
+  // The monthly rent hook calculates based on actual payments and is more accurate
   const calculatedBalance = tenantRentBalance || 0;
   const tenantInfoBalance = tenantInfo?.current_balance || 0;
-  const displayBalance = Math.max(calculatedBalance, tenantInfoBalance);
+  
+  // If monthly rent calculation shows 0, it means either:
+  // 1. No rent is due (all payments made), or
+  // 2. No payment record exists for current month (rent is due)
+  // In case 2, we should show the rent amount, not 0
+  const displayBalance = calculatedBalance > 0 ? calculatedBalance : (tenantInfoBalance > 0 ? tenantInfoBalance : 0);
   
   const displayPaymentStatus = hasApprovedLease 
     ? (displayBalance > 0 ? 'unpaid' : 'paid')
@@ -172,23 +178,59 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
       )
       .subscribe();
 
+    // Listen for payment completion notifications from edge function
+    const paymentUpdatesChannel = supabase
+      .channel('payment_updates')
+      .on(
+        'broadcast',
+        { event: 'payment_completed' },
+        (payload) => {
+          console.log('🔄 [TenantDashboard] Payment completion notification received:', payload);
+          // Refresh all data when payment is completed
+          refreshBalance();
+          refetch();
+          
+          // Show success notification
+          toast.success('Payment processed successfully! Balance updated.');
+        }
+      )
+      .subscribe();
+
+    // Also listen for database changes in rent_payments
+    const rentPaymentsChannel = supabase
+      .channel('rent_payments_realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'rent_payments'
+        },
+        (payload) => {
+          console.log('🔄 [TenantDashboard] Rent payment updated:', payload);
+          if (payload.new.status === 'paid') {
+            refreshBalance();
+            refetch();
+            toast.success('Payment confirmed! Balance updated.');
+          }
+        }
+      )
+      .subscribe();
+
     return () => {
       supabase.removeChannel(rentPaymentsChannel);
       supabase.removeChannel(maintenanceChannel);
       supabase.removeChannel(notificationsChannel);
       supabase.removeChannel(unitApplicationsChannel);
+      supabase.removeChannel(paymentUpdatesChannel);
     };
   }, [refetch]);
 
   const mockData = {
-    rentBalance,
-    nextPaymentDue: '2024-02-15',
+    rentBalance: tenantRentBalance || rentBalance,
+    nextPaymentDue: nextPaymentDue || '2024-02-15',
     pendingRequests: maintenanceRequests.filter(r => r.status === 'pending').length,
-    recentPayments: [
-      { id: '1', amount: 25000, date: '2024-01-15', status: 'paid', method: 'M-PESA', reference: 'NEV123456' },
-      { id: '2', amount: 25000, date: '2023-12-15', status: 'paid', method: 'Bank Transfer', reference: 'BNK789012' },
-      { id: '3', amount: 25000, date: '2023-11-15', status: 'paid', method: 'M-PESA', reference: 'NEV345678' },
-    ],
+    recentPayments: recentPayments || [],
     maintenanceRequests: maintenanceRequests || [
       { id: '1', title: 'Leaking Faucet', status: 'in_progress', priority: 'medium', date: '2024-01-20', category: 'Plumbing', assignedTo: 'John Technician' },
       { id: '2', title: 'AC Not Working', status: 'pending', priority: 'high', date: '2024-01-22', category: 'HVAC', assignedTo: null },
@@ -219,32 +261,81 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
     }
   };
 
-  const handlePaymentSuccess = () => {
+  const handlePaymentSuccess = async () => {
     // Refresh all tenant data after successful payment
     console.log('🔄 [TenantDashboard] Payment successful, refreshing data...');
     
-    // Immediate refresh
-    refetch(); // Maintenance requests
-    refetchPayments(); // Payment data and balance
-    refetchLease(); // Lease information
-    refetchTenantInfo(); // Tenant info including balance
-    
-    // Add a delayed refresh to ensure database has been updated
-    setTimeout(() => {
-      console.log('🔄 [TenantDashboard] Delayed refresh after payment...');
-      refetch(); // Maintenance requests
-      refetchPayments(); // Payment data and balance
-      refetchLease(); // Lease information
-      refetchTenantInfo(); // Tenant info including balance
+    try {
+      // Immediate refresh - run all refreshes in parallel for faster response
+      console.log('📊 [TenantDashboard] Refreshing all data sources...');
+      await Promise.all([
+        refetch(), // Maintenance requests
+        refetchPayments(), // Payment data and balance
+        refetchLease(), // Lease information
+        refetchTenantInfo() // Tenant info including balance
+      ]);
       
-      console.log('✅ [TenantDashboard] Delayed refresh completed');
-    }, 2000); // 2 second delay
+      console.log('✅ [TenantDashboard] Initial refresh completed');
+      
+      // Add multiple refresh attempts to ensure balance updates
+      console.log('🔄 [TenantDashboard] Additional refresh attempts...');
+      
+      // Second refresh after 500ms
+      setTimeout(() => {
+        console.log('🔄 [TenantDashboard] Second refresh attempt...');
+        refreshBalance();
+      }, 500);
+      
+      // Third refresh after 1.5 seconds
+      setTimeout(() => {
+        console.log('🔄 [TenantDashboard] Third refresh attempt...');
+        refreshBalance();
+      }, 1500);
+      
+      // Final refresh after 3 seconds
+      setTimeout(() => {
+        console.log('🔄 [TenantDashboard] Final refresh attempt...');
+        refreshBalance();
+      }, 3000);
+      
+    } catch (error) {
+      console.error('❌ [TenantDashboard] Error refreshing data after payment:', error);
+      // Don't throw error to avoid breaking the payment flow
+    }
   };
 
   const handleViewRequest = (request: any) => {
     setSelectedRequest(request);
     setShowMaintenanceView(true);
   };
+
+  // Global refresh function for balance updates
+  const refreshBalance = async () => {
+    console.log('🔄 [TenantDashboard] Global balance refresh triggered');
+    try {
+      await Promise.all([
+        refetchPayments(),
+        refetchTenantInfo(),
+        refetchLease()
+      ]);
+      console.log('✅ [TenantDashboard] Global refresh completed');
+    } catch (error) {
+      console.error('❌ [TenantDashboard] Global refresh failed:', error);
+    }
+  };
+
+  // Keyboard shortcut for refreshing balance (Ctrl+R or Cmd+R)
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === 'r') {
+        event.preventDefault();
+        refreshBalance();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Filter maintenance requests
   const filteredMaintenanceRequests = mockData.maintenanceRequests.filter(request => {
@@ -291,7 +382,17 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
             <Card className={`${displayPaymentStatus === 'overdue' || isOverdue ? 'bg-gradient-to-r from-destructive to-destructive/80' : displayBalance > 0 ? 'bg-gradient-to-r from-warning to-warning/80' : 'bg-gradient-to-r from-success to-success/80'} text-primary-foreground`}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Rent Balance</CardTitle>
-                <CreditCard className="h-4 w-4" />
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-primary-foreground hover:bg-white/20 h-6 w-6 p-0"
+                    onClick={refreshBalance}
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                  </Button>
+                  <CreditCard className="h-4 w-4" />
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">KES {(displayBalance ?? 0).toLocaleString()}</div>
@@ -444,9 +545,19 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
             {/* Current Balance */}
             <Card className={`bg-gradient-to-r ${isOverdue ? 'from-red-500 to-red-600' : 'from-primary to-primary-glow'} text-primary-foreground`}>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CreditCard className="h-5 w-5" />
-                  {isOverdue ? 'Overdue Balance' : 'Current Balance'}
+                <CardTitle className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CreditCard className="h-5 w-5" />
+                    {isOverdue ? 'Overdue Balance' : 'Current Balance'}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-primary-foreground hover:bg-white/20 h-8 w-8 p-0"
+                    onClick={refreshBalance}
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -537,47 +648,7 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
           </div>
 
           {/* Payment History */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Payment History</span>
-                <Button variant="outline" size="sm">
-                  <Download className="h-4 w-4 mr-2" />
-                  Export
-                </Button>
-              </CardTitle>
-              <CardDescription>Your rent payment records</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {recentPayments.map((payment) => (
-                  <div key={payment.id} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                        <Receipt className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <p className="font-medium">KES {Math.abs(payment.amount || 0).toLocaleString()}</p>
-                        <p className="text-sm text-muted-foreground">{payment.date} • {payment.method || 'N/A'}</p>
-                        {payment.reference && (
-                          <p className="text-xs text-muted-foreground">Ref: {payment.reference}</p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge className={getStatusColor(payment.status)}>
-                        {payment.status}
-                      </Badge>
-                      <Button variant="outline" size="sm">
-                        <Download className="h-4 w-4 mr-1" />
-                        Receipt
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+          <PaymentHistory onMakePayment={() => setShowPaymentModal(true)} />
 
           {/* Payment Methods */}
           <Card>
@@ -904,6 +975,7 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
         rentAmount={displayBalance}
         dueDate={nextPaymentDue || '-'}
         onPaymentSuccess={handlePaymentSuccess}
+        leaseData={approvedLease}
       />
       
       <MaintenanceRequestModal

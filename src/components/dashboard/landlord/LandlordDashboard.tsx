@@ -113,19 +113,19 @@ const DashboardOverview = ({ onSectionChange }: { onSectionChange?: (section: st
   };
   
   // Calculate occupancy rate
-  const totalUnits = properties.reduce((sum, prop) => sum + prop.total_units, 0);
-  const occupiedUnits = tenants.filter(tenant => tenant.lease_status === 'active').length;
+  const totalUnits = properties?.reduce((sum, prop) => sum + prop.total_units, 0) ?? 0;
+  const occupiedUnits = tenants?.filter(tenant => tenant.lease_status === 'active').length ?? 0;
   const occupancyRate = totalUnits > 0 ? Math.round((occupiedUnits / totalUnits) * 100) : 0;
 
   // Recent activity from actual data
   const recentActivity = [
-    ...requests.slice(0, 2).map(req => ({
+    ...(requests?.slice(0, 2) || []).map(req => ({
       id: req.id,
       type: 'maintenance',
       description: `New maintenance request: ${req.title}`,
       time: new Date(req.createdDate).toLocaleString(),
     })),
-    ...tenants.slice(0, 1).map(tenant => ({
+    ...(tenants?.slice(0, 1) || []).map(tenant => ({
       id: tenant.id,
       type: 'lease',
       description: `Tenant ${tenant.first_name} ${tenant.last_name} - Active lease`,
@@ -160,8 +160,8 @@ const DashboardOverview = ({ onSectionChange }: { onSectionChange?: (section: st
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <MetricCard
           title="Monthly Revenue"
-          value={`KES ${(financialData.totalCollected ?? 0).toLocaleString()}`}
-          description={`Net: KES ${(financialData.netProfit ?? 0).toLocaleString()}`}
+          value={`KES ${(financialData?.totalCollected ?? 0).toLocaleString()}`}
+          description={`Net: KES ${(financialData?.netProfit ?? 0).toLocaleString()}`}
           icon={DollarSign}
           variant="success"
         />
@@ -175,7 +175,7 @@ const DashboardOverview = ({ onSectionChange }: { onSectionChange?: (section: st
 
         <MetricCard
           title="Properties"
-          value={properties.length}
+          value={properties?.length ?? 0}
           description={`${totalUnits} total units`}
           icon={Building}
         />
@@ -284,7 +284,7 @@ const DashboardOverview = ({ onSectionChange }: { onSectionChange?: (section: st
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {financialData.monthlyData.map((month) => (
+              {financialData?.monthlyData?.map((month) => (
                 <div key={month.month} className="flex items-center justify-between p-3 border rounded-lg">
                   <div>
                     <p className="font-medium">{month.month} 2024</p>
@@ -317,10 +317,10 @@ const DashboardOverview = ({ onSectionChange }: { onSectionChange?: (section: st
             {occupancyRate < 85 && (
               <p className="text-sm">• Low occupancy rate ({occupancyRate}%) - consider marketing strategies</p>
             )}
-            {financialData.overdue > 0 && (
-              <p className="text-sm">• KES {(financialData.overdue ?? 0).toLocaleString()} in overdue payments need collection</p>
+            {financialData?.overdue > 0 && (
+              <p className="text-sm">• KES {(financialData?.overdue ?? 0).toLocaleString()} in overdue payments need collection</p>
             )}
-            {maintenanceStats.pending === 0 && occupancyRate >= 85 && financialData.overdue === 0 && (
+            {maintenanceStats.pending === 0 && occupancyRate >= 85 && financialData?.overdue === 0 && (
               <p className="text-sm text-success">• All systems operating normally - no alerts</p>
             )}
           </div>

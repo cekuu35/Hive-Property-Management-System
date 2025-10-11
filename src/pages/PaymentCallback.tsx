@@ -123,38 +123,38 @@ export const PaymentCallback = () => {
     let leaseId = null;
     let tenantInfoId = null;
 
-    // Try to find lease by profile ID
-    const { data: leaseByProfile } = await supabase
-      .from('leases')
-      .select('id, tenant_info_id, rent_amount')
-      .eq('tenant_id', profile.id)
-      .eq('status', 'active')
-      .maybeSingle();
+    // Try to find lease via tenant_info first (correct approach)
+    const { data: tenantInfo } = await supabase
+      .from('tenant_info')
+      .select('id')
+      .eq('profile_id', profile.id)
+      .order('updated_at', { ascending: false })
+      .limit(1);
 
-    if (leaseByProfile) {
-      leaseId = leaseByProfile.id;
-      tenantInfoId = leaseByProfile.tenant_info_id;
+    if (tenantInfo && tenantInfo.length > 0) {
+      const { data: leaseData } = await supabase
+        .from('leases')
+        .select('id, tenant_info_id, rent_amount')
+        .eq('tenant_info_id', tenantInfo[0].id)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (leaseData) {
+        leaseId = leaseData.id;
+        tenantInfoId = leaseData.tenant_info_id;
+      }
     } else {
-      // Try to find via tenant_info
-      const { data: tenantInfo } = await supabase
-        .from('tenant_info')
-        .select('id')
-        .eq('profile_id', profile.id)
-        .order('updated_at', { ascending: false })
-        .limit(1);
+      // Fallback: Try to find lease by profile ID (legacy approach)
+      const { data: leaseByProfile } = await supabase
+        .from('leases')
+        .select('id, tenant_info_id, rent_amount')
+        .eq('tenant_id', profile.id)
+        .eq('status', 'active')
+        .maybeSingle();
 
-      if (tenantInfo && tenantInfo.length > 0) {
-        const { data: leaseData } = await supabase
-          .from('leases')
-          .select('id, tenant_info_id, rent_amount')
-          .eq('tenant_info_id', tenantInfo[0].id)
-          .eq('status', 'active')
-          .maybeSingle();
-
-        if (leaseData) {
-          leaseId = leaseData.id;
-          tenantInfoId = leaseData.tenant_info_id;
-        }
+      if (leaseByProfile) {
+        leaseId = leaseByProfile.id;
+        tenantInfoId = leaseByProfile.tenant_info_id;
       }
     }
 

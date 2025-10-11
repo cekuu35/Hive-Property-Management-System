@@ -43,9 +43,11 @@ serve(async (req) => {
     const currentMonth = currentDate.getMonth()
     const currentYear = currentDate.getFullYear()
     
-    // Generate the first day of current month
-    const firstDayOfMonth = new Date(currentYear, currentMonth, 1)
+    // Generate the first day of current month (using UTC to avoid timezone issues)
+    const firstDayOfMonth = new Date(Date.UTC(currentYear, currentMonth, 1))
     const dueDate = firstDayOfMonth.toISOString().split('T')[0]
+    
+    console.log(`📅 Generating payments for: ${currentYear}-${String(currentMonth + 1).padStart(2, '0')} (${dueDate})`)
 
     const results = []
 

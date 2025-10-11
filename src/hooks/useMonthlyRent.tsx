@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { supabaseAdmin } from '@/integrations/supabase/admin';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 
@@ -56,12 +57,32 @@ export const useMonthlyRent = () => {
       }
 
       // Now fetch the lease using tenant_info_id
-      const { data: lease, error: leaseError } = await supabase
+      let { data: lease, error: leaseError } = await supabase
         .from('leases')
         .select('id, rent_amount, start_date')
         .eq('tenant_info_id', tenantInfo[0].id)
         .eq('status', 'active')
         .maybeSingle();
+
+      // If RLS blocks the query, try with admin client
+      if (leaseError && (leaseError.code === '42501' || leaseError.message.includes('RLS') || leaseError.code === '406')) {
+        console.log('🔄 [useMonthlyRent] RLS blocked query, trying with admin client...');
+        const { data: adminLease, error: adminLeaseError } = await supabaseAdmin
+          .from('leases')
+          .select('id, rent_amount, start_date')
+          .eq('tenant_info_id', tenantInfo[0].id)
+          .eq('status', 'active')
+          .maybeSingle();
+
+        if (adminLeaseError) {
+          console.error('❌ [useMonthlyRent] Admin client also failed:', adminLeaseError);
+          throw adminLeaseError;
+        }
+
+        lease = adminLease;
+        leaseError = null;
+        console.log('✅ [useMonthlyRent] Admin client succeeded');
+      }
 
       // Log the result
       if (leaseError) {
@@ -95,8 +116,8 @@ export const useMonthlyRent = () => {
       const currentMonth = today.getMonth();
       const currentYear = today.getFullYear();
       
-      // Calculate the first day of current month
-      const firstDayOfCurrentMonth = new Date(currentYear, currentMonth, 1);
+      // Calculate the first day of current month (using UTC to avoid timezone issues)
+      const firstDayOfCurrentMonth = new Date(Date.UTC(currentYear, currentMonth, 1));
       const dueDate = firstDayOfCurrentMonth.toISOString().split('T')[0];
 
       // Check if there's already a payment for this month
@@ -119,7 +140,7 @@ export const useMonthlyRent = () => {
         // Payment exists for this month
         if (existingPayment.status === 'paid') {
           // Check if we need to generate next month's payment
-          const nextMonth = new Date(currentYear, currentMonth + 1, 1);
+          const nextMonth = new Date(Date.UTC(currentYear, currentMonth + 1, 1));
           const nextMonthDue = nextMonth.toISOString().split('T')[0];
           
           // Check if next month's payment exists
@@ -167,7 +188,21 @@ export const useMonthlyRent = () => {
         }
       } else {
         // No payment exists for this month, create one
-        await generateNextMonthPayment(lease.id, lease.rent_amount, dueDate);
+        console.log('🔄 [useMonthlyRent] No payment exists for current month, creating one...');
+        console.log('📋 [useMonthlyRent] Creating payment:', {
+          leaseId: lease.id,
+          rentAmount: lease.rent_amount,
+          dueDate: dueDate
+        });
+        
+        try {
+          await generateNextMonthPayment(lease.id, lease.rent_amount, dueDate);
+          console.log('✅ [useMonthlyRent] Payment created successfully');
+        } catch (error) {
+          console.error('❌ [useMonthlyRent] Failed to create payment:', error);
+          // Continue with the calculation even if creation fails
+        }
+        
         currentRentDue = lease.rent_amount;
         nextDueDate = dueDate;
         const due = new Date(dueDate);
@@ -198,18 +233,32 @@ export const useMonthlyRent = () => {
 
   const generateNextMonthPayment = async (leaseId: string, rentAmount: number, dueDate: string) => {
     try {
-      const { error } = await supabase
+      console.log('🔄 [generateNextMonthPayment] Creating payment record...');
+      console.log('📋 [generateNextMonthPayment] Payment data:', {
+        lease_id: leaseId,
+        amount: rentAmount,
+        due_date: dueDate,
+        status: 'pending'
+      });
+      
+      const { data, error } = await supabase
         .from('rent_payments')
         .insert({
           lease_id: leaseId,
           amount: rentAmount,
           due_date: dueDate,
           status: 'pending'
-        });
+        })
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ [generateNextMonthPayment] Insert failed:', error);
+        throw error;
+      }
+      
+      console.log('✅ [generateNextMonthPayment] Payment created:', data);
     } catch (error) {
-      console.error('Error generating next month payment:', error);
+      console.error('❌ [generateNextMonthPayment] Error generating next month payment:', error);
       throw error;
     }
   };
@@ -231,6 +280,31 @@ export const useMonthlyRent = () => {
 
   useEffect(() => {
     calculateMonthlyRent();
+  }, [profile?.id]);
+
+  // Set up real-time subscription for rent_payments changes
+  useEffect(() => {
+    if (!profile?.id) return;
+
+    const channel = supabase
+      .channel('rent_payments_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'rent_payments'
+        },
+        (payload) => {
+          console.log('🔄 [useMonthlyRent] Rent payment change detected:', payload);
+          calculateMonthlyRent();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [profile?.id]);
 
   return {

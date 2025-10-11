@@ -61,8 +61,19 @@ export const useMaintenanceRequests = () => {
         // No additional filtering needed as RLS handles access control
         console.log('Fetching maintenance requests for caretaker...');
       } else if (profile.role === 'tenant') {
-        // Tenants see only their own requests
-        query = query.eq('tenant_id', profile.id);
+        // Tenants see only their own requests - need to find tenant_info first
+        const { data: tenantInfo } = await supabase
+          .from('tenant_info')
+          .select('id')
+          .eq('profile_id', profile.id)
+          .maybeSingle();
+        
+        if (tenantInfo) {
+          query = query.eq('tenant_id', tenantInfo.id);
+        } else {
+          // If no tenant_info found, return empty results
+          query = query.eq('tenant_id', '00000000-0000-0000-0000-000000000000');
+        }
       } else if (profile.role === 'landlord') {
         // Landlords see requests for their properties
         const { data: properties } = await supabase

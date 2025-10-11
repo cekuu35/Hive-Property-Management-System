@@ -232,8 +232,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Check if payment already recorded
-    const { data: existingPayment } = await supabaseClient
+    // Check if payment already recorded using admin client
+    const { data: existingPayment } = await supabaseAdmin
       .from('rent_payments')
       .select('id')
       .eq('transaction_reference', reference)
@@ -254,8 +254,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get lease details to find tenant_info
-    const { data: lease, error: leaseError } = await supabaseClient
+    // Get lease details to find tenant_info using admin client
+    const { data: lease, error: leaseError } = await supabaseAdmin
       .from('leases')
       .select('tenant_info_id')
       .eq('id', leaseId)
@@ -265,8 +265,8 @@ Deno.serve(async (req) => {
       console.error('Error fetching lease:', leaseError);
     }
 
-    // Record the payment in the database
-    const { data: payment, error: paymentError } = await supabaseClient
+    // Record the payment in the database using admin client
+    const { data: payment, error: paymentError } = await supabaseAdmin
       .from('rent_payments')
       .insert({
         lease_id: leaseId,
@@ -297,13 +297,14 @@ Deno.serve(async (req) => {
 
     console.log('Payment recorded successfully:', payment.id);
 
-    // Update tenant_info to reflect payment
+    // Update tenant_info to reflect payment using admin client
     if (lease?.tenant_info_id) {
-      const { error: tenantUpdateError } = await supabaseClient
+      const { error: tenantUpdateError } = await supabaseAdmin
         .from('tenant_info')
         .update({
           current_balance: 0,
-          payment_status: 'paid'
+          payment_status: 'paid',
+          updated_at: new Date().toISOString()
         })
         .eq('id', lease.tenant_info_id);
 

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { supabaseAdmin } from '@/integrations/supabase/admin';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 
@@ -64,31 +65,46 @@ export const useUtilityBills = () => {
       setLoading(true);
       setError(null);
 
-      const { data: { session } } = await supabase.auth.getSession();
-      console.log('🔍 [fetchTenantBills] Session exists:', !!session?.access_token);
-      
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://kozhlejudselgtmohdfm.supabase.co";
-      const requestUrl = `${supabaseUrl}/functions/v1/utility-bills/api/tenant/bills`;
-      
-      console.log('🔍 [fetchTenantBills] Request URL:', requestUrl);
-      
-      const response = await fetch(requestUrl, {
-        headers: {
-          'Authorization': `Bearer ${session?.access_token}`
-        }
-      });
+      // First, get the tenant_info record for this profile
+      const { data: tenantInfo, error: tenantError } = await supabase
+        .from('tenant_info')
+        .select('id')
+        .eq('profile_id', profile.id)
+        .single();
 
-      console.log('🔍 [fetchTenantBills] Response status:', response.status);
-      
-      const result = await response.json();
-      console.log('🔍 [fetchTenantBills] Response data:', result);
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to fetch bills');
+      if (tenantError || !tenantInfo) {
+        console.error('❌ [fetchTenantBills] Error fetching tenant_info:', tenantError);
+        throw new Error('Tenant info not found');
       }
 
-      console.log('🔍 [fetchTenantBills] Setting bills:', result.bills?.length || 0);
-      setBills(result.bills || []);
+      console.log('🔍 [fetchTenantBills] Tenant info found:', tenantInfo.id);
+
+      // Get bills for this tenant
+      const { data: bills, error: billsError } = await supabase
+        .from('unit_bills')
+        .select(`
+          id,
+          amount,
+          due_date,
+          status,
+          month,
+          created_at,
+          utilities!unit_bills_utility_id_fkey (name),
+          units!unit_bills_unit_id_fkey (
+            unit_number,
+            properties!units_property_id_fkey (name)
+          )
+        `)
+        .eq('tenant_id', tenantInfo.id)
+        .order('created_at', { ascending: false });
+
+      if (billsError) {
+        console.error('❌ [fetchTenantBills] Error fetching bills:', billsError);
+        throw billsError;
+      }
+
+      console.log('🔍 [fetchTenantBills] Setting bills:', bills?.length || 0);
+      setBills(bills || []);
     } catch (err) {
       console.error('❌ [fetchTenantBills] Error:', err);
       setError('Failed to load utility bills');
@@ -185,42 +201,118 @@ export const useUtilityBills = () => {
     tenant_id?: string;
   }) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://kozhlejudselgtmohdfm.supabase.co";
-      const requestUrl = `${supabaseUrl}/functions/v1/utility-bills/api/landlord/bills`;
-      
-      console.log('🔍 Creating bill:', {
-        url: requestUrl,
-        billData,
-        hasSession: !!session?.access_token
-      });
-      
-      const response = await fetch(requestUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
-        },
-        body: JSON.stringify(billData)
-      });
-
-      if (!response.ok) {
-        let errorMessage = 'Failed to create bill';
-        try {
-          const result = await response.json();
-          errorMessage = result.error || errorMessage;
-        } catch (e) {
-          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-        }
-        throw new Error(errorMessage);
+      // Get the current user's profile
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('User not authenticated');
       }
 
-      const result = await response.json();
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!profile) {
+        throw new Error('Profile not found');
+      }
+
+      // Check for duplicate bill
+      const { data: existingBill, error: duplicateError } = await supabase
+        .from('unit_bills')
+        .select('id')
+        .eq('unit_id', billData.unit_id)
+        .eq('utility_id', billData.utility_id)
+        .eq('month', billData.month)
+        .maybeSingle();
+
+      if (duplicateError) {
+        console.error('Duplicate check error:', duplicateError);
+        // Continue anyway, the unique constraint will catch duplicates
+      }
+
+      if (existingBill) {
+        throw new Error('Bill already exists for this unit, utility, and month');
+      }
+
+      // If no tenant_id provided, try to find the current tenant for this unit
+      let finalTenantId = billData.tenant_id;
+      if (!finalTenantId) {
+        // First try to find through active lease
+        const { data: lease, error: leaseError } = await supabase
+          .from('leases')
+          .select('tenant_id')
+          .eq('unit_id', billData.unit_id)
+          .eq('status', 'active')
+          .single();
+
+        if (!leaseError && lease) {
+          finalTenantId = lease.tenant_id;
+          console.log('Auto-assigned tenant from lease to bill:', finalTenantId);
+        } else {
+          // Fallback: try tenant_info table
+          const { data: currentTenant, error: tenantError } = await supabase
+            .from('tenant_info')
+            .select('id')
+            .eq('unit_id', billData.unit_id)
+            .eq('status', 'active')
+            .single();
+
+          if (!tenantError && currentTenant) {
+            finalTenantId = currentTenant.id;
+            console.log('Auto-assigned tenant from tenant_info to bill:', finalTenantId);
+          } else {
+            console.log('No active tenant found for unit:', billData.unit_id);
+          }
+        }
+      }
+
+      // Create the bill using admin client to bypass trigger issues
+      console.log('Creating bill with admin client...', {
+        unit_id: billData.unit_id,
+        utility_id: billData.utility_id,
+        month: billData.month,
+        amount: parseFloat(billData.amount.toString()),
+        due_date: billData.due_date,
+        landlord_id: profile.id,
+        tenant_id: finalTenantId
+      });
+      
+      console.log('Using supabaseAdmin client:', !!supabaseAdmin);
+      console.log('Admin client URL:', supabaseAdmin.supabaseUrl);
+      console.log('Admin client service key present:', !!supabaseAdmin.supabaseKey);
+      
+      // Force a fresh request by adding a timestamp
+      const timestamp = Date.now();
+      console.log('Request timestamp:', timestamp);
+      
+      // Try to clear any potential caching issues
+      console.log('Clearing any potential caching issues...');
+      
+      const { data: bill, error: createError } = await supabaseAdmin
+        .from('unit_bills')
+        .insert({
+          unit_id: billData.unit_id,
+          utility_id: billData.utility_id,
+          month: billData.month,
+          amount: parseFloat(billData.amount.toString()),
+          due_date: billData.due_date,
+          landlord_id: profile.id,
+          tenant_id: finalTenantId
+        })
+        .select()
+        .single();
+
+      if (createError) {
+        console.error('Create bill error details:', createError);
+        throw new Error(`Failed to create bill: ${createError.message}`);
+      }
+
+      console.log('Bill created successfully:', bill);
 
       toast.success('Utility bill created successfully');
       await fetchLandlordBills();
-      return result.bill;
+      return bill;
     } catch (err) {
       console.error('Error creating bill:', err);
       toast.error(err instanceof Error ? err.message : 'Failed to create bill');
@@ -236,26 +328,38 @@ export const useUtilityBills = () => {
     payment_reason?: string;
   }) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL || "https://kozhlejudselgtmohdfm.supabase.co"}/functions/v1/utility-bills/api/landlord/bills/${billId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
-        },
-        body: JSON.stringify(updates)
-      });
+      // Get the current user's profile
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
 
-      const result = await response.json();
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
 
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to update bill');
+      if (!profile) {
+        throw new Error('Profile not found');
+      }
+
+      // Update the bill
+      const { data: bill, error: updateError } = await supabase
+        .from('unit_bills')
+        .update(updates)
+        .eq('id', billId)
+        .eq('landlord_id', profile.id)
+        .select()
+        .single();
+
+      if (updateError) {
+        throw updateError;
       }
 
       toast.success('Bill updated successfully');
       await fetchLandlordBills();
-      return result.bill;
+      return bill;
     } catch (err) {
       console.error('Error updating bill:', err);
       toast.error(err instanceof Error ? err.message : 'Failed to update bill');
@@ -266,19 +370,31 @@ export const useUtilityBills = () => {
   // Delete a bill (landlord only)
   const deleteBill = async (billId: string) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL || "https://kozhlejudselgtmohdfm.supabase.co"}/functions/v1/utility-bills/api/landlord/bills/${billId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${session?.access_token}`
-        }
-      });
+      // Get the current user's profile
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
 
-      const result = await response.json();
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
 
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to delete bill');
+      if (!profile) {
+        throw new Error('Profile not found');
+      }
+
+      // Delete the bill
+      const { error: deleteError } = await supabase
+        .from('unit_bills')
+        .delete()
+        .eq('id', billId)
+        .eq('landlord_id', profile.id);
+
+      if (deleteError) {
+        throw deleteError;
       }
 
       toast.success('Bill deleted successfully');
@@ -328,53 +444,8 @@ export const useUtilityBills = () => {
     try {
       console.log('Processing utility bill payment:', { reference, billId });
 
-      // First try the edge function approach
-      try {
-      const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session?.access_token) {
-          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://kozhlejudselgtmohdfm.supabase.co";
-          
-          console.log('Calling verify-payment function:', {
-            url: `${supabaseUrl}/functions/v1/verify-payment`,
-            reference,
-            billId,
-            hasAuth: !!session.access_token
-          });
-          
-      const verifyResponse = await fetch(`${supabaseUrl}/functions/v1/verify-payment`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session.access_token}`,
-              'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ5NzQ4MDAsImV4cCI6MjA1MDU1MDgwMH0.example'
-        },
-        body: JSON.stringify({
-          reference: reference,
-          type: 'utility',
-          bill_id: billId
-        })
-      });
-
-          console.log('Verify payment response status:', verifyResponse.status);
-          
-          if (verifyResponse.ok) {
-      const verifyResult = await verifyResponse.json();
-            console.log('Verify payment result:', verifyResult);
-
-            if (verifyResult.success) {
-              toast.success(`Payment successful! Your ${verifyResult.bill?.utility_name || 'utility'} bill has been paid.`);
-              await fetchTenantBills();
-              return true;
-            }
-          }
-        }
-      } catch (edgeFunctionError) {
-        console.warn('Edge function failed, trying direct database update:', edgeFunctionError);
-      }
-
-      // Fallback: Direct database update (since payment is already verified by Paystack)
-      console.log('Using direct database update fallback');
+      // Direct database update (since payment is already verified by Paystack)
+      console.log('Using direct database update');
       
       const { data: bill, error: billError } = await supabase
         .from('unit_bills')

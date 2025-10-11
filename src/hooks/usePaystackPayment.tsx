@@ -32,38 +32,38 @@ export const usePaystackPayment = () => {
       let leaseId = paymentData.leaseId;
       
       if (!leaseId && profile?.id) {
-        // Try to find active lease by profile ID
-        const { data: leaseByProfile, error: leaseError1 } = await supabase
-          .from('leases')
+        // Try to find active lease via tenant_info first (correct approach)
+        const { data: tinfo, error: tinfoError } = await supabase
+          .from('tenant_info')
           .select('id')
-          .eq('tenant_id', profile.id)
-          .eq('status', 'active')
+          .eq('profile_id', profile.id)
           .maybeSingle();
+        
+        if (tinfoError) throw tinfoError;
 
-        if (leaseError1) throw leaseError1;
-        leaseId = leaseByProfile?.id;
-
-        // Fallback: resolve via tenant_info.profile_id
-        if (!leaseId) {
-          const { data: tinfo, error: tinfoError } = await supabase
-            .from('tenant_info')
+        if (tinfo?.id) {
+          const { data: leaseByTenantInfo, error: leaseError2 } = await supabase
+            .from('leases')
             .select('id')
-            .eq('profile_id', profile.id)
+            .eq('tenant_info_id', tinfo.id)
+            .eq('status', 'active')
             .maybeSingle();
           
-          if (tinfoError) throw tinfoError;
+          if (leaseError2) throw leaseError2;
+          leaseId = leaseByTenantInfo?.id;
+        }
 
-          if (tinfo?.id) {
-            const { data: leaseByTenantInfo, error: leaseError2 } = await supabase
-              .from('leases')
-              .select('id')
-              .eq('tenant_info_id', tinfo.id)
-              .eq('status', 'active')
-              .maybeSingle();
-            
-            if (leaseError2) throw leaseError2;
-            leaseId = leaseByTenantInfo?.id;
-          }
+        // Fallback: Try to find active lease by profile ID (legacy approach)
+        if (!leaseId) {
+          const { data: leaseByProfile, error: leaseError1 } = await supabase
+            .from('leases')
+            .select('id')
+            .eq('tenant_id', profile.id)
+            .eq('status', 'active')
+            .maybeSingle();
+
+          if (leaseError1) throw leaseError1;
+          leaseId = leaseByProfile?.id;
         }
       }
 
