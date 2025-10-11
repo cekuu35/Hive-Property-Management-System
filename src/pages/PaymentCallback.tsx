@@ -122,6 +122,7 @@ export const PaymentCallback = () => {
     // Find the tenant's lease
     let leaseId = null;
     let tenantInfoId = null;
+    let leaseByProfile: any = null;
 
     // Try to find lease via tenant_info first (correct approach)
     const { data: tenantInfo } = await supabase
@@ -142,19 +143,21 @@ export const PaymentCallback = () => {
       if (leaseData) {
         leaseId = leaseData.id;
         tenantInfoId = leaseData.tenant_info_id;
+        leaseByProfile = leaseData;
       }
     } else {
       // Fallback: Try to find lease by profile ID (legacy approach)
-      const { data: leaseByProfile } = await supabase
+      const { data: leaseByProfileData } = await supabase
         .from('leases')
         .select('id, tenant_info_id, rent_amount')
         .eq('tenant_id', profile.id)
         .eq('status', 'active')
         .maybeSingle();
 
-      if (leaseByProfile) {
-        leaseId = leaseByProfile.id;
-        tenantInfoId = leaseByProfile.tenant_info_id;
+      if (leaseByProfileData) {
+        leaseId = leaseByProfileData.id;
+        tenantInfoId = leaseByProfileData.tenant_info_id;
+        leaseByProfile = leaseByProfileData;
       }
     }
 

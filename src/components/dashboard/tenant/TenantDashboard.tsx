@@ -108,7 +108,7 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
 
   // Real-time updates for all tenant data
   useEffect(() => {
-    const rentPaymentsChannel = supabase
+    const tenantDataChannel = supabase
       .channel('rent_payments_changes')
       .on(
         'postgres_changes',
@@ -191,7 +191,7 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
           refetch();
           
           // Show success notification
-          toast.success('Payment processed successfully! Balance updated.');
+          console.log('Payment processed successfully! Balance updated.');
         }
       )
       .subscribe();
@@ -211,7 +211,7 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
           if (payload.new.status === 'paid') {
             refreshBalance();
             refetch();
-            toast.success('Payment confirmed! Balance updated.');
+            console.log('Payment confirmed! Balance updated.');
           }
         }
       )
@@ -975,7 +975,17 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
         rentAmount={displayBalance}
         dueDate={nextPaymentDue || '-'}
         onPaymentSuccess={handlePaymentSuccess}
-        leaseData={approvedLease}
+        leaseData={approvedLease ? {
+          id: approvedLease.id,
+          unit_id: approvedLease.unit_id,
+          tenant_id: approvedLease.tenant_id,
+          units: approvedLease.units ? {
+            property_id: approvedLease.units.properties?.id || '',
+            properties: {
+              landlord_id: approvedLease.units.properties?.landlord_id || ''
+            }
+          } : undefined
+        } : undefined}
       />
       
       <MaintenanceRequestModal

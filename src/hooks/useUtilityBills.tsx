@@ -80,7 +80,7 @@ export const useUtilityBills = () => {
       console.log('🔍 [fetchTenantBills] Tenant info found:', tenantInfo.id);
 
       // Get bills for this tenant
-      const { data: bills, error: billsError } = await supabase
+      const { data: bills, error: billsError } = await (supabase as any)
         .from('unit_bills')
         .select(`
           id,
@@ -122,7 +122,7 @@ export const useUtilityBills = () => {
       setError(null);
 
       // Use direct database approach instead of edge function
-      const { data: bills, error: billsError } = await supabase
+      const { data: bills, error: billsError } = await (supabase as any)
         .from('unit_bills')
         .select(`
           id,
@@ -218,7 +218,7 @@ export const useUtilityBills = () => {
       }
 
       // Check for duplicate bill
-      const { data: existingBill, error: duplicateError } = await supabase
+      const { data: existingBill, error: duplicateError } = await (supabase as any)
         .from('unit_bills')
         .select('id')
         .eq('unit_id', billData.unit_id)
@@ -251,7 +251,7 @@ export const useUtilityBills = () => {
           console.log('Auto-assigned tenant from lease to bill:', finalTenantId);
         } else {
           // Fallback: try tenant_info table
-          const { data: currentTenant, error: tenantError } = await supabase
+          const { data: currentTenant, error: tenantError } = await (supabase as any)
             .from('tenant_info')
             .select('id')
             .eq('unit_id', billData.unit_id)
@@ -279,8 +279,6 @@ export const useUtilityBills = () => {
       });
       
       console.log('Using supabaseAdmin client:', !!supabaseAdmin);
-      console.log('Admin client URL:', supabaseAdmin.supabaseUrl);
-      console.log('Admin client service key present:', !!supabaseAdmin.supabaseKey);
       
       // Force a fresh request by adding a timestamp
       const timestamp = Date.now();
@@ -345,7 +343,7 @@ export const useUtilityBills = () => {
       }
 
       // Update the bill
-      const { data: bill, error: updateError } = await supabase
+      const { data: bill, error: updateError } = await (supabase as any)
         .from('unit_bills')
         .update(updates)
         .eq('id', billId)
@@ -387,7 +385,7 @@ export const useUtilityBills = () => {
       }
 
       // Delete the bill
-      const { error: deleteError } = await supabase
+      const { error: deleteError } = await (supabase as any)
         .from('unit_bills')
         .delete()
         .eq('id', billId)
@@ -447,7 +445,7 @@ export const useUtilityBills = () => {
       // Direct database update (since payment is already verified by Paystack)
       console.log('Using direct database update');
       
-      const { data: bill, error: billError } = await supabase
+      const { data: bill, error: billError } = await (supabase as any)
         .from('unit_bills')
         .select(`
           id,
@@ -474,7 +472,7 @@ export const useUtilityBills = () => {
       }
 
       // Update bill status directly
-      const { error: updateError } = await supabase
+      const { error: updateError } = await (supabase as any)
         .from('unit_bills')
         .update({
           status: 'paid',

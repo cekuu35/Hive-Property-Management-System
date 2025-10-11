@@ -295,8 +295,6 @@ export const UtilityBillPaymentModal = ({
           </Alert>
 
           {/* Payment Buttons */}
-          <div className="space-y-3">
-            {/* Primary Payment Button */}
           <div className="flex gap-3">
             <Button
               variant="outline"
@@ -307,10 +305,10 @@ export const UtilityBillPaymentModal = ({
               Cancel
             </Button>
             
-              <Button
-                onClick={handleInlinePayment}
-                disabled={processing || !scriptLoaded}
-              className="flex-1 inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
+            <Button
+              onClick={handleInlinePayment}
+              disabled={processing || !scriptLoaded}
+              className="flex-1"
             >
               {processing ? (
                 <>
@@ -321,36 +319,9 @@ export const UtilityBillPaymentModal = ({
                 <>
                   <CreditCard className="mr-2 h-4 w-4" />
                   Pay Now
-                  </>
-                )}
-              </Button>
-            </div>
-
-            {/* Fallback PaystackButton */}
-            {!scriptLoaded && (
-              <div className="text-center">
-                <p className="text-xs text-muted-foreground mb-2">
-                  Alternative payment method:
-                </p>
-                <PaystackButton
-                  {...paystackConfig}
-                  className="w-full inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-secondary text-secondary-foreground hover:bg-secondary/80 h-10 px-4 py-2"
-                  disabled={processing}
-                >
-                  {processing ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      <CreditCard className="mr-2 h-4 w-4" />
-                      Pay with Paystack
                 </>
               )}
-            </PaystackButton>
-              </div>
-            )}
+            </Button>
           </div>
         </div>
       </DialogContent>

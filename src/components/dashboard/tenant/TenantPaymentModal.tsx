@@ -24,6 +24,7 @@ interface TenantPaymentModalProps {
   leaseData?: {
     id: string;
     unit_id: string;
+    tenant_id?: string;
     units?: {
       property_id: string;
       properties?: {
@@ -327,16 +328,16 @@ export const TenantPaymentModal = ({ open, onOpenChange, rentAmount, dueDate, on
                 if (!trackResult.success) {
                   throw new Error(trackResult.error || 'Track payment failed');
                 }
+                
+                // Update transaction status
+                setTransactionStatus('success');
+                setTransactionDetails(prev => ({
+                  ...prev,
+                  paymentId: trackResult.payment?.id,
+                  status: 'processed',
+                  processedAt: new Date().toISOString()
+                }));
               }
-              
-              // Update transaction status
-              setTransactionStatus('success');
-              setTransactionDetails(prev => ({
-                ...prev,
-                paymentId: paymentResult.payment?.id,
-                status: 'processed',
-                processedAt: new Date().toISOString()
-              }));
               
               // Refresh balance and data
               console.log('🔄 [TenantPaymentModal] Refreshing balance and data...');
