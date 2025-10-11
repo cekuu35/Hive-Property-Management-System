@@ -25,6 +25,7 @@ interface TenantPaymentModalProps {
     id: string;
     unit_id: string;
     tenant_id?: string;
+    tenant_info_id?: string;
     units?: {
       property_id: string;
       properties?: {
@@ -155,8 +156,13 @@ export const TenantPaymentModal = ({ open, onOpenChange, rentAmount, dueDate, on
 
       // Update tenant_info balance to 0 and payment status to paid
       console.log('🔍 [TenantPaymentModal] Updating tenant balance...');
+      
+      // First find the tenant_info record using the tenant_info_id from the lease
+      const tenantInfoId = leaseData.tenant_info_id || leaseData.tenant_id;
+      
       console.log('📋 [TenantPaymentModal] Balance update details:', {
-        tenantId: leaseData.tenant_id,
+        tenantInfoId: tenantInfoId,
+        leaseId: leaseData.id,
         currentBalance: 0,
         paymentStatus: 'paid'
       });
@@ -168,7 +174,7 @@ export const TenantPaymentModal = ({ open, onOpenChange, rentAmount, dueDate, on
           payment_status: 'paid',
           updated_at: new Date().toISOString()
         })
-        .eq('id', leaseData.tenant_id);
+        .eq('id', tenantInfoId);
 
       if (balanceError) {
         console.error('❌ [TenantPaymentModal] Error updating tenant balance:', balanceError);
@@ -181,7 +187,7 @@ export const TenantPaymentModal = ({ open, onOpenChange, rentAmount, dueDate, on
         const { data: verifyTenant, error: verifyError } = await supabase
           .from('tenant_info')
           .select('current_balance, payment_status, updated_at')
-          .eq('id', leaseData.tenant_id)
+          .eq('id', tenantInfoId)
           .single();
           
         if (verifyError) {
@@ -339,30 +345,24 @@ export const TenantPaymentModal = ({ open, onOpenChange, rentAmount, dueDate, on
                 }));
               }
               
-              // Refresh balance and data
-              console.log('🔄 [TenantPaymentModal] Refreshing balance and data...');
-              await onPaymentSuccess();
-              
               // Show success message
               toast.dismiss('payment-processing');
               toast.success(`Payment successful! KES ${rentAmount.toLocaleString()} has been processed.`);
               
-              // Close modal and refresh data
-              setTimeout(() => {
-                onOpenChange(false);
-                // Reset transaction status
-                setTransactionStatus('idle');
-                setTransactionDetails(null);
-                // Call the success callback to refresh parent data
-                console.log('🔄 [TenantPaymentModal] Calling onPaymentSuccess to refresh data...');
-                onPaymentSuccess();
-                
-                // Force page reload to ensure UI updates
-                console.log('🔄 [TenantPaymentModal] Reloading page to ensure UI updates...');
-                setTimeout(() => {
-                  window.location.reload();
-                }, 1000);
-              }, 2000);
+              // Update transaction status
+              setTransactionStatus('success');
+              
+              // Close modal immediately and trigger refetch
+              console.log('🔄 [TenantPaymentModal] Closing modal and refreshing data...');
+              onOpenChange(false);
+              
+              // Reset transaction status
+              setTransactionStatus('idle');
+              setTransactionDetails(null);
+              
+              // Call the success callback to trigger refetch
+              console.log('🔄 [TenantPaymentModal] Triggering onPaymentSuccess callback...');
+              await onPaymentSuccess();
               
             } catch (error) {
               console.error('❌ [TenantPaymentModal] PAYMENT PROCESSING FAILED!');

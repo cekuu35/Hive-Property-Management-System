@@ -217,6 +217,48 @@ export const useTenantPayments = () => {
     fetchPayments();
   }, [profile?.id]);
 
+  // Set up real-time subscription for payment changes
+  useEffect(() => {
+    if (!profile?.id) return;
+
+    console.log('🔔 [useTenantPayments] Setting up real-time subscription...');
+    
+    const channel = supabase
+      .channel('tenant_payments_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'rent_payments'
+        },
+        (payload) => {
+          console.log('🔄 [useTenantPayments] Payment change detected:', payload);
+          console.log('🔄 [useTenantPayments] Refetching payments...');
+          fetchPayments();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'tenant_info'
+        },
+        (payload) => {
+          console.log('🔄 [useTenantPayments] Tenant info change detected:', payload);
+          console.log('🔄 [useTenantPayments] Refetching payments...');
+          fetchPayments();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log('🔕 [useTenantPayments] Cleaning up real-time subscription');
+      supabase.removeChannel(channel);
+    };
+  }, [profile?.id]);
+
   return { 
     recentPayments, 
     rentBalance, 

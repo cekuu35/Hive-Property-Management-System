@@ -979,6 +979,7 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
           id: approvedLease.id,
           unit_id: approvedLease.unit_id,
           tenant_id: approvedLease.tenant_id,
+          tenant_info_id: approvedLease.tenant_info_id,
           units: approvedLease.units ? {
             property_id: approvedLease.units.properties?.id || '',
             properties: {
