@@ -53,6 +53,55 @@ serve(async (req) => {
       )
     }
 
+    // Verify payment with Paystack
+    console.log('🔍 [track-payment] Verifying payment with Paystack...')
+    const paystackSecretKey = 'sk_test_9f2c94cce8c01d4403373ce6f4bf8f1a7d142668'
+    
+    try {
+      const verifyResponse = await fetch(
+        `https://api.paystack.co/transaction/verify/${reference}`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${paystackSecretKey}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      )
+
+      const verifyData = await verifyResponse.json()
+      console.log('🔍 [track-payment] Paystack verification response:', verifyData)
+
+      if (!verifyData.status || verifyData.data.status !== 'success') {
+        console.error('❌ [track-payment] Payment verification failed:', verifyData)
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Payment verification failed',
+            details: verifyData.message 
+          }),
+          { 
+            status: 400, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
+      }
+
+      console.log('✅ [track-payment] Payment verified successfully with Paystack')
+    } catch (verifyError) {
+      console.error('❌ [track-payment] Error verifying payment with Paystack:', verifyError)
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Failed to verify payment with Paystack' 
+        }),
+        { 
+          status: 500, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+
     // Calculate due date for current month (UTC)
     const currentDate = new Date()
     const firstDayOfMonth = new Date(Date.UTC(currentDate.getFullYear(), currentDate.getMonth(), 1))
@@ -132,7 +181,11 @@ serve(async (req) => {
           lease_id: leaseId,
           amount: amount,
           due_date: dueDate,
-          status: 'pending'
+          paid_date: new Date().toISOString(),
+          status: 'paid',
+          payment_method: 'card',
+          transaction_reference: reference,
+          notes: `Payment processed via ${paymentType} tracking`
         })
         .select()
         .single()
@@ -157,8 +210,49 @@ serve(async (req) => {
 
     // Update tenant_info balance to 0 and payment status to paid
     console.log('🔄 [track-payment] Updating tenant balance...')
+    
+    // First, find the tenant_info record by ID or profile_id
+    let tenantInfoId = tenantId;
+    
+    // Check if tenantId is actually a profile_id (UUID format check)
+    const { data: tenantInfo, error: tenantInfoError } = await supabase
+      .from('tenant_info')
+      .select('id, profile_id')
+      .or(`id.eq.${tenantId},profile_id.eq.${tenantId}`)
+      .maybeSingle()
+    
+    if (tenantInfoError) {
+      console.error('❌ [track-payment] Error finding tenant_info:', tenantInfoError)
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Failed to find tenant information' 
+        }),
+        { 
+          status: 500, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+    
+    if (!tenantInfo?.id) {
+      console.error('❌ [track-payment] No tenant_info found for tenantId:', tenantId)
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'No tenant information found' 
+        }),
+        { 
+          status: 404, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+    
+    tenantInfoId = tenantInfo.id;
     console.log('📋 [track-payment] Balance update details:', {
-      tenantId,
+      originalTenantId: tenantId,
+      tenantInfoId: tenantInfoId,
       currentBalance: 0,
       paymentStatus: 'paid'
     })
@@ -170,7 +264,7 @@ serve(async (req) => {
         payment_status: 'paid',
         updated_at: new Date().toISOString()
       })
-      .eq('id', tenantId)
+      .eq('id', tenantInfoId)
 
     if (balanceError) {
       console.error('❌ [track-payment] Error updating tenant balance:', balanceError)
@@ -192,7 +286,7 @@ serve(async (req) => {
     const { data: verifyTenant, error: verifyError } = await supabase
       .from('tenant_info')
       .select('current_balance, payment_status, updated_at')
-      .eq('id', tenantId)
+      .eq('id', tenantInfoId)
       .single()
       
     if (verifyError) {
@@ -209,7 +303,7 @@ serve(async (req) => {
         type: 'broadcast',
         event: 'payment_completed',
         payload: {
-          tenantId,
+          tenantId: tenantInfoId,
           leaseId,
           paymentId,
           reference,

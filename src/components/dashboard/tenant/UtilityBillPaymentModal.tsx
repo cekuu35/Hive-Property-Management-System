@@ -98,9 +98,50 @@ export const UtilityBillPaymentModal = ({
     }
   };
 
-  // Fallback payment method using inline script
+  // Process utility payment via verification API
+  const processUtilityPayment = async (reference: string) => {
+    try {
+      console.log('🔍 Processing utility bill payment via verification API...');
+      console.log('Reference:', reference);
+      
+      // Call the verification API
+      const response = await fetch('/api/verifyUtilityPayment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          reference: reference
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('❌ Utility payment verification API error:', errorData);
+        throw new Error(errorData.error || 'Payment verification failed');
+      }
+
+      const data = await response.json();
+      console.log('✅ Utility payment verification successful:', data);
+
+      // Show success message
+      if (data.success && data.status === 'success') {
+        toast.success(`Payment successful! Your utility bill payment of KES ${paymentData.amount.toLocaleString()} has been processed.`);
+      } else {
+        toast.error('Payment verification completed but status is not successful');
+      }
+
+      return { success: data.success, payment: data };
+      
+    } catch (error) {
+      console.error('❌ Utility payment processing failed:', error);
+      throw error;
+    }
+  };
+
+  // Fallback payment method using inline script with subaccount support
   const handleInlinePayment = async () => {
-    console.log('Attempting inline payment...');
+    console.log('Attempting utility bill payment with subaccount...');
     console.log('Script loaded:', scriptLoaded);
     console.log('PaystackPop available:', !!window.PaystackPop);
     console.log('Public key:', publicKey);
@@ -134,22 +175,55 @@ export const UtilityBillPaymentModal = ({
     setError(null);
 
     try {
-      const reference = `utility_${paymentData.billId}_${Date.now()}`;
+      console.log('Initializing utility bill payment via API...');
+      
+      // Call the initialization API to get subaccount details
+      const initResponse = await fetch('/api/initializeUtilityPayment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          billId: paymentData.billId,
+          amount: paymentData.amount,
+          email: paymentData.email,
+          callbackUrl: `${window.location.origin}/payment/callback`
+        })
+      });
+
+      if (!initResponse.ok) {
+        const errorData = await initResponse.json();
+        console.error('Utility payment initialization API error:', errorData);
+        throw new Error(errorData.error || 'Payment initialization failed');
+      }
+
+      const initData = await initResponse.json();
+      console.log('Utility payment initialized successfully with subaccount:', initData);
+
       const amountInKobo = convertToKobo(paymentData.amount);
       
       console.log('Payment details:', {
-        reference,
+        reference: initData.reference,
         amount: paymentData.amount,
         amountInKobo,
         email: paymentData.email,
+        subaccount: initData.subaccount,
         publicKey: publicKey.substring(0, 20) + '...'
       });
       
       // Define callback functions separately to ensure they're proper functions
       const paymentCallback = function(response: any) {
-        console.log('Payment successful, reference:', response.reference);
-        handlePaymentSuccess(response.reference).catch((err) => {
-          console.error('Error in payment callback:', err);
+        console.log('🎉 UTILITY BILL PAYMENT SUCCESS CALLBACK TRIGGERED!');
+        console.log('✅ Payment successful:', response);
+        
+        // Process payment and then redirect
+        processUtilityPayment(response.reference).then(() => {
+          console.log('✅ Utility payment processed successfully');
+          handlePaymentSuccess(response.reference);
+          // Redirect to callback page
+          window.location.href = `${window.location.origin}/payment/callback?reference=${response.reference}&type=utility&amount=${paymentData.amount}&billId=${paymentData.billId}`;
+        }).catch((error) => {
+          console.error('❌ Utility payment processing failed:', error);
           setError('Payment completed but failed to update records. Please contact support.');
           setProcessing(false);
         });
@@ -166,7 +240,8 @@ export const UtilityBillPaymentModal = ({
         email: paymentData.email,
         amount: amountInKobo,
         currency: 'KES',
-        ref: reference,
+        ref: initData.reference,
+        authorization_code: initData.accessCode, // Use accessCode from API response
         metadata: {
           custom_fields: [
             {
@@ -195,7 +270,7 @@ export const UtilityBillPaymentModal = ({
         onClose: closeCallback
       });
 
-      console.log('Opening Paystack iframe...');
+      console.log('🚀 Opening Paystack iframe with subaccount...');
       handler.openIframe();
     } catch (error) {
       console.error('Payment initialization error:', error);

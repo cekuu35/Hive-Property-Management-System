@@ -12,8 +12,11 @@ import { Separator } from '@/components/ui/separator';
 import { User, Mail, Phone, Shield, Bell, CreditCard, Users, Settings, Save, Plus, Trash2, Loader2 } from 'lucide-react';
 import { useSettings } from '@/hooks/useSettings';
 import { DataIntegrityCheck } from '../DataIntegrityCheck';
+import { LandlordPasswordChangeModal } from '../LandlordPasswordChangeModal';
 
 export const SettingsSection = () => {
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  
   const {
     notifications,
     profileSettings,
@@ -454,7 +457,7 @@ export const SettingsSection = () => {
                     <div className="font-medium">Password</div>
                     <div className="text-sm text-muted-foreground">Last changed 3 months ago</div>
                   </div>
-                  <Button variant="outline">Change Password</Button>
+                  <Button variant="outline" onClick={() => setShowPasswordModal(true)}>Change Password</Button>
                 </div>
 
                 <div className="flex items-center justify-between p-4 border rounded-lg">
@@ -503,6 +506,12 @@ export const SettingsSection = () => {
           <DataIntegrityCheck />
         </TabsContent>
       </Tabs>
+
+      {/* Password Change Modal */}
+      <LandlordPasswordChangeModal 
+        isOpen={showPasswordModal} 
+        onClose={() => setShowPasswordModal(false)} 
+      />
     </div>
   );
 };

@@ -79,11 +79,11 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
   const calculatedBalance = tenantRentBalance || 0;
   const tenantInfoBalance = tenantInfo?.current_balance || 0;
   
-  // If monthly rent calculation shows 0, it means either:
-  // 1. No rent is due (all payments made), or
-  // 2. No payment record exists for current month (rent is due)
-  // In case 2, we should show the rent amount, not 0
-  const displayBalance = calculatedBalance > 0 ? calculatedBalance : (tenantInfoBalance > 0 ? tenantInfoBalance : 0);
+  // Prioritize tenant_info balance as it's updated by payment processing
+  // Fallback to calculated balance if tenant_info balance is not available
+  const displayBalance = tenantInfoBalance !== null && tenantInfoBalance !== undefined 
+    ? tenantInfoBalance 
+    : (calculatedBalance > 0 ? calculatedBalance : 0);
   
   const displayPaymentStatus = hasApprovedLease 
     ? (displayBalance > 0 ? 'unpaid' : 'paid')
@@ -217,12 +217,35 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
       )
       .subscribe();
 
+    // Listen for tenant_info changes (balance updates)
+    const tenantInfoChannel = supabase
+      .channel('tenant_info_realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'tenant_info'
+        },
+        (payload) => {
+          console.log('🔄 [TenantDashboard] Tenant info updated:', payload);
+          console.log('🔄 [TenantDashboard] New balance:', payload.new.current_balance);
+          console.log('🔄 [TenantDashboard] New payment status:', payload.new.payment_status);
+          // Refresh all data to update the UI
+          refreshBalance();
+          refetch();
+          console.log('✅ [TenantDashboard] Balance updated from tenant_info change');
+        }
+      )
+      .subscribe();
+
     return () => {
       supabase.removeChannel(rentPaymentsChannel);
       supabase.removeChannel(maintenanceChannel);
       supabase.removeChannel(notificationsChannel);
       supabase.removeChannel(unitApplicationsChannel);
       supabase.removeChannel(paymentUpdatesChannel);
+      supabase.removeChannel(tenantInfoChannel);
     };
   }, [refetch]);
 
@@ -262,12 +285,11 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
   };
 
   const handlePaymentSuccess = async () => {
-    // Refresh all tenant data after successful payment
     console.log('🔄 [TenantDashboard] Payment successful, refreshing data...');
+    console.log('🔍 [TenantDashboard] Current balance before refresh:', displayBalance);
     
     try {
-      // Immediate refresh - run all refreshes in parallel for faster response
-      console.log('📊 [TenantDashboard] Refreshing all data sources...');
+      // Immediate refresh of all data sources
       await Promise.all([
         refetch(), // Maintenance requests
         refetchPayments(), // Payment data and balance
@@ -275,32 +297,11 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
         refetchTenantInfo() // Tenant info including balance
       ]);
       
-      console.log('✅ [TenantDashboard] Initial refresh completed');
-      
-      // Add multiple refresh attempts to ensure balance updates
-      console.log('🔄 [TenantDashboard] Additional refresh attempts...');
-      
-      // Second refresh after 500ms
-      setTimeout(() => {
-        console.log('🔄 [TenantDashboard] Second refresh attempt...');
-        refreshBalance();
-      }, 500);
-      
-      // Third refresh after 1.5 seconds
-      setTimeout(() => {
-        console.log('🔄 [TenantDashboard] Third refresh attempt...');
-        refreshBalance();
-      }, 1500);
-      
-      // Final refresh after 3 seconds
-      setTimeout(() => {
-        console.log('🔄 [TenantDashboard] Final refresh attempt...');
-        refreshBalance();
-      }, 3000);
+      console.log('✅ [TenantDashboard] Data refresh completed');
+      console.log('🔍 [TenantDashboard] New balance after refresh:', displayBalance);
       
     } catch (error) {
       console.error('❌ [TenantDashboard] Error refreshing data after payment:', error);
-      // Don't throw error to avoid breaking the payment flow
     }
   };
 
@@ -470,7 +471,12 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
                 <Button 
                   className="h-auto p-4 flex flex-col items-center gap-2" 
                   variant={displayBalance > 0 ? "default" : "outline"}
-                  onClick={() => setShowPaymentModal(true)}
+                  onClick={() => {
+                    console.log('🔍 [TenantDashboard] Pay Rent button clicked');
+                    console.log('🔍 [TenantDashboard] Current balance:', displayBalance);
+                    console.log('🔍 [TenantDashboard] Opening payment modal...');
+                    setShowPaymentModal(true);
+                  }}
                   disabled={displayBalance === 0}
                 >
                   <CreditCard className="h-6 w-6" />
@@ -980,6 +986,9 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
           unit_id: approvedLease.unit_id,
           tenant_id: approvedLease.tenant_id,
           tenant_info_id: approvedLease.tenant_info_id,
+          rent_amount: approvedLease.rent_amount,
+          start_date: approvedLease.start_date,
+          end_date: approvedLease.end_date,
           units: approvedLease.units ? {
             property_id: approvedLease.units.properties?.id || '',
             properties: {

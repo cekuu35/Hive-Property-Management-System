@@ -110,7 +110,11 @@ async function handleSuccessfulPayment(supabaseAdmin: any, paymentData: any) {
 
 async function processUtilityBillPayment(supabaseAdmin: any, reference: string, metadata: any, amount: number) {
   try {
-    const { bill_id, tenant_id, landlord_id } = metadata
+    const { bill_id, tenant_id, landlord_id, property_id, unit_id, utility_name, type } = metadata
+
+    console.log('🔧 Processing utility bill payment with subaccount...')
+    console.log('Reference:', reference)
+    console.log('Metadata:', metadata)
 
     // Update the unit_bills table
     const { error: billError } = await supabaseAdmin
@@ -126,6 +130,8 @@ async function processUtilityBillPayment(supabaseAdmin: any, reference: string, 
       console.error('Error updating unit_bills:', billError)
       return
     }
+
+    console.log('✅ Utility bill status updated successfully')
 
     // Find the tenant's active lease for payment record
     let leaseId = null
@@ -159,6 +165,22 @@ async function processUtilityBillPayment(supabaseAdmin: any, reference: string, 
           leaseId = leaseByTenantInfo.id
         }
       }
+    }
+
+    // Update the payments table with subaccount information
+    const { error: paymentUpdateError } = await supabaseAdmin
+      .from('payments')
+      .update({
+        status: 'success',
+        amount: amount / 100, // Convert from kobo
+        updated_at: new Date().toISOString()
+      })
+      .eq('reference', reference)
+
+    if (paymentUpdateError) {
+      console.error('Error updating payments table:', paymentUpdateError)
+    } else {
+      console.log('✅ Payments table updated with subaccount information')
     }
 
     // Create a payment record only if we found a lease
@@ -221,17 +243,37 @@ async function processRentPayment(supabaseAdmin: any, reference: string, metadat
       return
     }
 
-    // Update tenant balance
+    // Find the tenant_info record by profile_id first
+    const { data: tenantInfo, error: tenantInfoError } = await supabaseAdmin
+      .from('tenant_info')
+      .select('id')
+      .eq('profile_id', tenant_id)
+      .maybeSingle()
+
+    if (tenantInfoError) {
+      console.error('Error finding tenant_info:', tenantInfoError)
+      return
+    }
+
+    if (!tenantInfo?.id) {
+      console.error('No tenant_info found for profile_id:', tenant_id)
+      return
+    }
+
+    // Update tenant balance using the correct tenant_info id
     const { error: balanceError } = await supabaseAdmin
       .from('tenant_info')
       .update({
         current_balance: 0,
-        payment_status: 'paid'
+        payment_status: 'paid',
+        updated_at: new Date().toISOString()
       })
-      .eq('profile_id', tenant_id)
+      .eq('id', tenantInfo.id)
 
     if (balanceError) {
       console.error('Error updating tenant balance:', balanceError)
+    } else {
+      console.log('Successfully updated tenant balance for tenant_info_id:', tenantInfo.id)
     }
 
     // Send notification to tenant

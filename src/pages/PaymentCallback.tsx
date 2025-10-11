@@ -30,7 +30,29 @@ export const PaymentCallback = () => {
       return;
     }
 
-    processPayment();
+    // Check for pending payment in localStorage as fallback
+    const pendingPayment = localStorage.getItem('pending_rent_payment');
+    if (pendingPayment) {
+      try {
+        const paymentData = JSON.parse(pendingPayment);
+        console.log('🔍 [PaymentCallback] Found pending payment in localStorage:', paymentData);
+        
+        // Verify this is the same payment
+        if (paymentData.reference === reference) {
+          console.log('✅ [PaymentCallback] Payment reference matches, processing...');
+          processPayment();
+        } else {
+          console.log('⚠️ [PaymentCallback] Payment reference mismatch, using URL params');
+          processPayment();
+        }
+      } catch (error) {
+        console.error('❌ [PaymentCallback] Error parsing pending payment:', error);
+        processPayment();
+      }
+    } else {
+      console.log('🔍 [PaymentCallback] No pending payment found, processing with URL params');
+      processPayment();
+    }
   }, [reference, profile?.id]);
 
   const processPayment = async () => {
@@ -119,51 +141,70 @@ export const PaymentCallback = () => {
   };
 
   const processRentPayment = async () => {
-    // Find the tenant's lease
+    console.log('🔍 [PaymentCallback] Processing rent payment...');
+    
+    // Get leaseId from URL parameters (passed from TenantPaymentModal)
+    const urlLeaseId = searchParams.get('leaseId');
     let leaseId = null;
     let tenantInfoId = null;
     let leaseByProfile: any = null;
 
-    // Try to find lease via tenant_info first (correct approach)
-    const { data: tenantInfo } = await supabase
-      .from('tenant_info')
-      .select('id')
-      .eq('profile_id', profile.id)
-      .order('updated_at', { ascending: false })
-      .limit(1);
-
-    if (tenantInfo && tenantInfo.length > 0) {
-      const { data: leaseData } = await supabase
+    if (urlLeaseId) {
+      console.log('🔍 [PaymentCallback] Using leaseId from URL:', urlLeaseId);
+      // Use the leaseId passed from the payment modal
+      const { data: leaseData, error: leaseError } = await supabase
         .from('leases')
         .select('id, tenant_info_id, rent_amount')
-        .eq('tenant_info_id', tenantInfo[0].id)
+        .eq('id', urlLeaseId)
         .eq('status', 'active')
         .maybeSingle();
+
+      if (leaseError) {
+        console.error('❌ [PaymentCallback] Error fetching lease:', leaseError);
+        throw new Error('Failed to fetch lease information');
+      }
 
       if (leaseData) {
         leaseId = leaseData.id;
         tenantInfoId = leaseData.tenant_info_id;
         leaseByProfile = leaseData;
+        console.log('✅ [PaymentCallback] Found lease:', leaseData);
       }
-    } else {
-      // Fallback: Try to find lease by profile ID (legacy approach)
-      const { data: leaseByProfileData } = await supabase
-        .from('leases')
-        .select('id, tenant_info_id, rent_amount')
-        .eq('tenant_id', profile.id)
-        .eq('status', 'active')
-        .maybeSingle();
+    }
 
-      if (leaseByProfileData) {
-        leaseId = leaseByProfileData.id;
-        tenantInfoId = leaseByProfileData.tenant_info_id;
-        leaseByProfile = leaseByProfileData;
+    // Fallback: Find lease via tenant_info if URL leaseId not provided
+    if (!leaseId || !tenantInfoId) {
+      console.log('🔍 [PaymentCallback] Fallback: Finding lease via tenant_info...');
+      const { data: tenantInfo } = await supabase
+        .from('tenant_info')
+        .select('id')
+        .eq('profile_id', profile.id)
+        .order('updated_at', { ascending: false })
+        .limit(1);
+
+      if (tenantInfo && tenantInfo.length > 0) {
+        const { data: leaseData } = await supabase
+          .from('leases')
+          .select('id, tenant_info_id, rent_amount')
+          .eq('tenant_info_id', tenantInfo[0].id)
+          .eq('status', 'active')
+          .maybeSingle();
+
+        if (leaseData) {
+          leaseId = leaseData.id;
+          tenantInfoId = leaseData.tenant_info_id;
+          leaseByProfile = leaseData;
+          console.log('✅ [PaymentCallback] Found lease via tenant_info:', leaseData);
+        }
       }
     }
 
     if (!leaseId || !tenantInfoId) {
+      console.error('❌ [PaymentCallback] No active lease found for tenant');
       throw new Error('No active lease found for tenant');
     }
+
+    console.log('✅ [PaymentCallback] Using lease:', { leaseId, tenantInfoId });
 
     // Get payment amount from URL params or use a default
     const amount = searchParams.get('amount') ? 
@@ -171,6 +212,13 @@ export const PaymentCallback = () => {
       (leaseByProfile?.rent_amount || 0);
 
     // Record the payment in rent_payments table
+    console.log('🔍 [PaymentCallback] Recording payment:', {
+      leaseId,
+      amount,
+      reference,
+      tenantInfoId
+    });
+
     const { data: paymentRecord, error: paymentError } = await supabase
       .from('rent_payments')
       .insert({
@@ -187,22 +235,44 @@ export const PaymentCallback = () => {
       .single();
 
     if (paymentError) {
-      console.error('Error recording payment:', paymentError);
+      console.error('❌ [PaymentCallback] Error recording payment:', paymentError);
       throw new Error('Failed to record payment');
     }
 
+    console.log('✅ [PaymentCallback] Payment recorded successfully:', paymentRecord);
+
     // Update tenant_info balance
-    const { error: balanceError } = await supabase
+    console.log('🔍 [PaymentCallback] Updating tenant_info balance...');
+    const { data: updateResult, error: balanceError } = await supabase
       .from('tenant_info')
       .update({
         current_balance: 0, // Set balance to 0 after payment
-        payment_status: 'paid'
+        payment_status: 'paid',
+        updated_at: new Date().toISOString()
       })
-      .eq('id', tenantInfoId);
+      .eq('id', tenantInfoId)
+      .select();
 
     if (balanceError) {
-      console.error('Error updating balance:', balanceError);
+      console.error('❌ [PaymentCallback] Error updating balance:', balanceError);
       // Don't throw here, payment was recorded successfully
+    } else {
+      console.log('✅ [PaymentCallback] Balance updated successfully:', updateResult);
+    }
+
+    // Verify the balance update
+    console.log('🔍 [PaymentCallback] Verifying balance update...');
+    const { data: verifyTenant, error: verifyError } = await supabase
+      .from('tenant_info')
+      .select('current_balance, payment_status, updated_at')
+      .eq('id', tenantInfoId)
+      .single();
+      
+    if (verifyError) {
+      console.error('❌ [PaymentCallback] Error verifying balance update:', verifyError);
+    } else {
+      console.log('✅ [PaymentCallback] Balance verification:', verifyTenant);
+      console.log('🔍 [PaymentCallback] Final balance should be 0:', verifyTenant.current_balance);
     }
 
     setPaymentDetails({
@@ -215,6 +285,10 @@ export const PaymentCallback = () => {
 
     setStatus('success');
     setMessage('Rent payment processed successfully!');
+
+    // Clean up pending payment from localStorage
+    console.log('🔍 [PaymentCallback] Cleaning up pending payment from localStorage');
+    localStorage.removeItem('pending_rent_payment');
 
     toast({
       title: "Payment Successful!",

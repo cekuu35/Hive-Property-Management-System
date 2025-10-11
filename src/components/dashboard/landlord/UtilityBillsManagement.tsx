@@ -95,7 +95,35 @@ export const UtilityBillsManagement = () => {
 
   const handleCreateBill = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate form data
+    if (!createForm.unit_id || createForm.unit_id === '') {
+      toast.error('Please select a unit');
+      return;
+    }
+    if (!createForm.utility_id || createForm.utility_id === '') {
+      toast.error('Please select a utility');
+      return;
+    }
+    if (!createForm.month || createForm.month === '') {
+      toast.error('Please enter a month');
+      return;
+    }
+    if (!createForm.amount || createForm.amount === '') {
+      toast.error('Please enter an amount');
+      return;
+    }
+    if (!createForm.due_date || createForm.due_date === '') {
+      toast.error('Please enter a due date');
+      return;
+    }
+    
     try {
+      console.log('Creating bill with form data:', createForm);
+      console.log('Properties available:', properties?.length);
+      console.log('Utilities available:', utilities?.length);
+      console.log('Tenants available:', tenants?.length);
+      
       await createBill({
         unit_id: createForm.unit_id,
         utility_id: createForm.utility_id,

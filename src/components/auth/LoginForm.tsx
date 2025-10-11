@@ -3,11 +3,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
-import { Loader2, Eye, EyeOff } from "lucide-react";
+import { Loader2, Eye, EyeOff, Shield } from "lucide-react";
 import { RoleSelector, UserRole } from "./RoleSelector";
 import { AnimatedBackground } from "./AnimatedBackground";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { Link } from "react-router-dom";
 
 export const LoginForm = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -342,10 +343,24 @@ export const LoginForm = () => {
                 </form>
 
                 {authMode === "login" && (
-                  <div className="mt-6 text-center">
+                  <div className="mt-6 text-center space-y-3">
                     <Button variant="link" className="text-sm text-white/70 hover:text-white transition-colors duration-200">
                       Forgot your password?
                     </Button>
+                    
+                    {/* Admin Gateway Button */}
+                    <div className="pt-2">
+                      <Link to="/admin">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="bg-white/10 hover:bg-white/20 backdrop-blur-sm border-white/30 text-white hover:text-white transition-all duration-200 rounded-full p-2"
+                          title="Admin Portal"
+                        >
+                          <Shield className="h-4 w-4" />
+                        </Button>
+                      </Link>
+                    </div>
                   </div>
                 )}
             </div>

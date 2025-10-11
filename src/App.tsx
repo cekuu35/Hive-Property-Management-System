@@ -13,6 +13,7 @@ import TestRoleSwitching from "./pages/TestRoleSwitching";
 import NotFound from "./pages/NotFound";
 import SupabaseConnectionTest from "./components/SupabaseConnectionTest";
 import { PaymentCallback } from "./pages/PaymentCallback";
+import AdminPortal from "./pages/AdminPortal";
 
 const queryClient = new QueryClient();
 
@@ -61,6 +62,10 @@ const App = () => (
               <Route 
                 path="/payment/callback" 
                 element={<PaymentCallback />} 
+              />
+              <Route 
+                path="/admin" 
+                element={<AdminPortal />} 
               />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />

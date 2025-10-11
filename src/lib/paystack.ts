@@ -19,7 +19,7 @@ export const getPaystackConfig = (): PaystackConfig => {
     // Return a placeholder key for development
     console.warn('Paystack public key is missing. Using placeholder key for development.');
     return {
-      publicKey: 'pk_test_placeholder_key',
+      publicKey: 'pk_test_9f2c94cce8c01d4403373ce6f4bf8f1a7d142668',
     };
   }
 

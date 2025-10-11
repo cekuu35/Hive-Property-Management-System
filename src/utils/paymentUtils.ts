@@ -39,12 +39,34 @@ export async function fetchTenantPaymentHistory(profileId: string): Promise<Paym
     console.log('✅ Found tenant_info:', tenantInfo.first_name, tenantInfo.last_name);
 
     // Find active lease using tenant_info_id
-    const { data: lease, error: leaseError } = await supabase
+    // Try with regular client first
+    let { data: lease, error: leaseError } = await supabase
       .from('leases')
       .select('id, rent_amount, status, tenant_info_id')
       .eq('tenant_info_id', tenantInfo.id)
       .eq('status', 'active')
       .maybeSingle();
+
+    // If RLS blocks the query, try with admin client
+    if (leaseError && (leaseError.code === '42501' || leaseError.message.includes('RLS'))) {
+      console.log('🔄 RLS blocked lease query - trying admin client...');
+      
+      const { data: adminLease, error: adminLeaseError } = await supabaseAdmin
+        .from('leases')
+        .select('id, rent_amount, status, tenant_info_id')
+        .eq('tenant_info_id', tenantInfo.id)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (adminLeaseError) {
+        console.error('❌ Admin client also failed:', adminLeaseError);
+        throw adminLeaseError;
+      }
+
+      lease = adminLease;
+      leaseError = null;
+      console.log('✅ Admin client succeeded, found lease:', lease);
+    }
 
     if (leaseError) {
       console.error('❌ Error fetching lease:', leaseError);

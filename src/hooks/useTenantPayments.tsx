@@ -186,9 +186,29 @@ export const useTenantPayments = () => {
       
       setRecentPayments(prioritizedPayments);
 
-      // Use monthly rent calculation for current balance
-      const totalOutstanding = currentRentDue + lateFee;
-      setRentBalance(totalOutstanding);
+      // Get the actual current_balance from tenant_info table
+      console.log('📋 [useTenantPayments] Step 5: Fetching current balance from tenant_info...');
+      const { data: tenantInfoBalance, error: balanceError } = await supabase
+        .from('tenant_info')
+        .select('current_balance, payment_status')
+        .eq('profile_id', profile.id)
+        .order('updated_at', { ascending: false })
+        .limit(1);
+
+      if (balanceError) {
+        console.error('❌ [useTenantPayments] Error fetching tenant balance:', balanceError);
+        // Fallback to monthly rent calculation
+        const totalOutstanding = currentRentDue + lateFee;
+        setRentBalance(totalOutstanding);
+      } else if (tenantInfoBalance && tenantInfoBalance.length > 0) {
+        console.log('✅ [useTenantPayments] Using tenant_info balance:', tenantInfoBalance[0].current_balance);
+        setRentBalance(tenantInfoBalance[0].current_balance || 0);
+      } else {
+        console.log('⚠️ [useTenantPayments] No tenant_info balance found, using monthly rent calculation');
+        const totalOutstanding = currentRentDue + lateFee;
+        setRentBalance(totalOutstanding);
+      }
+      
       setNextPaymentDue(nextDueDate);
       
       console.log('✅ [useTenantPayments] Payment fetch completed successfully');
@@ -247,7 +267,7 @@ export const useTenantPayments = () => {
         },
         (payload) => {
           console.log('🔄 [useTenantPayments] Tenant info change detected:', payload);
-          console.log('🔄 [useTenantPayments] Refetching payments...');
+          console.log('🔄 [useTenantPayments] Refetching payments and balance...');
           fetchPayments();
         }
       )
