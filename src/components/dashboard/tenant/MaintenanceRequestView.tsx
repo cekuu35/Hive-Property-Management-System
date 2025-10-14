@@ -7,12 +7,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { PhotoGallery } from '@/components/ui/PhotoGallery';
 import { 
   Calendar, User, Clock, MessageCircle, Send, Wrench, AlertTriangle, 
   CheckCircle, Star, Camera, Phone, Mail 
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
+import { useLandlordInfo } from '@/hooks/useLandlordInfo';
+import { useAuth } from '@/hooks/useAuth';
 
 interface MaintenanceRequest {
   id: string;
@@ -50,6 +53,8 @@ export const MaintenanceRequestView = ({ isOpen, onClose, request }: Maintenance
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [rating, setRating] = useState(0);
+  const { landlordInfo } = useLandlordInfo();
+  const { profile } = useAuth();
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -424,6 +429,41 @@ export const MaintenanceRequestView = ({ isOpen, onClose, request }: Maintenance
                   </CardContent>
                 </Card>
 
+                {/* Landlord Information */}
+                {landlordInfo && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <User className="h-4 w-4" />
+                        Your Landlord
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-10 w-10">
+                          <AvatarImage src={landlordInfo.avatar_url || undefined} />
+                          <AvatarFallback>
+                            {landlordInfo.first_name?.[0]}{landlordInfo.last_name?.[0]}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1">
+                          <h4 className="font-medium">
+                            {landlordInfo.first_name} {landlordInfo.last_name}
+                          </h4>
+                          {landlordInfo.company_name && (
+                            <p className="text-sm text-muted-foreground">
+                              {landlordInfo.company_name}
+                            </p>
+                          )}
+                        </div>
+                        <Button variant="ghost" size="sm">
+                          <MessageCircle className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Cost Information */}
                 {(request.estimatedCost || request.actualCost) && (
                   <Card>
@@ -453,20 +493,17 @@ export const MaintenanceRequestView = ({ isOpen, onClose, request }: Maintenance
                     <CardHeader>
                       <CardTitle className="text-sm flex items-center gap-2">
                         <Camera className="h-4 w-4" />
-                        Photos
+                        Photos ({request.images.length})
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="grid grid-cols-2 gap-2">
-                        {request.images.map((image, index) => (
-                          <img
-                            key={index}
-                            src={image}
-                            alt={`Request image ${index + 1}`}
-                            className="w-full h-20 object-cover rounded border"
-                          />
-                        ))}
-                      </div>
+                      <PhotoGallery
+                        photos={request.images}
+                        maxColumns={3}
+                        showActions={false}
+                        allowFullscreen={true}
+                        className="mt-2"
+                      />
                     </CardContent>
                   </Card>
                 )}

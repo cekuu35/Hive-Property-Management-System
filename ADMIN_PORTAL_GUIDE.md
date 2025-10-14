@@ -33,29 +33,30 @@
 
 ---
 
-## **💳 How Subaccount Code Updates Work**
+## **📱 How M-Pesa Configuration Updates Work**
 
 ### **Real-Time Updates**
-✅ **Yes, subaccount code changes update in Supabase immediately!**
+✅ **Yes, M-Pesa configuration changes update in Supabase immediately!**
 
 ### **How It Works**
-1. **You update the subaccount code** in the admin portal
+1. **You update the M-Pesa configuration** in the admin portal
 2. **The change is saved to Supabase** instantly
-3. **All future payments** automatically use the new subaccount code
+3. **All future payments** automatically use the new M-Pesa settings
 4. **No system restart required** - changes are immediate
 
-### **Step-by-Step Subaccount Update**
+### **Step-by-Step M-Pesa Configuration Update**
 1. **Access the admin portal**
-2. **Scroll to "Landlord Subaccount Management"**
+2. **Scroll to "Landlord M-Pesa Configuration"**
 3. **Find the landlord** you want to update
-4. **Enter the new Paystack subaccount code** (e.g., `ACCT_1234567890abcdef`)
-5. **Click "Save Changes"** to update all modified landlords at once
+4. **Enter the M-Pesa paybill number** (e.g., `174379`)
+5. **Enter the account reference** (e.g., `RENT_PAYMENT`)
+6. **Click "Save Changes"** to update all modified landlords at once
 
 ### **What Happens When You Update**
 - ✅ **Database updated** in real-time
-- ✅ **All future payments** route to the new subaccount
-- ✅ **Payment logging** includes the updated subaccount code
-- ✅ **Landlord receives payments** in their correct account
+- ✅ **All future payments** use M-Pesa STK Push
+- ✅ **Payment logging** includes the updated M-Pesa details
+- ✅ **Landlord receives payments** via their M-Pesa paybill
 - ✅ **No downtime** or system restart needed
 
 ---
@@ -67,14 +68,14 @@
 - **Total properties count**
 - **Total tenants count**
 - **Recent payments overview**
-- **Landlords with subaccount codes status**
+- **Landlords with M-Pesa configuration status**
 
-### **🔧 Landlord Subaccount Management**
-- **Visual interface** to update Paystack subaccount codes
-- **Real-time validation** of subaccount codes
+### **🔧 Landlord M-Pesa Configuration**
+- **Visual interface** to update M-Pesa paybill numbers and account references
+- **Real-time validation** of M-Pesa configuration
 - **Shows which landlords** have been modified
 - **Bulk save functionality**
-- **Clear instructions** on how split payments work
+- **Clear instructions** on how M-Pesa STK Push works
 
 ### **📈 Payment Monitoring**
 - **Recent payment activity**
@@ -105,12 +106,12 @@
 2. **Go to**: `http://localhost:8080/admin`
 3. **Sign in** with your email and any password
 4. **Change your password** using the "Change Password" button
-5. **Update Paystack subaccount codes** for split payments
+5. **Update M-Pesa configurations** for STK Push payments
 6. **Test the payment flow** with different landlords
 
 ### **Regular Usage**
 1. **Access the portal** whenever you need to:
-   - Update subaccount codes
+   - Update M-Pesa configurations
    - Monitor system activity
    - Check payment status
    - Manage landlord configurations
@@ -119,8 +120,10 @@
 
 ## **💡 Tips & Best Practices**
 
-### **Subaccount Code Management**
-- **Update codes** when you get new Paystack subaccounts
+### **M-Pesa Configuration Management**
+- **Update configurations** when you get new M-Pesa paybill numbers
+- **Use descriptive account references** for easy payment tracking
+- **Test configurations** with sandbox environment first
 - **Test payments** after updating codes
 - **Keep backup** of old codes in case of issues
 - **Verify payments** are routing correctly

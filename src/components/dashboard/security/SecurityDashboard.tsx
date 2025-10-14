@@ -1,420 +1,464 @@
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Shield, AlertTriangle, UserCheck, MapPin, Clock, Plus } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { 
+  Shield, 
+  Building, 
+  Users, 
+  AlertTriangle, 
+  CheckCircle, 
+  Clock,
+  Eye,
+  Plus,
+  Calendar,
+  MapPin
+} from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { useVisitorRequests } from '@/hooks/useVisitorRequests';
-import { useVisitors } from '@/hooks/useVisitors';
-import { format } from 'date-fns';
-import { IncidentsSection } from './IncidentsSection';
 import { VisitorsSection } from './VisitorsSection';
+import { IncidentsSection } from './IncidentsSection';
 import { PatrolsSection } from './PatrolsSection';
 import { SecurityReportsSection } from './SecurityReportsSection';
+import { SettingsSection } from './SettingsSection';
 
 interface SecurityDashboardProps {
+  className?: string;
   activeSection?: string;
   onSectionChange?: (section: string) => void;
 }
 
-const SecurityDashboard = ({ activeSection = "overview", onSectionChange }: SecurityDashboardProps) => {
+interface AssignedProperty {
+  id: string;
+  name: string;
+  address: string;
+  total_units: number;
+  occupied_units: number;
+}
+
+interface SecurityLog {
+  id: string;
+  incident_type: string;
+  description: string;
+  severity: string;
+  status: string;
+  location: string;
+  created_at: string;
+}
+
+interface VisitorRequest {
+  id: string;
+  visitor_name: string;
+  visitor_phone: string;
+  unit_number: string;
+  purpose: string;
+  status: string;
+  created_at: string;
+}
+
+export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ className, activeSection = 'overview', onSectionChange }) => {
+  const [assignedProperties, setAssignedProperties] = useState<AssignedProperty[]>([]);
+  const [recentLogs, setRecentLogs] = useState<SecurityLog[]>([]);
+  const [pendingVisitors, setPendingVisitors] = useState<VisitorRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { profile } = useAuth();
   const { toast } = useToast();
-  const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
-  const [isVisitorDialogOpen, setIsVisitorDialogOpen] = useState(false);
-  const [newIncident, setNewIncident] = useState({
-    type: '',
-    description: '',
-    severity: 'medium',
-    location: ''
-  });
-  const [newVisitor, setNewVisitor] = useState({
-    name: '',
-    visiting: '',
-    phone: '',
-    purpose: ''
-  });
 
-  // Real data hooks
-  const { requests, loading: requestsLoading } = useVisitorRequests();
-  const { visitors, loading: visitorsLoading, getStats } = useVisitors();
+  useEffect(() => {
+    if (profile?.id) {
+      fetchDashboardData();
+    }
+  }, [profile?.id]);
 
-  // Calculate real-time stats
-  const stats = getStats();
-  const pendingRequests = requests.filter(r => r.status === 'pending').length;
-  const activeVisitors = visitors.filter(v => v.status === 'active');
-  const todaysVisitors = visitors.filter(v => {
-    const today = new Date().toDateString();
-    return new Date(v.created_at).toDateString() === today;
-  });
+  // Handle different sections - connect to your existing components
+  if (activeSection === 'visitors') {
+    return <VisitorsSection />;
+  }
+  
+  if (activeSection === 'incidents') {
+    return <IncidentsSection />;
+  }
+  
+  if (activeSection === 'patrols') {
+    return <PatrolsSection />;
+  }
+  
+  if (activeSection === 'reports') {
+    return <SecurityReportsSection />;
+  }
+  
+  if (activeSection === 'settings') {
+    return <SettingsSection />;
+  }
 
-  // Mock data for incidents and patrols (until those features are implemented)
-  const mockIncidents = [
-    { id: '1', type: 'visitor', description: 'Visitor request pending approval', severity: 'medium', time: '2 hours ago', status: 'investigating' },
-    { id: '2', type: 'maintenance', description: 'Maintenance request submitted', severity: 'low', time: '4 hours ago', status: 'resolved' },
-  ];
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
 
-  const mockPatrols = [
-    { id: '1', location: 'Building A Perimeter', time: '06:00 AM', status: 'completed', duration: '15 min' },
-    { id: '2', location: 'Parking Lot', time: '09:00 AM', status: 'completed', duration: '10 min' },
-    { id: '3', location: 'Building B Entrance', time: '12:00 PM', status: 'scheduled', duration: '15 min' },
-    { id: '4', location: 'Common Areas', time: '03:00 PM', status: 'scheduled', duration: '20 min' },
-  ];
+      // Fetch assigned properties (if staff_assignments table exists)
+      let properties: AssignedProperty[] = [];
+      
+      try {
+        const { data: assignments } = await (supabase as any)
+          .from('staff_assignments')
+          .select(`
+            property:properties!staff_assignments_property_id_fkey (
+              id,
+              name,
+              address,
+              total_units
+            )
+          `)
+          .eq('staff_id', profile.id)
+          .eq('role', 'security')
+          .eq('is_active', true);
 
-  const handleReportIncident = () => {
-    console.log('Reporting incident:', newIncident);
-    toast({ title: "Incident reported successfully" });
-    setIsReportDialogOpen(false);
-    setNewIncident({ type: '', description: '', severity: 'medium', location: '' });
-  };
+        properties = assignments?.map((a: any) => ({
+          id: a.property.id,
+          name: a.property.name,
+          address: a.property.address,
+          total_units: a.property.total_units,
+          occupied_units: 0 // This would need to be calculated
+        })) || [];
+      } catch (error) {
+        console.warn('staff_assignments table not found, using fallback data');
+        // Fallback: show all properties for soft landing during development
+        const { data: allProperties } = await supabase
+          .from('properties')
+          .select('id, name, address, total_units')
+          .order('name', { ascending: true }); // Show all properties, sorted by name
 
-  const handleRegisterVisitor = () => {
-    console.log('Registering visitor:', newVisitor);
-    toast({ title: "Visitor registered successfully" });
-    setIsVisitorDialogOpen(false);
-    setNewVisitor({ name: '', visiting: '', phone: '', purpose: '' });
-  };
+        properties = allProperties?.map(p => ({
+          id: p.id,
+          name: p.name,
+          address: p.address,
+          total_units: p.total_units,
+          occupied_units: 0
+        })) || [];
+      }
 
-  const handleStartPatrol = () => {
-    toast({ title: "Patrol started" });
+      setAssignedProperties(properties);
+
+      // Fetch recent security logs
+      const { data: logs } = await supabase
+        .from('security_logs')
+        .select('*')
+        .eq('security_id', profile.id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      setRecentLogs(logs || []);
+
+      // Fetch pending visitor requests
+      let visitorRequests: VisitorRequest[] = [];
+      
+      try {
+        const { data: visitors } = await supabase
+          .from('visitor_requests')
+          .select('*')
+          .in('status', ['pending', 'approved'])
+          .order('created_at', { ascending: false })
+          .limit(10);
+
+        visitorRequests = visitors?.map((v: any) => ({
+          id: v.id,
+          visitor_name: v.visitor_name,
+          visitor_phone: v.visitor_phone || '',
+          unit_number: 'N/A', // Will be populated by the proper visitor management component
+          purpose: v.purpose,
+          status: v.status,
+          created_at: v.created_at
+        })) || [];
+      } catch (error) {
+        console.warn('visitor_requests table not found or has different structure');
+        // Fallback: show empty array
+        visitorRequests = [];
+      }
+
+      setPendingVisitors(visitorRequests);
+
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load dashboard data',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
-      case 'high': return 'bg-destructive';
-      case 'medium': return 'bg-warning';
-      case 'low': return 'bg-success';
-      case 'critical': return 'bg-destructive';
-      default: return 'bg-muted';
+      case 'critical': return 'destructive';
+      case 'high': return 'destructive';
+      case 'medium': return 'default';
+      case 'low': return 'secondary';
+      default: return 'secondary';
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'open': return 'bg-destructive text-destructive-foreground';
-      case 'investigating': return 'bg-warning';
-      case 'resolved': return 'bg-success';
-      case 'active': return 'bg-primary';
-      case 'completed': return 'bg-success';
-      case 'checked_out': return 'bg-success';
-      case 'scheduled': return 'bg-muted';
-      default: return 'bg-muted';
+      case 'open': return 'destructive';
+      case 'investigating': return 'default';
+      case 'resolved': return 'secondary';
+      case 'closed': return 'outline';
+      default: return 'secondary';
     }
   };
 
-  // Render different sections based on activeSection
-  if (activeSection === 'incidents') {
-    return <IncidentsSection />;
-  }
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
 
-  if (activeSection === 'visitors') {
-    return <VisitorsSection />;
-  }
-
-  if (activeSection === 'patrols') {
-    return <PatrolsSection />;
-  }
-
-  if (activeSection === 'reports') {
-    return <SecurityReportsSection />;
-  }
-
-  // Show loading state if data is still loading
-  if (requestsLoading || visitorsLoading) {
+  if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="text-center space-y-2">
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="text-sm text-muted-foreground">Loading security dashboard...</p>
+          <p className="mt-2 text-sm text-muted-foreground">Loading dashboard...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Welcome Header */}
+    <div className={`space-y-6 ${className}`}>
+      {/* Header */}
+      <div className="flex items-center justify-between">
       <div>
-        <h1 className="text-3xl font-bold text-foreground mb-2">Security Control Center</h1>
-        <p className="text-muted-foreground">Monitor property security and manage incidents</p>
+          <h1 className="text-3xl font-bold tracking-tight">Security Dashboard</h1>
+          <p className="text-muted-foreground">
+            Monitor security activities and manage visitor access
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="flex items-center gap-1">
+            <Shield className="w-3 h-3" />
+            Security Personnel
+          </Badge>
+        </div>
       </div>
 
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="bg-gradient-to-r from-destructive to-destructive/80 text-destructive-foreground">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Requests</CardTitle>
-            <AlertTriangle className="h-4 w-4" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{pendingRequests}</div>
-            <p className="text-xs opacity-90">Pending requests</p>
-          </CardContent>
-        </Card>
-
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Today's Visitors</CardTitle>
-            <UserCheck className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Assigned Properties</CardTitle>
+            <Building className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{todaysVisitors.length}</div>
-            <p className="text-xs text-muted-foreground">Registered visits</p>
+            <div className="text-2xl font-bold">{assignedProperties.length}</div>
+            <p className="text-xs text-muted-foreground">
+              Properties under your watch
+            </p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Patrols Done</CardTitle>
-            <MapPin className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Open Incidents</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{mockPatrols.filter(p => p.status === 'completed').length}</div>
-            <p className="text-xs text-muted-foreground">of {mockPatrols.length} scheduled</p>
+            <div className="text-2xl font-bold">
+              {recentLogs.filter(log => log.status === 'open').length}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Active security incidents
+            </p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Security Status</CardTitle>
-            <Shield className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Pending Visitors</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-success">Secure</div>
-            <p className="text-xs text-muted-foreground">All systems operational</p>
+            <div className="text-2xl font-bold">
+              {pendingVisitors.filter(v => v.status === 'pending').length}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Awaiting approval
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Resolved Today</CardTitle>
+            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {recentLogs.filter(log => 
+                log.status === 'resolved' && 
+                new Date(log.created_at).toDateString() === new Date().toDateString()
+              ).length}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Incidents resolved today
+            </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Quick Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-          <CardDescription>Common security tasks</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <Dialog open={isReportDialogOpen} onOpenChange={setIsReportDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="h-auto p-4 flex flex-col items-center gap-2" variant="outline">
-                  <AlertTriangle className="h-6 w-6" />
-                  <span>Report Incident</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Report Security Incident</DialogTitle>
-                  <DialogDescription>Provide details about the security incident</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <Select value={newIncident.type} onValueChange={(value) => 
-                    setNewIncident(prev => ({ ...prev, type: value }))
-                  }>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select incident type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="unauthorized_access">Unauthorized Access</SelectItem>
-                      <SelectItem value="suspicious_activity">Suspicious Activity</SelectItem>
-                      <SelectItem value="vandalism">Vandalism</SelectItem>
-                      <SelectItem value="noise_complaint">Noise Complaint</SelectItem>
-                      <SelectItem value="emergency">Emergency</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    placeholder="Location"
-                    value={newIncident.location}
-                    onChange={(e) => setNewIncident(prev => ({ ...prev, location: e.target.value }))}
-                  />
-                  <Select value={newIncident.severity} onValueChange={(value) =>
-                    setNewIncident(prev => ({ ...prev, severity: value }))
-                  }>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Textarea
-                    placeholder="Incident description"
-                    value={newIncident.description}
-                    onChange={(e) => setNewIncident(prev => ({ ...prev, description: e.target.value }))}
-                  />
-                  <Button onClick={handleReportIncident} className="w-full">
-                    Report Incident
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-
-            <Dialog open={isVisitorDialogOpen} onOpenChange={setIsVisitorDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="h-auto p-4 flex flex-col items-center gap-2" variant="outline">
-                  <UserCheck className="h-6 w-6" />
-                  <span>Register Visitor</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Register Visitor</DialogTitle>
-                  <DialogDescription>Enter visitor details for security records</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <Input
-                    placeholder="Visitor name"
-                    value={newVisitor.name}
-                    onChange={(e) => setNewVisitor(prev => ({ ...prev, name: e.target.value }))}
-                  />
-                  <Input
-                    placeholder="Visiting (Unit/Person)"
-                    value={newVisitor.visiting}
-                    onChange={(e) => setNewVisitor(prev => ({ ...prev, visiting: e.target.value }))}
-                  />
-                  <Input
-                    placeholder="Phone number"
-                    value={newVisitor.phone}
-                    onChange={(e) => setNewVisitor(prev => ({ ...prev, phone: e.target.value }))}
-                  />
-                  <Input
-                    placeholder="Purpose of visit"
-                    value={newVisitor.purpose}
-                    onChange={(e) => setNewVisitor(prev => ({ ...prev, purpose: e.target.value }))}
-                  />
-                  <Button onClick={handleRegisterVisitor} className="w-full">
-                    Register Visitor
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-
-            <Button 
-              className="h-auto p-4 flex flex-col items-center gap-2" 
-              variant="outline"
-              onClick={handleStartPatrol}
-            >
-              <MapPin className="h-6 w-6" />
-              <span>Start Patrol</span>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Incidents */}
+        {/* Assigned Properties */}
         <Card>
           <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>Latest security activity</CardDescription>
+            <CardTitle className="flex items-center gap-2">
+              <Building className="w-5 h-5" />
+              Assigned Properties
+            </CardTitle>
+            <CardDescription>
+              Properties under your security management
+              {assignedProperties.length > 0 && assignedProperties.length > 3 && (
+                <span className="text-xs text-blue-600 ml-2">
+                  (Showing all properties - staff assignments pending)
+                </span>
+              )}
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {mockIncidents.map((incident) => (
-                <div key={incident.id} className="flex items-start justify-between p-3 border rounded-lg">
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">{incident.description}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{incident.time}</p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <Badge className={getSeverityColor(incident.severity)} variant="secondary">
-                        {incident.severity}
-                      </Badge>
-                      <Badge className={getStatusColor(incident.status)} variant="secondary">
-                        {incident.status}
-                      </Badge>
+            {assignedProperties.length === 0 ? (
+              <div className="text-center py-8">
+                <Building className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">No properties found</p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Properties will appear here once staff assignments are configured
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {assignedProperties.map((property) => (
+                  <div key={property.id} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                        <Building className="w-5 h-5 text-primary" />
+                      </div>
+                      <div>
+                        <h4 className="font-medium">{property.name}</h4>
+                        <p className="text-sm text-muted-foreground flex items-center gap-1">
+                          <MapPin className="w-3 h-3" />
+                          {property.address}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+                    <Badge variant="outline">
+                      {property.total_units} units
+                    </Badge>
                 </div>
               ))}
             </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Active Visitors */}
+        {/* Recent Security Logs */}
         <Card>
           <CardHeader>
-            <CardTitle>Active Visitors</CardTitle>
-            <CardDescription>Currently on property</CardDescription>
+            <CardTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" />
+              Recent Security Logs
+            </CardTitle>
+            <CardDescription>
+              Latest security incidents and activities
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {activeVisitors.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">No active visitors currently</p>
-              ) : (
-                activeVisitors.slice(0, 5).map((visitor) => (
-                  <div key={visitor.id} className="flex items-center justify-between p-3 border rounded-lg">
+            {recentLogs.length === 0 ? (
+              <div className="text-center py-8">
+                <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
+                <p className="text-muted-foreground">No recent incidents</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {recentLogs.map((log) => (
+                  <div key={log.id} className="flex items-start gap-3 p-3 border rounded-lg">
+                    <div className="w-2 h-2 bg-primary rounded-full mt-2"></div>
                     <div className="flex-1">
-                      <p className="font-medium text-sm">{visitor.visitor_name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Purpose: {visitor.purpose}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        In: {format(new Date(visitor.time_in), 'hh:mm a')}
-                        {visitor.time_out && ` | Out: ${format(new Date(visitor.time_out), 'hh:mm a')}`}
-                      </p>
+                      <div className="flex items-center gap-2 mb-1">
+                        <h4 className="font-medium capitalize">{log.incident_type}</h4>
+                        <Badge variant={getSeverityColor(log.severity)}>
+                          {log.severity}
+                        </Badge>
+                        <Badge variant={getStatusColor(log.status)}>
+                          {log.status}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-2">{log.description}</p>
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <MapPin className="w-3 h-3" />
+                          {log.location || 'No location'}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {formatDate(log.created_at)}
+                        </span>
+                      </div>
                     </div>
-                    <Badge className={getStatusColor(visitor.status)} variant="secondary">
-                      {visitor.status}
-                    </Badge>
                   </div>
-                ))
+                ))}
+              </div>
               )}
-            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Patrol Schedule */}
+      {/* Pending Visitor Requests */}
       <Card>
         <CardHeader>
-          <CardTitle>Today's Patrol Schedule</CardTitle>
-          <CardDescription>Security patrol rounds</CardDescription>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="w-5 h-5" />
+            Pending Visitor Requests
+          </CardTitle>
+          <CardDescription>
+            Visitor access requests requiring your attention
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {mockPatrols.map((patrol) => (
-              <div key={patrol.id} className="flex items-center justify-between p-3 border rounded-lg">
-                <div className="flex-1">
-                  <p className="font-medium text-sm">{patrol.location}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Clock className="h-3 w-3 text-muted-foreground" />
-                    <p className="text-xs text-muted-foreground">{patrol.time} ({patrol.duration})</p>
+          {pendingVisitors.length === 0 ? (
+            <div className="text-center py-8">
+              <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">No pending visitor requests</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {pendingVisitors.map((visitor) => (
+                <div key={visitor.id} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                      <Users className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <h4 className="font-medium">{visitor.visitor_name}</h4>
+                      <p className="text-sm text-muted-foreground">{visitor.visitor_phone}</p>
+                      <p className="text-sm text-muted-foreground">Unit {visitor.unit_number} - {visitor.purpose}</p>
+                    </div>
                   </div>
-                </div>
-                <Badge className={getStatusColor(patrol.status)} variant="secondary">
-                  {patrol.status}
-                </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={visitor.status === 'pending' ? 'default' : 'secondary'}>
+                      {visitor.status}
+                    </Badge>
+                    <Button size="sm" variant="outline">
+                      <Eye className="w-4 h-4 mr-1" />
+                      Review
+                    </Button>
+                  </div>
               </div>
             ))}
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Security Alerts */}
-      <Card className="border-warning bg-warning/5">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-warning">
-            <Shield className="h-5 w-5" />
-            Security Alerts
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            <p className="text-sm">• System updated with real-time visitor data</p>
-            <p className="text-sm">• Visitor request management now fully operational</p>
-            <p className="text-sm">• Contact administrator for additional security features</p>
-          </div>
+          )}
         </CardContent>
       </Card>
     </div>
   );
 };
-
-export { SecurityDashboard };

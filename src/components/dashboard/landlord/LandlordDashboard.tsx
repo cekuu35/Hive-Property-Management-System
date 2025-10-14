@@ -12,6 +12,8 @@ import { MessagesSection } from './sections/MessagesSection';
 import { UtilityBillsManagement } from './UtilityBillsManagement';
 import { UnitApplicationsSection } from './UnitApplicationsSection';
 import { PropertyForm } from './PropertyForm';
+import { StaffManagementSection } from './StaffManagementSection';
+import { TenantInfoCard } from '../tenant/TenantInfoCard';
 import { useFinancials } from '@/hooks/useFinancials';
 import { useMaintenanceRequests } from '@/hooks/useMaintenanceRequests';
 import { useProperties } from '@/hooks/useProperties';
@@ -32,6 +34,7 @@ const LandlordDashboard = ({ activeSection = 'dashboard', onSectionChange }: Lan
       case 'properties': return <PropertiesSection />;
       case 'tenants': return <TenantsSection />;
       case 'applications': return <UnitApplicationsSection />;
+      case 'staff': return <StaffManagementSection />;
       case 'financials': return <FinancialsSection />;
       case 'utility-bills': return <UtilityBillsManagement />;
       case 'maintenance': return <MaintenanceSection />;
@@ -188,6 +191,9 @@ const DashboardOverview = ({ onSectionChange }: { onSectionChange?: (section: st
           variant={maintenanceStats.pending > 5 ? "warning" : "default"}
         />
       </div>
+
+      {/* Tenant Information */}
+      <TenantInfoCard showAll={false} />
 
       {/* Quick Actions */}
       <Card>

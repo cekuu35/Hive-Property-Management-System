@@ -11,7 +11,7 @@ interface SystemStats {
   totalTenants: number;
   totalPayments: number;
   recentPayments: any[];
-  landlordsWithSubaccounts: number;
+  landlordsWithMpesaConfig: number;
 }
 
 export default function AdminDashboard() {
@@ -21,7 +21,7 @@ export default function AdminDashboard() {
     totalTenants: 0,
     totalPayments: 0,
     recentPayments: [],
-    landlordsWithSubaccounts: 0
+    landlordsWithMpesaConfig: 0
   });
   const [loading, setLoading] = useState(true);
 
@@ -36,7 +36,7 @@ export default function AdminDashboard() {
       // Fetch landlords
       const { data: landlords, error: landlordsError } = await supabaseAdmin
         .from('landlords')
-        .select('id, subaccount_code');
+        .select('id, paybill_number, account_reference');
 
       // Fetch properties
       const { data: properties, error: propertiesError } = await supabaseAdmin
@@ -65,11 +65,12 @@ export default function AdminDashboard() {
       console.log('Landlords fetched:', landlords);
       console.log('Landlords count:', landlords?.length || 0);
       
-      const landlordsWithSubaccounts = landlords?.filter(l => 
-        l.subaccount_code && l.subaccount_code.length > 0 && l.subaccount_code !== 'ACCT_default_landlord'
+      const landlordsWithMpesaConfig = landlords?.filter(l => 
+        l.paybill_number && l.paybill_number.length > 0 && 
+        l.account_reference && l.account_reference.length > 0
       ).length || 0;
       
-      console.log('Landlords with subaccounts:', landlordsWithSubaccounts);
+      console.log('Landlords with M-Pesa config:', landlordsWithMpesaConfig);
 
       setStats({
         totalLandlords: landlords?.length || 0,
@@ -77,7 +78,7 @@ export default function AdminDashboard() {
         totalTenants: tenants?.length || 0,
         totalPayments: payments?.length || 0,
         recentPayments: payments || [],
-        landlordsWithSubaccounts
+        landlordsWithMpesaConfig
       });
 
     } catch (error) {
@@ -115,8 +116,8 @@ export default function AdminDashboard() {
               <div className="ml-4">
                 <p className="text-sm font-medium text-muted-foreground">Total Landlords</p>
                 <p className="text-2xl font-bold text-foreground">{stats.totalLandlords}</p>
-                <Badge variant={stats.landlordsWithSubaccounts > 0 ? "default" : "destructive"} className="mt-1">
-                  {stats.landlordsWithSubaccounts} with subaccounts
+                <Badge variant={stats.landlordsWithMpesaConfig > 0 ? "default" : "destructive"} className="mt-1">
+                  {stats.landlordsWithMpesaConfig} with M-Pesa config
                 </Badge>
               </div>
             </div>

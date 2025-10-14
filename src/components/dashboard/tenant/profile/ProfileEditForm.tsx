@@ -6,11 +6,13 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
+import { PhotoUpload } from '@/components/ui/PhotoUpload';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { User, Edit, Save, Upload } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { usePhotoUpload } from '@/hooks/usePhotoUpload';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -29,6 +31,7 @@ export const ProfileEditForm = () => {
   const { profile, user } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const { updateProfileAvatar } = usePhotoUpload();
 
   const form = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
@@ -85,39 +88,18 @@ export const ProfileEditForm = () => {
     }
   };
 
-  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file || !profile || !user) return;
+  const handleAvatarUpload = async (result: { url: string; path: string; size: number }) => {
+    if (!profile) return;
 
     setIsLoading(true);
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}-${Math.random()}.${fileExt}`;
-      const filePath = `avatars/${fileName}`;
-
-      // Upload file to Supabase Storage
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(filePath);
-
-      // Update profile with avatar URL
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ avatar_url: publicUrl })
-        .eq('id', profile.id);
-
-      if (updateError) throw updateError;
-
-      toast.success('Avatar updated successfully');
+      const success = await updateProfileAvatar(profile.id, result.url, 'tenant');
+      if (success) {
+        // Refresh the profile data
+        window.location.reload();
+      }
     } catch (error: any) {
-      toast.error('Failed to upload avatar: ' + error.message);
+      toast.error('Failed to update avatar: ' + error.message);
     } finally {
       setIsLoading(false);
     }
@@ -150,34 +132,34 @@ export const ProfileEditForm = () => {
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             {/* Avatar Section */}
-            <div className="flex items-center gap-6">
-              <Avatar className="h-20 w-20">
-                <AvatarImage src={profile?.avatar_url || undefined} />
-                <AvatarFallback className="text-lg">
-                  {profile?.first_name?.[0]}{profile?.last_name?.[0]}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <Label htmlFor="avatar-upload" className="cursor-pointer">
-                  <Button variant="outline" size="sm" asChild>
-                    <span>
-                      <Upload className="h-4 w-4 mr-2" />
-                      Change Avatar
-                    </span>
-                  </Button>
-                </Label>
-                <input
-                  id="avatar-upload"
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleAvatarUpload}
-                  disabled={isLoading}
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  JPG, PNG or GIF (max 2MB)
-                </p>
+            <div className="space-y-4">
+              <div className="flex items-center gap-6">
+                <Avatar className="h-20 w-20">
+                  <AvatarImage src={profile?.avatar_url || undefined} />
+                  <AvatarFallback className="text-lg">
+                    {profile?.first_name?.[0]}{profile?.last_name?.[0]}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <h4 className="text-sm font-medium mb-2">Profile Photo</h4>
+                  <p className="text-xs text-muted-foreground">
+                    Upload a clear photo of yourself for your profile
+                  </p>
+                </div>
               </div>
+              
+              <PhotoUpload
+                onUpload={handleAvatarUpload}
+                currentPhoto={profile?.avatar_url || undefined}
+                bucket="avatars"
+                path={user?.id || ''}
+                maxSize={5}
+                compress={true}
+                quality={0.8}
+                placeholder="Click to upload profile photo"
+                disabled={isLoading}
+                className="max-w-md"
+              />
             </div>
 
             {/* Personal Details */}

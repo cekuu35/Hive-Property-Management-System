@@ -34,7 +34,35 @@ export const useSecurityUnits = () => {
       setLoading(true);
       console.log('Fetching available tenants for security role...');
 
-      // Get active leases with tenant info and units
+      // First, get assigned properties for this security personnel
+      let assignedPropertyIds: string[] = [];
+      
+      try {
+        const { data: assignments } = await (supabase as any)
+          .from('staff_assignments')
+          .select('property_id')
+          .eq('staff_id', profile.id)
+          .eq('role', 'security')
+          .eq('is_active', true);
+
+        assignedPropertyIds = assignments?.map((a: any) => a.property_id) || [];
+        console.log('Assigned properties:', assignedPropertyIds);
+      } catch (error) {
+        console.warn('staff_assignments table not found, using all properties for soft landing');
+        // For soft landing, get all properties
+        const { data: allProperties } = await supabase
+          .from('properties')
+          .select('id');
+        assignedPropertyIds = allProperties?.map(p => p.id) || [];
+      }
+
+      if (assignedPropertyIds.length === 0) {
+        console.log('No assigned properties found');
+        setAvailableTenants([]);
+        return;
+      }
+
+      // Get active leases with tenant info and units - filtered by assigned properties
       const { data: leasesData, error: leasesError } = await supabase
         .from('leases')
         .select(`
@@ -55,7 +83,8 @@ export const useSecurityUnits = () => {
             )
           )
         `)
-        .eq('status', 'active');
+        .eq('status', 'active')
+        .in('units.property_id', assignedPropertyIds);
 
       if (leasesError) throw leasesError;
 

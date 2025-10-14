@@ -20,7 +20,7 @@ import {
 import { useUtilityBills } from '@/hooks/useUtilityBills';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
-import { UtilityBillPaymentModal } from './UtilityBillPaymentModal';
+import { MpesaUtilityPaymentModal } from './MpesaUtilityPaymentModal';
 
 const getUtilityIcon = (utilityName: string) => {
   switch (utilityName.toLowerCase()) {
@@ -461,14 +461,16 @@ export const UtilityBillsSection = () => {
       </Card>
 
       {/* Payment Modal */}
-      <UtilityBillPaymentModal
-        isOpen={paymentModalOpen}
-        onClose={() => {
-          setPaymentModalOpen(false);
-          setPaymentData(null);
+      <MpesaUtilityPaymentModal
+        open={paymentModalOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPaymentModalOpen(false);
+            setPaymentData(null);
+          }
         }}
         paymentData={paymentData}
-        onSuccess={handlePaymentSuccess}
+        onPaymentSuccess={handlePaymentSuccess}
       />
     </div>
   );

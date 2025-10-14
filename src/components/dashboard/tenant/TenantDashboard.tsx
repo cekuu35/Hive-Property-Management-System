@@ -12,7 +12,7 @@ import {
   Download, Upload, Phone, Shield, User, Mail, MapPin, DollarSign, Clock, CheckCircle, XCircle,
   Send, Plus, Search, Filter, Eye, Edit, Trash2, UserCheck, Star, Building2, RefreshCw
 } from 'lucide-react';
-import { TenantPaymentModal } from './TenantPaymentModal';
+import { MpesaRentPaymentModal } from './MpesaRentPaymentModal';
 import { MaintenanceRequestModal } from '@/components/dashboard/maintenance/MaintenanceRequestModal';
 import { MaintenanceRequestView } from './MaintenanceRequestView';
 import { TenantDocuments } from './TenantDocuments';
@@ -28,6 +28,7 @@ import { MessagesSection } from './MessagesSection';
 import { VisitorsSection } from './VisitorsSection';
 import { UtilityBillsSection } from './UtilityBillsSection';
 import { TenantNotices } from './TenantNotices';
+import { LandlordInfoCard } from './LandlordInfoCard';
 import { useMaintenanceRequests } from '@/hooks/useMaintenanceRequests';
 import { useApprovedLease } from '@/hooks/useApprovedLease';
 import { supabase } from '@/integrations/supabase/client';
@@ -446,6 +447,9 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
               </CardContent>
             </Card>
           </div>
+
+          {/* Landlord Information */}
+          <LandlordInfoCard />
 
           {/* Quick Actions */}
           <Card>
@@ -975,7 +979,7 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
         )}
 
       {/* Modals */}
-      <TenantPaymentModal
+      <MpesaRentPaymentModal
         open={showPaymentModal}
         onOpenChange={setShowPaymentModal}
         rentAmount={displayBalance}

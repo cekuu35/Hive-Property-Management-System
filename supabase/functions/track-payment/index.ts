@@ -55,7 +55,7 @@ serve(async (req) => {
 
     // Verify payment with Paystack
     console.log('🔍 [track-payment] Verifying payment with Paystack...')
-    const paystackSecretKey = 'sk_test_9f2c94cce8c01d4403373ce6f4bf8f1a7d142668'
+    const paystackSecretKey = 'sk_test_ad42ab79c7915c9cdbcc6328e606a1f84d6b0f81'
     
     try {
       const verifyResponse = await fetch(

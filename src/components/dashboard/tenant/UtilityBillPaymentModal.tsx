@@ -6,6 +6,13 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { PaystackButton } from 'react-paystack';
 import { convertToKobo } from '@/lib/paystack';
 import { toast } from 'sonner';
+import { createClient } from '@supabase/supabase-js';
+
+// Admin client for accessing all tables
+const supabaseAdmin = createClient(
+  'https://kozhlejudselgtmohdfm.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g'
+);
 
 // Declare Paystack type for TypeScript
 declare global {
@@ -42,22 +49,48 @@ export const UtilityBillPaymentModal = ({
 
   // Get Paystack public key
   const publicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || 'pk_test_9f2c94cce8c01d4403373ce6f4bf8f1a7d142668';
+  
+  // Environment variables are loaded
 
   // Load Paystack inline script for better reliability
   useEffect(() => {
+    // Check if Paystack is already available
+    if (window.PaystackPop) {
+      console.log('✅ Paystack already loaded');
+      setScriptLoaded(true);
+      return;
+    }
+
     if (isOpen && !scriptLoaded) {
+      // Check if script is already in the DOM
+      if (document.querySelector('script[src="https://js.paystack.co/v1/inline.js"]')) {
+        console.log('✅ Paystack script already in DOM, waiting for load...');
+        // Wait a bit for the script to load
+        const checkInterval = setInterval(() => {
+          if (window.PaystackPop) {
+            console.log('✅ Paystack loaded after waiting');
+            setScriptLoaded(true);
+            clearInterval(checkInterval);
+          }
+        }, 100);
+        
+        // Clear interval after 5 seconds
+        setTimeout(() => clearInterval(checkInterval), 5000);
+        return;
+      }
+
       const script = document.createElement('script');
       script.src = 'https://js.paystack.co/v1/inline.js';
       script.async = true;
       script.onload = () => {
-        console.log('Paystack script loaded successfully');
+        console.log('✅ Paystack script loaded successfully');
         setScriptLoaded(true);
       };
       script.onerror = () => {
-        console.error('Failed to load Paystack script');
+        console.error('❌ Failed to load Paystack script');
         setError('Failed to load payment system. Please refresh and try again.');
       };
-      document.body.appendChild(script);
+      document.head.appendChild(script);
       
       return () => {
         if (script.parentNode) {
@@ -98,40 +131,39 @@ export const UtilityBillPaymentModal = ({
     }
   };
 
-  // Process utility payment via verification API
+  // Process utility payment with database updates
   const processUtilityPayment = async (reference: string) => {
     try {
-      console.log('🔍 Processing utility bill payment via verification API...');
+      console.log('🔍 Processing utility bill payment...');
       console.log('Reference:', reference);
       
-      // Call the verification API
-      const response = await fetch('/api/verifyUtilityPayment', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          reference: reference
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('❌ Utility payment verification API error:', errorData);
-        throw new Error(errorData.error || 'Payment verification failed');
+      // Import the verification service dynamically to avoid circular imports
+      const { verifyPaystackPayment, updateUtilityBillPayment } = await import('@/lib/paymentVerification');
+      
+      // Verify the payment with Paystack
+      const verification = await verifyPaystackPayment(reference);
+      
+      if (!verification.success) {
+        throw new Error('Payment verification failed');
       }
 
-      const data = await response.json();
-      console.log('✅ Utility payment verification successful:', data);
+      // Update the utility bill in the database
+      const updateSuccess = await updateUtilityBillPayment(
+        paymentData.billId,
+        reference,
+        paymentData.amount
+      );
+
+      if (!updateSuccess) {
+        console.warn('⚠️ Payment verified but database update failed');
+      }
+
+      console.log('✅ Payment verified and database updated:', verification);
 
       // Show success message
-      if (data.success && data.status === 'success') {
-        toast.success(`Payment successful! Your utility bill payment of KES ${paymentData.amount.toLocaleString()} has been processed.`);
-      } else {
-        toast.error('Payment verification completed but status is not successful');
-      }
+      toast.success(`Payment successful! Your utility bill payment of KES ${paymentData.amount.toLocaleString()} has been processed and updated.`);
 
-      return { success: data.success, payment: data };
+      return { success: true, payment: { reference, verification } };
       
     } catch (error) {
       console.error('❌ Utility payment processing failed:', error);
@@ -139,15 +171,112 @@ export const UtilityBillPaymentModal = ({
     }
   };
 
-  // Fallback payment method using inline script with subaccount support
+  // Payment method using backend API for proper split payment support
   const handleInlinePayment = async () => {
-    console.log('Attempting utility bill payment with subaccount...');
+    console.log('🚀 Initializing utility bill payment with backend API for split payments...');
+    
+    setProcessing(true);
+    setError(null);
+
+    try {
+      // Use the backend API to initialize the transaction with subaccount
+      console.log('📞 Calling backend API to initialize transaction with subaccount...');
+      console.log('🔍 API URL: http://localhost:3001/api/initializeUtilityPayment');
+      
+      const response = await fetch('http://localhost:3001/api/initializeUtilityPayment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          billId: paymentData.billId,
+          amount: paymentData.amount,
+          email: paymentData.email,
+          callbackUrl: `${window.location.origin}/payment/callback?type=utility&billId=${paymentData.billId}`
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to initialize payment');
+      }
+
+      const { data: paystackData } = await response.json();
+      
+      console.log('✅ Backend API response:', paystackData);
+      console.log('🔍 Authorization URL:', paystackData.authorization_url);
+      console.log('🔍 Reference:', paystackData.reference);
+      console.log('🔍 Access Code:', paystackData.access_code);
+
+      // Check if Paystack is loaded
+      if (!window.PaystackPop) {
+        throw new Error('Paystack is not loaded. Please refresh the page and try again.');
+      }
+
+      // Use the authorization URL from the backend
+      const paystackConfig = {
+        key: publicKey,
+        email: paymentData.email,
+        amount: paystackData.amount,
+        currency: 'KES',
+        ref: paystackData.reference,
+        authorization: paystackData.authorization_code, // Use the authorization code from backend
+        metadata: {
+          utility_name: paymentData.utilityName,
+          due_date: paymentData.dueDate,
+          bill_id: paymentData.billId,
+          payment_type: "utility"
+        },
+        callback: function(response: any) {
+          console.log('🎉 UTILITY BILL PAYMENT SUCCESS CALLBACK TRIGGERED!');
+          console.log('✅ Payment successful:', response);
+          
+          // Process payment and then redirect
+          processUtilityPayment(response.reference).then(() => {
+            console.log('✅ Utility payment processed successfully');
+            handlePaymentSuccess(response.reference);
+            // Redirect to callback page
+            window.location.href = `${window.location.origin}/payment/callback?reference=${response.reference}&type=utility&amount=${paymentData.amount}&billId=${paymentData.billId}`;
+          }).catch((error) => {
+            console.error('❌ Utility payment processing failed:', error);
+            setError('Payment completed but failed to update records. Please contact support.');
+            setProcessing(false);
+          });
+        },
+        onClose: function() {
+          console.log('Payment modal closed by user');
+          setProcessing(false);
+          toast.error('Payment cancelled. You can try again anytime.');
+        }
+      };
+
+      console.log('🚀 Opening Paystack iframe with backend configuration...');
+      console.log('🔍 Paystack config:', paystackConfig);
+      
+      const handler = window.PaystackPop.setup(paystackConfig);
+      handler.openIframe();
+      
+    } catch (error) {
+      console.error('❌ Payment initialization error:', error);
+      const errorMsg = `Failed to initialize payment: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      setError(errorMsg);
+      toast.error(errorMsg);
+      setProcessing(false);
+    }
+  };
+
+  // Legacy payment method (keeping for fallback)
+  const handleLegacyPayment = async () => {
+    console.log('Attempting utility bill payment with legacy method...');
     console.log('Script loaded:', scriptLoaded);
     console.log('PaystackPop available:', !!window.PaystackPop);
     console.log('Public key:', publicKey);
     console.log('Payment data:', paymentData);
 
     if (!scriptLoaded) {
+      console.log('🔄 [UtilityBillPaymentModal] Script not loaded, attempting to reload...');
+      // Try to reload the script
+      setScriptLoaded(false);
       const errorMsg = 'Payment system is still loading. Please wait a moment and try again.';
       console.error(errorMsg);
       toast.error(errorMsg);
@@ -156,6 +285,9 @@ export const UtilityBillPaymentModal = ({
     }
 
     if (!window.PaystackPop) {
+      console.log('🔄 [UtilityBillPaymentModal] PaystackPop not available, attempting to reload script...');
+      // Try to reload the script
+      setScriptLoaded(false);
       const errorMsg = 'Payment system failed to load. Please refresh the page and try again.';
       console.error(errorMsg);
       toast.error(errorMsg);
@@ -175,39 +307,49 @@ export const UtilityBillPaymentModal = ({
     setError(null);
 
     try {
-      console.log('Initializing utility bill payment via API...');
+      console.log('Initializing utility bill payment with subaccount...');
       
-      // Call the initialization API to get subaccount details
-      const initResponse = await fetch('/api/initializeUtilityPayment', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          billId: paymentData.billId,
-          amount: paymentData.amount,
-          email: paymentData.email,
-          callbackUrl: `${window.location.origin}/payment/callback`
-        })
-      });
-
-      if (!initResponse.ok) {
-        const errorData = await initResponse.json();
-        console.error('Utility payment initialization API error:', errorData);
-        throw new Error(errorData.error || 'Payment initialization failed');
-      }
-
-      const initData = await initResponse.json();
-      console.log('Utility payment initialized successfully with subaccount:', initData);
-
+      // Generate a unique reference for this payment
+      const reference = `utility_${Date.now()}_${paymentData.billId}`;
       const amountInKobo = convertToKobo(paymentData.amount);
       
+      // Fetch the landlord's subaccount code for transaction splitting
+      let subaccountCode = null;
+      try {
+        // First get the bill to find the landlord_id
+        const { data: bill, error: billError } = await supabaseAdmin
+          .from('unit_bills')
+          .select('landlord_id')
+          .eq('id', paymentData.billId)
+          .single();
+        
+        if (!billError && bill?.landlord_id) {
+          // Then get the landlord's subaccount code
+          const { data: landlord, error: landlordError } = await supabaseAdmin
+            .from('landlords')
+            .select('subaccount_code')
+            .eq('id', bill.landlord_id)
+            .single();
+          
+          if (!landlordError && landlord?.subaccount_code) {
+            subaccountCode = landlord.subaccount_code;
+            console.log('✅ Found subaccount code:', subaccountCode);
+          } else {
+            console.warn('⚠️ No subaccount code found, using main account');
+          }
+        } else {
+          console.warn('⚠️ No landlord found for this bill, using main account');
+        }
+      } catch (error) {
+        console.warn('⚠️ Error fetching subaccount code:', error);
+      }
+      
       console.log('Payment details:', {
-        reference: initData.reference,
+        reference,
         amount: paymentData.amount,
         amountInKobo,
         email: paymentData.email,
-        subaccount: initData.subaccount,
+        subaccount: subaccountCode,
         publicKey: publicKey.substring(0, 20) + '...'
       });
       
@@ -235,49 +377,154 @@ export const UtilityBillPaymentModal = ({
         toast.error('Payment cancelled. You can try again anytime.');
       };
 
-      const handler = window.PaystackPop.setup({
+      // Debug Paystack configuration
+      console.log('🔍 Paystack configuration:', {
+        key: publicKey.substring(0, 20) + '...',
+        email: paymentData.email,
+        amount: amountInKobo,
+        currency: 'KES',
+        ref: reference,
+        subaccount: subaccountCode,
+        amountInKes: paymentData.amount,
+        isValidEmail: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(paymentData.email),
+        amountValid: amountInKobo > 0,
+        subaccountValid: subaccountCode ? subaccountCode.startsWith('ACCT_') : false
+      });
+
+      // Create Paystack configuration object with proper validation
+      const paystackConfig: any = {
         key: publicKey,
         email: paymentData.email,
         amount: amountInKobo,
         currency: 'KES',
-        ref: initData.reference,
-        authorization_code: initData.accessCode, // Use accessCode from API response
+        ref: reference,
         metadata: {
-          custom_fields: [
-            {
-              display_name: "Utility Type",
-              variable_name: "utility_name",
-              value: paymentData.utilityName
-            },
-            {
-              display_name: "Due Date",
-              variable_name: "due_date",
-              value: paymentData.dueDate
-            },
-            {
-              display_name: "Bill ID",
-              variable_name: "bill_id",
-              value: paymentData.billId
-            },
-            {
-              display_name: "Payment Type",
-              variable_name: "payment_type",
-              value: "utility"
-            }
-          ]
+          utility_name: paymentData.utilityName,
+          due_date: paymentData.dueDate,
+          bill_id: paymentData.billId,
+          payment_type: "utility"
         },
         callback: paymentCallback,
         onClose: closeCallback
-      });
+      };
 
-      console.log('🚀 Opening Paystack iframe with subaccount...');
-      handler.openIframe();
+      // Ensure all required fields are present and valid
+      if (!paystackConfig.key || typeof paystackConfig.key !== 'string') {
+        throw new Error('Invalid Paystack public key');
+      }
+      if (!paystackConfig.email || typeof paystackConfig.email !== 'string') {
+        throw new Error('Invalid email address');
+      }
+      if (!paystackConfig.amount || typeof paystackConfig.amount !== 'number' || paystackConfig.amount <= 0) {
+        throw new Error('Invalid amount');
+      }
+      if (!paystackConfig.ref || typeof paystackConfig.ref !== 'string') {
+        throw new Error('Invalid payment reference');
+      }
+      if (!paystackConfig.callback || typeof paystackConfig.callback !== 'function') {
+        throw new Error('Invalid callback function');
+      }
+      if (!paystackConfig.onClose || typeof paystackConfig.onClose !== 'function') {
+        throw new Error('Invalid close callback function');
+      }
+
+      // Only add subaccount if it's valid
+      if (subaccountCode && subaccountCode.startsWith('ACCT_')) {
+        paystackConfig.subaccount = subaccountCode;
+        console.log('✅ [UtilityBillPaymentModal] Adding subaccount to Paystack config:', subaccountCode);
+        console.log('🔍 [UtilityBillPaymentModal] Subaccount validation: starts with ACCT_ =', subaccountCode.startsWith('ACCT_'));
+      } else {
+        console.log('⚠️ [UtilityBillPaymentModal] No valid subaccount code, using main account');
+        console.log('🔍 [UtilityBillPaymentModal] Subaccount code was:', subaccountCode);
+        console.log('🔍 [UtilityBillPaymentModal] Subaccount type:', typeof subaccountCode);
+      }
+
+      // Validate Paystack configuration before sending
+      console.log('🔍 [UtilityBillPaymentModal] Validating Paystack config...');
+      
+      // Check required fields
+      if (!paystackConfig.key) {
+        throw new Error('Missing Paystack public key');
+      }
+      if (!paystackConfig.email) {
+        throw new Error('Missing customer email');
+      }
+      if (!paystackConfig.amount || paystackConfig.amount <= 0) {
+        throw new Error('Invalid amount: ' + paystackConfig.amount);
+      }
+      if (!paystackConfig.ref) {
+        throw new Error('Missing payment reference');
+      }
+      
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(paystackConfig.email)) {
+        throw new Error('Invalid email format: ' + paystackConfig.email);
+      }
+      
+      // Validate amount is in kobo (should be integer)
+      if (!Number.isInteger(paystackConfig.amount)) {
+        throw new Error('Amount must be in kobo (integer): ' + paystackConfig.amount);
+      }
+      
+      console.log('✅ [UtilityBillPaymentModal] Paystack config validation passed');
+      console.log('🚀 Final Paystack config:', paystackConfig);
+      console.log('🔍 [UtilityBillPaymentModal] Subaccount in final config:', paystackConfig.subaccount);
+      console.log('🔍 [UtilityBillPaymentModal] Has subaccount property:', 'subaccount' in paystackConfig);
+
+      // Validate PaystackPop is available
+      if (!window.PaystackPop) {
+        throw new Error('Paystack is not loaded. Please refresh the page and try again.');
+      }
+
+      // Additional validation of the configuration object
+      if (!paystackConfig || typeof paystackConfig !== 'object') {
+        throw new Error('Invalid Paystack configuration object');
+      }
+
+      console.log('🔍 [UtilityBillPaymentModal] PaystackPop setup method available:', typeof window.PaystackPop.setup);
+      console.log('🔍 [UtilityBillPaymentModal] PaystackPop object keys:', Object.keys(window.PaystackPop));
+      
+      // Test if PaystackPop.setup is a function
+      if (typeof window.PaystackPop.setup !== 'function') {
+        throw new Error('PaystackPop.setup is not a function. Paystack may not be properly loaded.');
+      }
+      
+      const handler = window.PaystackPop.setup(paystackConfig);
+
+      if (!handler) {
+        throw new Error('Failed to create Paystack handler');
+      }
+
+      console.log('✅ [UtilityBillPaymentModal] Paystack handler created successfully:', typeof handler);
+
+      console.log('🚀 Opening Paystack iframe...');
+      
+      // Add error handling for Paystack
+      try {
+        handler.openIframe();
+      } catch (paystackError) {
+        console.error('Paystack iframe error:', paystackError);
+        console.error('Paystack error details:', {
+          message: paystackError.message,
+          name: paystackError.name,
+          stack: paystackError.stack
+        });
+        throw new Error(`Paystack error: ${paystackError.message || 'Failed to open payment form'}`);
+      }
     } catch (error) {
       console.error('Payment initialization error:', error);
       const errorMsg = `Failed to initialize payment: ${error instanceof Error ? error.message : 'Unknown error'}`;
       setError(errorMsg);
       toast.error(errorMsg);
       setProcessing(false);
+      
+      // Show additional help
+      console.log('💡 Troubleshooting tips:');
+      console.log('1. Check if the API server is running');
+      console.log('2. Verify Paystack keys are configured');
+      console.log('3. Check browser console for network errors');
+      console.log('4. Ensure the utility bill exists in the database');
     }
   };
 
@@ -299,28 +546,10 @@ export const UtilityBillPaymentModal = ({
     onSuccess: paystackSuccessCallback,
     onClose: paystackCloseCallback,
     metadata: {
-      custom_fields: [
-        {
-          display_name: "Utility Type",
-          variable_name: "utility_name",
-          value: paymentData.utilityName
-        },
-        {
-          display_name: "Due Date",
-          variable_name: "due_date",
-          value: paymentData.dueDate
-        },
-        {
-          display_name: "Bill ID",
-          variable_name: "bill_id",
-          value: paymentData.billId
-        },
-        {
-          display_name: "Payment Type",
-          variable_name: "payment_type",
-          value: "utility"
-        }
-      ]
+      utility_name: paymentData.utilityName,
+      due_date: paymentData.dueDate,
+      bill_id: paymentData.billId,
+      payment_type: "utility"
     }
   };
 

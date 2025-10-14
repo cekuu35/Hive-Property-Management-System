@@ -5,8 +5,14 @@ import { Loader2, CreditCard, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { convertToKobo } from '@/lib/paystack';
+import { createClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { supabaseAdmin } from '@/integrations/supabase/admin';
+
+// Admin client for accessing all tables
+const supabaseAdmin = createClient(
+  'https://kozhlejudselgtmohdfm.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g'
+);
 
 // Declare Paystack type for TypeScript
 declare global {
@@ -41,47 +47,47 @@ export const TenantPaymentModal = ({ open, onOpenChange, rentAmount, dueDate, on
   const [loading, setLoading] = useState(false);
   const [transactionStatus, setTransactionStatus] = useState<'idle' | 'processing' | 'verifying' | 'success' | 'error'>('idle');
   const [transactionDetails, setTransactionDetails] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  // Debug logging when modal opens
+  // Get Paystack public key from environment
+  const publicKey = 'pk_test_9f2c94cce8c01d4403373ce6f4bf8f1a7d142668';
+
+  // Load Paystack script
   useEffect(() => {
-    if (open) {
-      console.log('🔍 [TenantPaymentModal] Modal opened');
-      console.log('🔍 [TenantPaymentModal] Props:', {
-        rentAmount,
-        dueDate,
-        leaseData: leaseData ? {
-          id: leaseData.id,
-          tenant_info_id: leaseData.tenant_info_id,
-          rent_amount: leaseData.rent_amount
-        } : null
-      });
+    if (window.PaystackPop) {
+      console.log('✅ Paystack already loaded');
+      setScriptLoaded(true);
+      return;
     }
-  }, [open, rentAmount, dueDate, leaseData]);
-
-  // Load Paystack inline script
-  useEffect(() => {
     if (open && !scriptLoaded) {
-      // Check if script already exists
       if (document.querySelector('script[src="https://js.paystack.co/v1/inline.js"]')) {
-        setScriptLoaded(true);
+        console.log('✅ Paystack script already in DOM, waiting for load...');
+        const checkInterval = setInterval(() => {
+          if (window.PaystackPop) {
+            console.log('✅ Paystack loaded after waiting');
+            setScriptLoaded(true);
+            clearInterval(checkInterval);
+          }
+        }, 100);
+        setTimeout(() => clearInterval(checkInterval), 5000);
         return;
       }
-
       const script = document.createElement('script');
       script.src = 'https://js.paystack.co/v1/inline.js';
       script.async = true;
       script.onload = () => {
-        console.log('✅ Paystack script loaded');
+        console.log('✅ Paystack script loaded successfully');
         setScriptLoaded(true);
       };
       script.onerror = () => {
         console.error('❌ Failed to load Paystack script');
-        setScriptLoaded(false);
+        setError('Failed to load payment system. Please refresh and try again.');
       };
       document.head.appendChild(script);
-      
       return () => {
-        // Don't remove the script as it might be used by other components
+        if (script.parentNode) {
+          script.parentNode.removeChild(script);
+        }
       };
     }
   }, [open, scriptLoaded]);
@@ -89,233 +95,167 @@ export const TenantPaymentModal = ({ open, onOpenChange, rentAmount, dueDate, on
   const processRentPayment = async (reference: string) => {
     try {
       console.log('🔍 [TenantPaymentModal] Processing rent payment via verification API...');
-      console.log('🔍 [TenantPaymentModal] Reference:', reference);
-      console.log('🔍 [TenantPaymentModal] Lease data:', leaseData);
-      console.log('🔍 [TenantPaymentModal] Profile:', profile);
       
-      if (!leaseData?.id) {
-        console.error('❌ [TenantPaymentModal] No lease data available');
-        throw new Error('No lease data available');
+      // Import the verification function
+      const { verifyPaystackPayment, updateRentPayment } = await import('@/lib/paymentVerification');
+      
+      // Verify the payment with Paystack
+      const verificationResult = await verifyPaystackPayment(reference);
+      
+      if (!verificationResult.success) {
+        throw new Error(verificationResult.error || 'Payment verification failed');
       }
 
-      // Call the verification API
-      console.log('🔍 [TenantPaymentModal] Calling verifyPayment API...');
-      const response = await fetch('/api/verifyPayment', {
+      // Update the rent payment in the database
+      const updateSuccess = await updateRentPayment(
+        leaseData?.id || '',
+        reference,
+        rentAmount
+      );
+
+      if (!updateSuccess) {
+        throw new Error('Failed to update rent payment in database');
+      }
+
+      console.log('✅ [TenantPaymentModal] Rent payment processed successfully');
+      toast.success(`Payment successful! Your rent payment of KES ${rentAmount.toLocaleString()} has been processed and updated.`);
+      
+    } catch (error) {
+      console.error('❌ [TenantPaymentModal] Rent payment processing failed:', error);
+      throw error;
+    }
+  };
+
+  const handlePaymentSuccess = (reference: string) => {
+    setTransactionStatus('success');
+    setTransactionDetails({ reference, amount: rentAmount });
+    onPaymentSuccess();
+    onOpenChange(false);
+  };
+
+  const handlePayment = async () => {
+    if (!leaseData?.id) {
+      toast.error('Lease information is missing. Please try again.');
+      return;
+    }
+
+    if (!user?.email) {
+      toast.error('User email is required for payment processing.');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setTransactionStatus('processing');
+
+    const userEmail = user.email;
+    const amountInKobo = convertToKobo(rentAmount);
+
+    console.log('🔍 [TenantPaymentModal] Payment details:', {
+      userEmail,
+      originalAmountKES: rentAmount,
+      amountInKobo,
+      leaseId: leaseData.id,
+      unitId: leaseData.unit_id
+    });
+
+    try {
+      console.log('🚀 [TenantPaymentModal] Initializing rent payment with backend API for split payments...');
+      
+      // Use the backend API to initialize the transaction with subaccount
+      console.log('📞 Calling backend API to initialize rent payment with subaccount...');
+      
+      const response = await fetch('http://localhost:3001/api/initializeRentPayment', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          reference: reference
-        })
+          leaseId: leaseData.id,
+          amount: rentAmount,
+          email: userEmail,
+          callbackUrl: `${window.location.origin}/payment/callback?type=rent&leaseId=${leaseData.id}`
+        }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('❌ [TenantPaymentModal] Verification API error:', errorData);
-        throw new Error(errorData.error || 'Payment verification failed');
+        throw new Error(errorData.error || 'Failed to initialize payment');
       }
 
-      const data = await response.json();
-      console.log('✅ [TenantPaymentModal] Payment verification successful:', data);
-
-      // Show success message
-      if (data.success && data.status === 'success') {
-        toast.success(`Payment successful! Your rent payment of KES ${rentAmount.toLocaleString()} has been processed.`);
-      } else {
-        toast.error('Payment verification completed but status is not successful');
-      }
-
-      return { success: data.success, payment: data };
+      const { data: paystackData } = await response.json();
       
-    } catch (error) {
-      console.error('❌ [TenantPaymentModal] Payment processing failed:', error);
-      throw error;
-    }
-  };
+      console.log('✅ Backend API response:', paystackData);
+      console.log('🔍 Authorization URL:', paystackData.authorization_url);
+      console.log('🔍 Reference:', paystackData.reference);
+      console.log('🔍 Access Code:', paystackData.access_code);
 
-  const handlePayment = async () => {
-    console.log('🔍 [TenantPaymentModal] handlePayment called');
-    console.log('🔍 [TenantPaymentModal] Script loaded:', scriptLoaded);
-    console.log('🔍 [TenantPaymentModal] PaystackPop available:', !!window.PaystackPop);
-    
-    if (!scriptLoaded || !window.PaystackPop) {
-      console.log('❌ [TenantPaymentModal] Payment system not ready');
-      toast.error("Payment system is still loading. Please try again.");
-      return;
-    }
-
-    try {
-      setLoading(true);
-      
-      // Use the lease data passed as prop instead of doing our own lookup
-      if (!leaseData) {
-        console.error('No lease data provided to payment modal');
-        toast.error("Could not find an active lease. Please contact your landlord.");
-        setLoading(false);
-        return;
+      // Check if Paystack is loaded
+      if (!window.PaystackPop) {
+        throw new Error('Paystack is not loaded. Please refresh the page and try again.');
       }
 
-      console.log('✅ [TenantPaymentModal] Using provided lease data:', leaseData);
-
-      const publicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || 'pk_test_9f2c94cce8c01d4403373ce6f4bf8f1a7d142668';
-      
-      console.log('🔍 [TenantPaymentModal] Using Paystack public key:', publicKey);
-      console.log('🔍 [TenantPaymentModal] Key length:', publicKey.length);
-      console.log('🔍 [TenantPaymentModal] Key starts with pk_test:', publicKey.startsWith('pk_test'));
-      const amountInKobo = convertToKobo(rentAmount); // Convert KES to kobo using the same function as utility bills
-      const reference = `rent_${Date.now()}_${profile?.id}`;
-      const userEmail = user?.email || 'test@example.com';
-
-      // Validate amount (minimum 100 kobo)
-      if (amountInKobo < 100) {
-        toast.error('Amount too small. Minimum payment is 1 KES (100 kobo).');
-        setLoading(false);
-        return;
-      }
-
-      console.log('🔍 [TenantPaymentModal] Paystack config:', {
-        key: publicKey.substring(0, 20) + '...',
+      // Use the authorization URL from the backend
+      const paystackConfig = {
+        key: publicKey,
         email: userEmail,
-        originalAmountKES: rentAmount,
-        amountInKobo: amountInKobo,
+        amount: paystackData.amount,
         currency: 'KES',
-        ref: reference
-      });
-
-      try {
-        console.log('🔍 [TenantPaymentModal] Initializing payment via API...');
-        
-        // Call the initialization API
-        const initResponse = await fetch('/api/initializeTransaction', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            tenantId: leaseData.tenant_info_id,
-            propertyId: leaseData.units?.property_id,
-            amount: rentAmount,
-            email: userEmail,
-            callbackUrl: `${window.location.origin}/payment/callback`
-          })
-        });
-
-        if (!initResponse.ok) {
-          const errorData = await initResponse.json();
-          console.error('❌ [TenantPaymentModal] Initialization API error:', errorData);
-          throw new Error(errorData.error || 'Payment initialization failed');
-        }
-
-        const initData = await initResponse.json();
-        console.log('✅ [TenantPaymentModal] Payment initialized successfully:', initData);
-
-        // Create Paystack configuration with API response
-        const paystackConfig = {
-          key: publicKey,
-          email: userEmail,
-          amount: amountInKobo,
-          currency: 'KES',
-          ref: initData.reference,
-          authorization_code: initData.accessCode,
-          metadata: {
-            type: 'rent',
-            lease_id: leaseData.id,
-            tenant_id: profile?.id,
-            property_id: leaseData.units?.property_id,
-            custom_fields: [
-              {
-                display_name: "Tenant Name",
-                variable_name: "tenant_name",
-                value: `${profile?.first_name || 'Test'} ${profile?.last_name || 'User'}`
-              },
-              {
-                display_name: "Payment Type",
-                variable_name: "payment_type",
-                value: "Rent Payment"
-              },
-              {
-                display_name: "Lease ID",
-                variable_name: "lease_id",
-                value: leaseData.id
-              }
-            ]
-          },
-          callback: function(response: any) {
-            console.log('🎉 [TenantPaymentModal] PAYSTACK SUCCESS CALLBACK TRIGGERED!');
-            console.log('✅ [TenantPaymentModal] Payment successful:', response);
-            
-            // Process payment and then redirect like security deposit does
-            processRentPayment(response.reference).then(() => {
-              console.log('✅ [TenantPaymentModal] Payment processed successfully');
-              onPaymentSuccess();
-              // Redirect to callback page like security deposit does
-              window.location.href = `${window.location.origin}/payment/callback?reference=${response.reference}&type=rent&amount=${rentAmount}&leaseId=${leaseData.id}`;
-            }).catch((error) => {
-              console.error('❌ [TenantPaymentModal] Payment processing failed:', error);
-              toast.error('Payment completed but failed to update records. Please contact support.');
-            });
-          },
-          onClose: function() {
+        ref: paystackData.reference,
+        authorization: paystackData.authorization_code, // Use the authorization code from backend
+        metadata: {
+          lease_id: leaseData.id,
+          tenant_id: leaseData.tenant_id,
+          unit_id: leaseData.unit_id,
+          payment_type: 'Rent Payment'
+        },
+        callback: function(response: any) {
+          console.log('🎉 RENT PAYMENT SUCCESS CALLBACK TRIGGERED!');
+          console.log('✅ Payment successful:', response);
+          
+          // Process payment and then redirect
+          processRentPayment(response.reference).then(() => {
+            console.log('✅ Rent payment processed successfully');
+            handlePaymentSuccess(response.reference);
+            // Redirect to callback page
+            window.location.href = `${window.location.origin}/payment/callback?reference=${response.reference}&type=rent&amount=${rentAmount}&leaseId=${leaseData.id}`;
+          }).catch((error) => {
+            console.error('❌ Rent payment processing failed:', error);
+            setError('Payment completed but failed to update records. Please contact support.');
             setLoading(false);
-            toast.error('Payment Cancelled', {
-              description: 'You closed the payment window. Your payment was not completed.'
-            });
-          }
-        };
+          });
+        },
+        onClose: function() {
+          console.log('Payment modal closed by user');
+          setLoading(false);
+          toast.error('Payment cancelled. You can try again anytime.');
+        }
+      };
 
-        console.log('🔧 [TenantPaymentModal] Paystack config object:', paystackConfig);
-
-        const handler = window.PaystackPop.setup(paystackConfig);
-
-        console.log('🚀 [TenantPaymentModal] Opening Paystack iframe...');
-        handler.openIframe();
-      } catch (paystackError) {
-        console.error('❌ [TenantPaymentModal] Paystack setup error:', paystackError);
-        console.error('❌ [TenantPaymentModal] Error details:', {
-          message: paystackError.message,
-          stack: paystackError.stack,
-          name: paystackError.name
-        });
-        toast.error('Failed to initialize payment. Please check your connection and try again.');
-        setLoading(false);
-        return;
-      }
+      console.log('🚀 Opening Paystack iframe with backend configuration...');
+      console.log('🔍 Paystack config:', paystackConfig);
+      
+      const handler = window.PaystackPop.setup(paystackConfig);
+      handler.openIframe();
+      
     } catch (error) {
-      console.error('Payment error:', error);
-      toast.error("Failed to initialize payment. Please try again.");
-    } finally {
+      console.error('❌ Payment initialization error:', error);
+      const errorMsg = `Failed to initialize payment: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      setError(errorMsg);
+      toast.error(errorMsg);
       setLoading(false);
     }
   };
 
-  const userEmail = user?.email || 'tenant@example.com';
-  
-  if (!userEmail) {
-    return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5" />
-              Payment Not Available
-            </DialogTitle>
-            <DialogDescription>
-              No email address found. Please update your profile.
-            </DialogDescription>
-          </DialogHeader>
-        </DialogContent>
-      </Dialog>
-    );
-  }
+  if (!open) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CreditCard className="h-5 w-5" />
-            Pay Rent
+            Rent Payment
           </DialogTitle>
           <DialogDescription>
             Complete your rent payment securely via Paystack
@@ -323,110 +263,53 @@ export const TenantPaymentModal = ({ open, onOpenChange, rentAmount, dueDate, on
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Payment Details */}
-          <div className="bg-muted p-4 rounded-lg space-y-2">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Amount Due:</span>
-              <span className="font-semibold">KES {rentAmount.toLocaleString()}</span>
+          <div className="bg-muted p-4 rounded-lg">
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium">Amount Due:</span>
+              <span className="text-lg font-bold">KES {rentAmount.toLocaleString()}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Due Date:</span>
-              <span className="font-semibold">{new Date(dueDate).toLocaleDateString()}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Payment Method:</span>
-              <span className="font-semibold">Card/Mobile Money</span>
+            <div className="flex justify-between items-center mt-2">
+              <span className="text-sm text-muted-foreground">Due Date:</span>
+              <span className="text-sm">{new Date(dueDate).toLocaleDateString()}</span>
             </div>
           </div>
 
-          {/* Transaction Status */}
-          {transactionStatus !== 'idle' && (
-            <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <div className={`w-2 h-2 rounded-full ${
-                  transactionStatus === 'verifying' ? 'bg-yellow-500 animate-pulse' :
-                  transactionStatus === 'success' ? 'bg-green-500' :
-                  transactionStatus === 'error' ? 'bg-red-500' : 'bg-gray-500'
-                }`} />
-                <span className="font-medium text-sm">
-                  {transactionStatus === 'verifying' && 'Verifying Payment...'}
-                  {transactionStatus === 'success' && 'Payment Verified'}
-                  {transactionStatus === 'error' && 'Verification Failed'}
-                </span>
-              </div>
-              
-              {transactionDetails && (
-                <div className="text-xs text-muted-foreground space-y-1">
-                  <div>Reference: {transactionDetails.reference}</div>
-                  {transactionDetails.paymentId && (
-                    <div>Payment ID: {transactionDetails.paymentId}</div>
-                  )}
-                  {transactionDetails.error && (
-                    <div className="text-red-600">Error: {transactionDetails.error}</div>
-                  )}
-                </div>
-              )}
+          {error && (
+            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
+              <p className="text-sm text-destructive">{error}</p>
             </div>
           )}
 
-          {/* Payment Info */}
-          <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
-            <div className="flex gap-2">
-              <Zap className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="font-medium text-blue-900">Secure Payment</p>
-                <p className="text-sm text-blue-700">
-                  Your payment is processed securely by Paystack. We never store your card details.
-                </p>
-              </div>
-            </div>
+          <div className="flex flex-col gap-2">
+            <Button
+              onClick={handlePayment}
+              disabled={loading || !scriptLoaded}
+              className="w-full"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Zap className="mr-2 h-4 w-4" />
+                  Pay KES {rentAmount.toLocaleString()}
+                </>
+              )}
+            </Button>
+            
+            {!scriptLoaded && (
+              <p className="text-xs text-muted-foreground text-center">
+                Loading payment system...
+              </p>
+            )}
           </div>
 
-          {/* Action Buttons */}
-          <form onSubmit={(e) => { e.preventDefault(); handlePayment(); }}>
-            <div className="flex gap-2">
-              <Button 
-                type="button"
-                variant="outline" 
-                onClick={() => onOpenChange(false)}
-                className="flex-1"
-                disabled={loading}
-              >
-                Cancel
-              </Button>
-              <Button 
-                type="submit"
-                className="flex-1"
-                disabled={loading || !scriptLoaded || transactionStatus === 'verifying' || transactionStatus === 'success'}
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Processing...
-                  </>
-                ) : transactionStatus === 'verifying' ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Verifying...
-                  </>
-                ) : transactionStatus === 'success' ? (
-                  <>
-                    <CreditCard className="mr-2 h-4 w-4" />
-                    Payment Complete
-                  </>
-                ) : (
-                  <>
-                    <CreditCard className="mr-2 h-4 w-4" />
-                    Pay Now
-                  </>
-                )}
-              </Button>
-            </div>
-          </form>
-
-          <p className="text-xs text-muted-foreground text-center">
-            By proceeding, you agree to complete the payment for the amount shown above
-          </p>
+          <div className="text-xs text-muted-foreground text-center">
+            <p>Powered by Paystack • Secure payment processing</p>
+            <p>Split payment: 95% to platform, 5% to landlord</p>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

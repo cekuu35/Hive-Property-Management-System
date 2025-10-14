@@ -28,7 +28,7 @@ export interface CreateMaintenanceRequest {
   category: string;
   priority: 'low' | 'medium' | 'high' | 'emergency';
   preferredDate?: string;
-  images?: File[];
+  images?: string[];
   unitId?: string;
 }
 
@@ -51,15 +51,15 @@ export const useMaintenanceRequests = () => {
         .select(`
           *,
           unit:units(unit_number, property:properties(name)),
-          tenant:profiles!maintenance_requests_tenant_id_fkey(first_name, last_name),
-          assigned:profiles!maintenance_requests_assigned_to_fkey(first_name, last_name)
+          tenant:profiles!tenant_id(first_name, last_name),
+          assigned:profiles!assigned_to(first_name, last_name)
         `);
 
       // Filter based on user role
-      if (profile.role === 'caretaker') {
-        // Caretakers can see all maintenance requests due to RLS policy
-        // No additional filtering needed as RLS handles access control
-        console.log('Fetching maintenance requests for caretaker...');
+      if (profile.role === 'caretaker' || profile.role === 'security') {
+        // Staff roles see all maintenance requests for now
+        // TODO: Implement proper staff assignment filtering when staff_assignments table is available
+        console.log(`Fetching maintenance requests for ${profile.role}...`);
       } else if (profile.role === 'tenant') {
         // Tenants see only their own requests - need to find tenant_info first
         const { data: tenantInfo } = await supabase
@@ -91,7 +91,13 @@ export const useMaintenanceRequests = () => {
           if (units && units.length > 0) {
             const unitIds = units.map(u => u.id);
             query = query.in('unit_id', unitIds);
+          } else {
+            // If no units found, return empty results
+            query = query.eq('unit_id', '00000000-0000-0000-0000-000000000000');
           }
+        } else {
+          // If no properties found, return empty results
+          query = query.eq('unit_id', '00000000-0000-0000-0000-000000000000');
         }
       }
 
@@ -261,7 +267,7 @@ export const useMaintenanceRequests = () => {
         unit_id: unitId,
         tenant_id: profile.id,
         scheduled_date: requestData.preferredDate || null,
-        images: [], // Initialize as empty array for now
+        images: requestData.images || [], // Use provided images or empty array
       };
 
       console.log('Creating maintenance request with data:', insertData);

@@ -2,7 +2,7 @@ import {
   Home, CreditCard, Wrench, FileText, MessageCircle, User,
   BarChart3, Building, Users, DollarSign, Settings, TrendingUp,
   Clipboard, Calendar, Package, Shield, AlertTriangle, UserCheck, MapPin,
-  Receipt, Bell, Activity
+  Receipt, Bell, Activity, UserPlus
 } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import {
@@ -46,6 +46,7 @@ const navigationConfig: Record<UserRole, NavigationItem[]> = {
     { id: "properties", label: "Properties", icon: Building, path: "/properties" },
     { id: "tenants", label: "Tenants", icon: Users, path: "/tenants" },
     { id: "applications", label: "Applications", icon: FileText, path: "/applications" },
+    { id: "staff", label: "Staff Management", icon: UserPlus, path: "/staff" },
     { id: "financials", label: "Financials", icon: DollarSign, path: "/financials" },
     { id: "utility-bills", label: "Utility Bills", icon: Receipt, path: "/utility-bills" },
     { id: "maintenance", label: "Maintenance", icon: Wrench, path: "/maintenance" },
@@ -63,10 +64,11 @@ const navigationConfig: Record<UserRole, NavigationItem[]> = {
   ],
   security: [
     { id: "overview", label: "Security Overview", icon: Shield, path: "/dashboard" },
-    { id: "incidents", label: "Incidents", icon: AlertTriangle, path: "/incidents" },
-    { id: "visitors", label: "Visitor Log", icon: UserCheck, path: "/visitors" },
+    { id: "visitors", label: "Visitor Management", icon: UserCheck, path: "/visitors" },
+    { id: "incidents", label: "Incident Management", icon: AlertTriangle, path: "/incidents" },
     { id: "patrols", label: "Patrols", icon: MapPin, path: "/patrols" },
     { id: "reports", label: "Reports", icon: FileText, path: "/reports" },
+    { id: "settings", label: "Settings", icon: Settings, path: "/settings" },
   ],
 };
 

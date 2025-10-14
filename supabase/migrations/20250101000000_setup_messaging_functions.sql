@@ -36,10 +36,16 @@ CREATE TRIGGER update_profiles_updated_at
   BEFORE UPDATE ON public.profiles 
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
-DROP TRIGGER IF EXISTS update_properties_updated_at ON public.properties;
-CREATE TRIGGER update_properties_updated_at 
-  BEFORE UPDATE ON public.properties 
-  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+-- Only create trigger if properties table exists
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'properties' AND table_schema = 'public') THEN
+        DROP TRIGGER IF EXISTS update_properties_updated_at ON public.properties;
+        CREATE TRIGGER update_properties_updated_at 
+          BEFORE UPDATE ON public.properties 
+          FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+    END IF;
+END $$;
 
 DROP TRIGGER IF EXISTS update_units_updated_at ON public.units;
 CREATE TRIGGER update_units_updated_at 

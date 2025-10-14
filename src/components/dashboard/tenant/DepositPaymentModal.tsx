@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { CreditCard, Loader2, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
+import { convertToKobo } from '@/lib/paystack';
 
 // Declare Paystack type for TypeScript
 declare global {
@@ -65,7 +66,7 @@ export const DepositPaymentModal = ({
       const handler = window.PaystackPop.setup({
         key: publicKey,
         email: user?.email || 'tenant@example.com',
-        amount: Math.round(depositAmount * 100), // Convert to kobo
+        amount: convertToKobo(depositAmount), // Convert to kobo
         currency: 'KES',
         ref: reference,
         metadata: {

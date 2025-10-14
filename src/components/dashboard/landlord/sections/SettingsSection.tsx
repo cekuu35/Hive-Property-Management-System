@@ -9,13 +9,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { PhotoUpload } from '@/components/ui/PhotoUpload';
 import { User, Mail, Phone, Shield, Bell, CreditCard, Users, Settings, Save, Plus, Trash2, Loader2 } from 'lucide-react';
 import { useSettings } from '@/hooks/useSettings';
+import { usePhotoUpload } from '@/hooks/usePhotoUpload';
+import { useAuth } from '@/hooks/useAuth';
 import { DataIntegrityCheck } from '../DataIntegrityCheck';
 import { LandlordPasswordChangeModal } from '../LandlordPasswordChangeModal';
 
 export const SettingsSection = () => {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const { profile, user } = useAuth();
+  const { updateProfileAvatar } = usePhotoUpload();
   
   const {
     notifications,
@@ -43,6 +48,20 @@ export const SettingsSection = () => {
 
   const handleSaveSettings = async () => {
     await saveAllSettings();
+  };
+
+  const handleAvatarUpload = async (result: { url: string; path: string; size: number }) => {
+    if (!profile) return;
+
+    try {
+      const success = await updateProfileAvatar(profile.id, result.url, 'landlord');
+      if (success) {
+        // Refresh the profile data
+        window.location.reload();
+      }
+    } catch (error: any) {
+      console.error('Failed to update avatar:', error);
+    }
   };
 
   if (loading) {
@@ -85,15 +104,31 @@ export const SettingsSection = () => {
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Profile Picture Section */}
-              <div className="flex items-center gap-6">
-                <Avatar className="h-20 w-20">
-                  <AvatarImage src="" />
-                  <AvatarFallback className="text-lg">{profileSettings.firstName[0]}{profileSettings.lastName[0]}</AvatarFallback>
-                </Avatar>
-                <div className="space-y-2">
-                  <Button variant="outline">Change Photo</Button>
-                  <p className="text-sm text-muted-foreground">JPG, GIF or PNG. Max size 2MB.</p>
+              <div className="space-y-4">
+                <div className="flex items-center gap-6">
+                  <Avatar className="h-20 w-20">
+                    <AvatarImage src={profile?.avatar_url || undefined} />
+                    <AvatarFallback className="text-lg">{profileSettings.firstName[0]}{profileSettings.lastName[0]}</AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <h4 className="text-sm font-medium mb-2">Profile Photo</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Upload a professional photo for your landlord profile
+                    </p>
+                  </div>
                 </div>
+                
+                <PhotoUpload
+                  onUpload={handleAvatarUpload}
+                  currentPhoto={profile?.avatar_url || undefined}
+                  bucket="avatars"
+                  path={user?.id || ''}
+                  maxSize={5}
+                  compress={true}
+                  quality={0.8}
+                  placeholder="Click to upload profile photo"
+                  className="max-w-md"
+                />
               </div>
 
               <Separator />

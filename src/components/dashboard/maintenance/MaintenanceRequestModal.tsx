@@ -5,9 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Loader2, Upload, X } from 'lucide-react';
+import { MultiplePhotoUpload } from '@/components/ui/PhotoUpload';
+import { PhotoGallery } from '@/components/ui/PhotoGallery';
+import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useMaintenanceRequests } from '@/hooks/useMaintenanceRequests';
+import { useAuth } from '@/hooks/useAuth';
 
 interface MaintenanceRequestModalProps {
   isOpen: boolean;
@@ -20,7 +23,7 @@ type Category = 'plumbing' | 'electrical' | 'hvac' | 'appliances' | 'general' | 
 
 export const MaintenanceRequestModal = ({ isOpen, onClose, onSuccess }: MaintenanceRequestModalProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [uploadedImages, setUploadedImages] = useState<File[]>([]);
+  const [uploadedImages, setUploadedImages] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -30,6 +33,7 @@ export const MaintenanceRequestModal = ({ isOpen, onClose, onSuccess }: Maintena
   });
   const { toast } = useToast();
   const { createMaintenanceRequest, debugTenantUnitAssignment } = useMaintenanceRequests();
+  const { user } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,17 +77,9 @@ export const MaintenanceRequestModal = ({ isOpen, onClose, onSuccess }: Maintena
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length + uploadedImages.length > 5) {
-      toast({
-        title: "Too Many Images",
-        description: "You can upload a maximum of 5 images.",
-        variant: "destructive",
-      });
-      return;
-    }
-    setUploadedImages(prev => [...prev, ...files]);
+  const handleImageUpload = (results: Array<{ url: string; path: string; size: number }>) => {
+    const newUrls = results.map(result => result.url);
+    setUploadedImages(prev => [...prev, ...newUrls]);
   };
 
   const removeImage = (index: number) => {
@@ -210,47 +206,31 @@ export const MaintenanceRequestModal = ({ isOpen, onClose, onSuccess }: Maintena
           {/* Image Upload */}
           <div className="space-y-4">
             <Label>Photos (Optional)</Label>
-            <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center">
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={handleImageUpload}
-                className="hidden"
-                id="image-upload"
-              />
-              <Label htmlFor="image-upload" className="cursor-pointer">
-                <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">
-                  Click to upload photos or drag and drop
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Max 5 images, PNG or JPG
-                </p>
-              </Label>
-            </div>
-
-            {/* Image Preview */}
+            
+            {/* Photo Gallery */}
             {uploadedImages.length > 0 && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                {uploadedImages.map((file, index) => (
-                  <div key={index} className="relative group">
-                    <img
-                      src={URL.createObjectURL(file)}
-                      alt={`Upload ${index + 1}`}
-                      className="w-full h-24 object-cover rounded-lg border"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeImage(index)}
-                      className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
+              <PhotoGallery
+                photos={uploadedImages}
+                onRemove={removeImage}
+                maxColumns={3}
+                showActions={true}
+                allowFullscreen={true}
+                className="mb-4"
+              />
             )}
+
+            {/* Upload Component */}
+            <MultiplePhotoUpload
+              onUpload={handleImageUpload}
+              currentPhotos={uploadedImages}
+              bucket="maintenance-photos"
+              path={user?.id || 'anonymous'}
+              maxSize={10}
+              compress={true}
+              quality={0.8}
+              maxPhotos={5}
+              placeholder="Click to upload maintenance photos"
+            />
           </div>
 
           {/* Debug Button (only for development) */}

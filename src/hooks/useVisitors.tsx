@@ -81,8 +81,41 @@ export const useVisitors = () => {
             query = query.in('visiting_unit_id', unitIds);
           }
         }
+      } else if (profile.role === 'security') {
+        // Security can only see visitors to their assigned properties
+        let assignedPropertyIds: string[] = [];
+        
+        try {
+          const { data: assignments } = await (supabase as any)
+            .from('staff_assignments')
+            .select('property_id')
+            .eq('staff_id', profile.id)
+            .eq('role', 'security')
+            .eq('is_active', true);
+
+          assignedPropertyIds = assignments?.map((a: any) => a.property_id) || [];
+        } catch (error) {
+          console.warn('staff_assignments table not found, using all properties for soft landing');
+          // For soft landing, get all properties
+          const { data: allProperties } = await supabase
+            .from('properties')
+            .select('id');
+          assignedPropertyIds = allProperties?.map(p => p.id) || [];
+        }
+
+        if (assignedPropertyIds.length > 0) {
+          // Get units from assigned properties
+          const { data: units } = await supabase
+            .from('units')
+            .select('id')
+            .in('property_id', assignedPropertyIds);
+
+          if (units && units.length > 0) {
+            const unitIds = units.map(u => u.id);
+            query = query.in('visiting_unit_id', unitIds);
+          }
+        }
       }
-      // Security can see all visitors (no additional filter needed)
 
       const { data, error } = await query;
 

@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Shield, Lock, Users, Settings, DollarSign, Sun, Moon, Eye, EyeOff } from 'lucide-react';
-import LandlordSubaccountManager from '@/components/admin/LandlordSubaccountManager';
+import LandlordMpesaManager from '@/components/admin/LandlordMpesaManager';
 import AdminDashboard from '@/components/admin/AdminDashboard';
 import PasswordChangeModal from '@/components/admin/PasswordChangeModal';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
@@ -249,7 +249,7 @@ export default function AdminPortal() {
           {/* Main Admin Content */}
           <div className="space-y-8">
             <AdminDashboard />
-            <LandlordSubaccountManager />
+            <LandlordMpesaManager />
           </div>
         </div>
       </div>

@@ -326,13 +326,15 @@ export const useUtilityBills = () => {
       if (createError) {
         console.error('Create bill error details:', createError);
         
-        // Check if the error is related to notifications data column
-        if (createError.message.includes('notifications') && createError.message.includes('data')) {
-          console.log('🔄 Notifications data column issue detected. Creating bill without trigger...');
+        // Check if the error is related to notifications foreign key constraint
+        if (createError.message.includes('notifications') && 
+            (createError.message.includes('foreign key constraint') || 
+             createError.message.includes('notifications_user_id_fkey'))) {
+          console.log('🔄 Notifications foreign key constraint issue detected. Creating bill without trigger...');
           
           // The issue is that the database trigger is trying to insert into notifications
-          // with a data column that doesn't exist. We'll create the bill without the trigger
-          // by temporarily setting tenant_id to null to avoid the trigger
+          // with a user_id that doesn't exist in the profiles table. We'll create the bill 
+          // without the trigger by temporarily setting tenant_id to null to avoid the trigger
           const { data: retryBill, error: retryError } = await supabaseAdmin
             .from('unit_bills')
             .insert({
@@ -369,7 +371,7 @@ export const useUtilityBills = () => {
           }
           
           console.log('✅ Bill created successfully (without trigger):', retryBill);
-          toast.success('Utility bill created successfully');
+          toast.success('Utility bill created successfully (notification may not be sent due to user profile issue)');
           await fetchLandlordBills();
           return retryBill;
         } else {
