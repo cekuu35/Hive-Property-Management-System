@@ -8,6 +8,9 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+      strategies: 'injectManifest',
+      srcDir: 'public',
+      filename: 'sw.js',
       manifest: {
         name: 'Lovly Property Management',
         short_name: 'LovlyProp',
@@ -109,6 +112,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        navigateFallback: '/offline.html',
+        navigateFallbackDenylist: [/^\/api\//, /^\/_/, /^\/admin/],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/api\.safaricom\.co\.ke\/.*/i,
@@ -136,6 +141,13 @@ export default defineConfig({
               cacheableResponse: {
                 statuses: [0, 200]
               }
+            }
+          },
+          {
+            urlPattern: /^chrome-extension:\/\/.*/i,
+            handler: 'NetworkOnly',
+            options: {
+              cacheName: 'extension-ignore-cache'
             }
           }
         ]
