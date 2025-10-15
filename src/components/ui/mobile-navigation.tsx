@@ -83,30 +83,30 @@ export function MobileNavigation({
   };
 
   return (
-    <div className="lg:hidden">
+    <div className="md:hidden">
       <Sheet open={isOpen} onOpenChange={setIsOpen}>
         <SheetTrigger asChild>
           <Button
             variant="ghost"
             size="sm"
-            className="fixed top-4 left-4 z-50 bg-background/80 backdrop-blur-sm border shadow-lg"
+            className="fixed top-4 left-4 z-[60] bg-background/90 backdrop-blur-sm border shadow-lg hover:bg-background"
           >
             <Menu className="h-5 w-5" />
             <span className="sr-only">Open menu</span>
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="w-80 p-0">
-          <div className="flex flex-col h-full">
+        <SheetContent side="left" className="w-80 p-0 z-[70] bg-background">
+          <div className="flex flex-col h-full bg-background">
             {/* Header */}
-            <div className="p-6 border-b">
-              <h2 className="text-lg font-semibold">LovlyProp</h2>
+            <div className="p-6 border-b bg-background">
+              <h2 className="text-lg font-semibold text-foreground">LovlyProp</h2>
               <p className="text-sm text-muted-foreground">
                 {userRole === 'landlord' ? 'Property Management' : 'Tenant Portal'}
               </p>
             </div>
 
             {/* Navigation Items */}
-            <nav className="flex-1 p-4 space-y-2">
+            <nav className="flex-1 p-4 space-y-2 overflow-y-auto bg-background">
               {items.map((item) => {
                 const Icon = item.icon;
                 const badgeCount = getBadgeCount(item.id);
@@ -117,20 +117,21 @@ export function MobileNavigation({
                     key={item.id}
                     variant={isActive ? "secondary" : "ghost"}
                     className={cn(
-                      "w-full justify-start h-12 px-4",
-                      isActive && "bg-primary text-primary-foreground"
+                      "w-full justify-start h-14 px-4 text-left",
+                      isActive && "bg-primary text-primary-foreground hover:bg-primary/90",
+                      !isActive && "hover:bg-accent hover:text-accent-foreground"
                     )}
                     onClick={() => handleTabChange(item.id)}
                   >
-                    <Icon className="h-5 w-5 mr-3" />
-                    <div className="flex-1 text-left">
-                      <div className="font-medium">{item.label}</div>
-                      <div className="text-xs opacity-70">{item.description}</div>
+                    <Icon className="h-5 w-5 mr-3 flex-shrink-0" />
+                    <div className="flex-1 text-left min-w-0">
+                      <div className="font-medium truncate">{item.label}</div>
+                      <div className="text-xs opacity-70 truncate">{item.description}</div>
                     </div>
                     {badgeCount > 0 && (
                       <Badge 
                         variant={isActive ? "secondary" : "destructive"}
-                        className="ml-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
+                        className="ml-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs flex-shrink-0"
                       >
                         {badgeCount > 99 ? '99+' : badgeCount}
                       </Badge>
@@ -141,11 +142,11 @@ export function MobileNavigation({
             </nav>
 
             {/* Footer */}
-            <div className="p-4 border-t">
+            <div className="p-4 border-t bg-background">
               {onLogout && (
                 <Button
                   variant="ghost"
-                  className="w-full justify-start text-destructive hover:text-destructive"
+                  className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10 h-12"
                   onClick={() => {
                     onLogout();
                     setIsOpen(false);

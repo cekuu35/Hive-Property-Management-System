@@ -29,10 +29,10 @@ export function MobileHeader({
   className
 }: MobileHeaderProps) {
   return (
-    <div className={cn("sticky top-0 z-40 bg-background/80 backdrop-blur-sm border-b", className)}>
-      <div className="flex items-center justify-between p-4">
+    <div className={cn("sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b shadow-sm", className)}>
+      <div className="flex items-center justify-between p-4 safe-area-top">
         {/* Left side - Title */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 ml-12">
           <h1 className="text-lg font-semibold truncate">{title}</h1>
           {subtitle && (
             <p className="text-sm text-muted-foreground truncate">{subtitle}</p>

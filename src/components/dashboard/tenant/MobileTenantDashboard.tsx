@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { MobileHeader } from '@/components/ui/mobile-header';
 import { MobileCard, MobileGrid, MobileList, MobileListItem } from '@/components/ui/mobile-card';
 import { MobileNavigation } from '@/components/ui/mobile-navigation';
+import { MobileBottomNav } from '@/components/ui/mobile-bottom-nav';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { 
@@ -18,7 +19,9 @@ import {
   Clock,
   DollarSign,
   RefreshCw,
-  Plus
+  Plus,
+  Shield,
+  User
 } from 'lucide-react';
 import { MpesaRentPaymentModal } from './MpesaRentPaymentModal';
 import { MaintenanceRequestModal } from '@/components/dashboard/maintenance/MaintenanceRequestModal';
@@ -215,6 +218,95 @@ export function MobileTenantDashboard({ onTabChange }: MobileTenantDashboardProp
     </div>
   );
 
+  const renderDocuments = () => (
+    <div className="space-y-4 p-4">
+      <MobileCard
+        title="Documents"
+        description="Your lease and payment documents"
+      />
+      <MobileList>
+        <MobileListItem
+          title="Lease Agreement"
+          subtitle="Signed on Jan 1, 2024"
+          value="PDF"
+          icon={<FileText className="h-4 w-4" />}
+        />
+        <MobileListItem
+          title="Rent Receipt - January"
+          subtitle="Paid on Jan 15, 2024"
+          value="PDF"
+          icon={<Receipt className="h-4 w-4" />}
+        />
+        <MobileListItem
+          title="Property Rules"
+          subtitle="Updated Jan 1, 2024"
+          value="PDF"
+          icon={<FileText className="h-4 w-4" />}
+        />
+      </MobileList>
+    </div>
+  );
+
+  const renderMessages = () => (
+    <div className="space-y-4 p-4">
+      <MobileCard
+        title="Messages"
+        description="Chat with your landlord"
+      />
+      <MobileList>
+        <MobileListItem
+          title="Property Manager"
+          subtitle="Monthly inspection scheduled"
+          value="2 min ago"
+          icon={<MessageCircle className="h-4 w-4" />}
+        />
+        <MobileListItem
+          title="Maintenance Team"
+          subtitle="AC repair completed"
+          value="1 hour ago"
+          icon={<MessageCircle className="h-4 w-4" />}
+        />
+        <MobileListItem
+          title="Landlord"
+          subtitle="Lease renewal discussion"
+          value="2 days ago"
+          icon={<MessageCircle className="h-4 w-4" />}
+        />
+      </MobileList>
+    </div>
+  );
+
+  const renderProfile = () => (
+    <div className="space-y-4 p-4">
+      <MobileCard
+        title="Profile Settings"
+        description="Manage your account"
+      />
+      <MobileList>
+        <MobileListItem
+          title="Personal Information"
+          subtitle="Update your details"
+          icon={<User className="h-4 w-4" />}
+        />
+        <MobileListItem
+          title="Payment Methods"
+          subtitle="Manage M-Pesa settings"
+          icon={<CreditCard className="h-4 w-4" />}
+        />
+        <MobileListItem
+          title="Notifications"
+          subtitle="Configure alerts"
+          icon={<Bell className="h-4 w-4" />}
+        />
+        <MobileListItem
+          title="Security"
+          subtitle="Password and privacy"
+          icon={<Shield className="h-4 w-4" />}
+        />
+      </MobileList>
+    </div>
+  );
+
   const renderContent = () => {
     switch (activeTab) {
       case 'overview':
@@ -223,14 +315,20 @@ export function MobileTenantDashboard({ onTabChange }: MobileTenantDashboardProp
         return renderMaintenance();
       case 'payments':
         return renderPayments();
+      case 'documents':
+        return renderDocuments();
+      case 'messages':
+        return renderMessages();
+      case 'profile':
+        return renderProfile();
       default:
         return renderOverview();
     }
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Mobile Navigation */}
+    <div className="min-h-screen bg-background pb-20">
+      {/* Mobile Navigation Sidebar */}
       <MobileNavigation
         activeTab={activeTab}
         onTabChange={handleTabChange}
@@ -250,7 +348,18 @@ export function MobileTenantDashboard({ onTabChange }: MobileTenantDashboardProp
       />
 
       {/* Content */}
-      {renderContent()}
+      <div className="pb-4">
+        {renderContent()}
+      </div>
+
+      {/* Mobile Bottom Navigation */}
+      <MobileBottomNav
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        pendingRequests={pendingRequestsCount}
+        unreadMessages={unreadCount}
+        userRole="tenant"
+      />
 
       {/* Modals */}
       {showPaymentModal && (
