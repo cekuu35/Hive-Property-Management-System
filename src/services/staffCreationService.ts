@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { supabaseAdmin } from '@/integrations/supabase/admin';
 
 export interface CreateStaffData {
   first_name: string;

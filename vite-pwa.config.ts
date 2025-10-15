@@ -114,6 +114,8 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         navigateFallback: '/offline.html',
         navigateFallbackDenylist: [/^\/api\//, /^\/_/, /^\/admin/],
+        skipWaiting: true,
+        clientsClaim: true,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/api\.safaricom\.co\.ke\/.*/i,

@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import { supabaseAdmin } from '../../scripts/supabaseAdmin.js';
+import { supabaseAdmin } from '@/integrations/supabase/admin';
 
 export interface CreateTenantData {
   first_name: string;
