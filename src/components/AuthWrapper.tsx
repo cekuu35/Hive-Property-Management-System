@@ -2,11 +2,13 @@ import { useRoleBasedAuth } from '@/hooks/useRoleBasedAuth';
 import { RoleSwitcher } from '@/components/RoleSwitcher';
 import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
 import { TenantDashboard } from '@/components/dashboard/tenant/TenantDashboard';
+import { MobileTenantDashboard } from '@/components/dashboard/tenant/MobileTenantDashboard';
 import { LandlordDashboard } from '@/components/dashboard/landlord/LandlordDashboard';
 import { CaretakerDashboard } from '@/components/dashboard/caretaker/CaretakerDashboard';
 import { SecurityDashboard } from '@/components/dashboard/security/SecurityDashboard';
 import { Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface AuthWrapperProps {
   children?: React.ReactNode;
@@ -16,6 +18,7 @@ export const AuthWrapper = ({ children }: AuthWrapperProps) => {
   const { userRole, loading, error } = useRoleBasedAuth();
   const [activeTab, setActiveTab] = useState("overview");
   const [activeSection, setActiveSection] = useState<string>("dashboard");
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     if (!userRole) return;
@@ -95,7 +98,9 @@ export const AuthWrapper = ({ children }: AuthWrapperProps) => {
   const renderDashboard = () => {
     switch (userRole.role) {
       case 'tenant':
-        return <TenantDashboard activeTab={activeTab} onTabChange={setActiveTab} />;
+        return isMobile ? 
+          <MobileTenantDashboard onTabChange={setActiveTab} /> : 
+          <TenantDashboard activeTab={activeTab} onTabChange={setActiveTab} />;
       case 'landlord':
         return <LandlordDashboard activeSection={activeSection} onSectionChange={setActiveSection} />;
       case 'caretaker':

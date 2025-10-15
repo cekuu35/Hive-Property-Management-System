@@ -7,6 +7,10 @@
   "background_color": "#ffffff",
   "theme_color": "#3b82f6",
   "orientation": "portrait-primary",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
   "scope": "/",
   "lang": "en",
   "categories": ["business", "productivity", "finance"],
