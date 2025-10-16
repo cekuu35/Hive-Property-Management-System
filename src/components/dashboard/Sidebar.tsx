@@ -2,7 +2,7 @@ import {
   Home, CreditCard, Wrench, FileText, MessageCircle, User,
   BarChart3, Building, Users, DollarSign, Settings, TrendingUp,
   Clipboard, Calendar, Package, Shield, AlertTriangle, UserCheck, MapPin,
-  Receipt, Bell, Activity, UserPlus
+  Receipt, Bell, Activity, UserPlus, Workflow
 } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import {
@@ -52,6 +52,7 @@ const navigationConfig: Record<UserRole, NavigationItem[]> = {
     { id: "maintenance", label: "Maintenance", icon: Wrench, path: "/maintenance" },
     { id: "messages", label: "Messages", icon: MessageCircle, path: "/messages" },
     { id: "reports", label: "Reports", icon: TrendingUp, path: "/reports" },
+    { id: "workflows", label: "Workflows", icon: Workflow, path: "/workflows" },
     { id: "settings", label: "Settings", icon: Settings, path: "/settings" },
   ],
   caretaker: [

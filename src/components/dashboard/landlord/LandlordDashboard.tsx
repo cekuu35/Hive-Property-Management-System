@@ -13,7 +13,8 @@ import { UtilityBillsManagement } from './UtilityBillsManagement';
 import { UnitApplicationsSection } from './UnitApplicationsSection';
 import { PropertyForm } from './PropertyForm';
 import { StaffManagementSection } from './StaffManagementSection';
-import { TenantInfoCard } from '../tenant/TenantInfoCard';
+// import { TenantInfoCard } from '../tenant/TenantInfoCard';
+import { N8nWorkflowManager } from './N8nWorkflowManager';
 import { useFinancials } from '@/hooks/useFinancials';
 import { useMaintenanceRequests } from '@/hooks/useMaintenanceRequests';
 import { useProperties } from '@/hooks/useProperties';
@@ -40,6 +41,7 @@ const LandlordDashboard = ({ activeSection = 'dashboard', onSectionChange }: Lan
       case 'maintenance': return <MaintenanceSection />;
       case 'messages': return <MessagesSection />;
       case 'reports': return <ReportsSection />;
+      case 'workflows': return <N8nWorkflowManager />;
       case 'settings': return <SettingsSection />;
       default: return <DashboardOverview onSectionChange={onSectionChange} />;
     }
@@ -193,7 +195,7 @@ const DashboardOverview = ({ onSectionChange }: { onSectionChange?: (section: st
       </div>
 
       {/* Tenant Information */}
-      <TenantInfoCard showAll={false} />
+      {/* <TenantInfoCard showAll={false} /> */}
 
       {/* Quick Actions */}
       <Card>
