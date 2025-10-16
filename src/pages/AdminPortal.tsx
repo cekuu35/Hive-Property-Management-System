@@ -4,10 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Shield, Lock, Users, Settings, DollarSign, Sun, Moon, Eye, EyeOff } from 'lucide-react';
+import { Shield, Lock, Users, Settings, DollarSign, Sun, Moon, Eye, EyeOff, Workflow } from 'lucide-react';
 import LandlordMpesaManager from '@/components/admin/LandlordMpesaManager';
 import AdminDashboard from '@/components/admin/AdminDashboard';
 import PasswordChangeModal from '@/components/admin/PasswordChangeModal';
+import { N8nWorkflowManager } from '@/components/dashboard/landlord/N8nWorkflowManager';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { useTheme } from '@/components/ThemeProvider';
 
@@ -250,6 +251,22 @@ export default function AdminPortal() {
           <div className="space-y-8">
             <AdminDashboard />
             <LandlordMpesaManager />
+            
+            {/* n8n Workflow Management */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <Workflow className="h-5 w-5 text-primary" />
+                  <CardTitle>n8n Workflow Management</CardTitle>
+                </div>
+                <CardDescription>
+                  Manage automation workflows and integrations
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <N8nWorkflowManager />
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>

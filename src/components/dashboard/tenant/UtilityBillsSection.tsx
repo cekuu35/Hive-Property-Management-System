@@ -470,7 +470,11 @@ export const UtilityBillsSection = () => {
           }
         }}
         paymentData={paymentData}
-        onPaymentSuccess={handlePaymentSuccess}
+        onPaymentSuccess={() => {
+          if (paymentData) {
+            handlePaymentSuccess('', paymentData.billId);
+          }
+        }}
       />
     </div>
   );
