@@ -1,0 +1,109 @@
+{
+  "name": "Debug Supabase Response",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://kozhlejudselgtmohdfm.supabase.co/rest/v1/tenants?select=*,units(*,properties(*)),tenant_info(*)&status=eq.active",
+        "authentication": "headerAuth",
+        "headerAuth": {
+          "name": "Authorization",
+          "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g"
+        },
+        "additionalHeaders": {
+          "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g",
+          "Content-Type": "application/json"
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "debug-http-request",
+      "name": "Debug HTTP Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Debug the HTTP response\nconst items = $input.all();\n\nconsole.log('=== DEBUG HTTP RESPONSE ===');\nconsole.log('Number of items:', items.length);\n\nif (items.length > 0) {\n  const item = items[0];\n  console.log('Response structure:');\n  console.log('- json:', typeof item.json);\n  console.log('- binary:', typeof item.binary);\n  console.log('- headers:', typeof item.headers);\n  console.log('- statusCode:', item.statusCode);\n  \n  if (item.json) {\n    console.log('JSON data type:', Array.isArray(item.json) ? 'array' : typeof item.json);\n    console.log('JSON length:', Array.isArray(item.json) ? item.json.length : 'N/A');\n    \n    if (Array.isArray(item.json) && item.json.length > 0) {\n      const firstItem = item.json[0];\n      console.log('First item keys:', Object.keys(firstItem));\n      console.log('First item status:', firstItem.status);\n      console.log('First item tenant_info:', !!firstItem.tenant_info);\n      console.log('First item units:', !!firstItem.units);\n    }\n  }\n  \n  if (item.headers) {\n    console.log('Response headers:', item.headers);\n  }\n  \n  if (item.statusCode) {\n    console.log('Status code:', item.statusCode);\n  }\n} else {\n  console.log('No items received');\n}\n\nconsole.log('=== END DEBUG ===');\n\nreturn items;"
+      },
+      "id": "debug-response",
+      "name": "Debug Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "debug_complete",
+              "value": "Debug completed - check execution log"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "debug-complete",
+      "name": "Debug Complete",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Debug HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Debug HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Debug Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Debug Response": {
+      "main": [
+        [
+          {
+            "node": "Debug Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "1"
+}
+
+
+

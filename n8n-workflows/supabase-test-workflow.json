@@ -1,0 +1,78 @@
+{
+  "name": "Supabase Connection Test",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://kozhlejudselgtmohdfm.supabase.co/rest/v1/tenants?select=*,units(*,properties(*)),tenant_info(*)&status=eq.active",
+        "authentication": "headerAuth",
+        "headerAuth": {
+          "name": "Authorization",
+          "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g"
+        },
+        "additionalHeaders": {
+          "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g",
+          "Content-Type": "application/json"
+        }
+      },
+      "id": "test-supabase-connection",
+      "name": "Test Supabase Connection",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_count",
+              "value": "={{$json.length}}"
+            },
+            {
+              "name": "first_tenant_name",
+              "value": "={{$json[0].tenant_info.full_name}}"
+            },
+            {
+              "name": "first_tenant_phone",
+              "value": "={{$json[0].tenant_info.phone}}"
+            },
+            {
+              "name": "first_property_address",
+              "value": "={{$json[0].units.properties.address}}"
+            },
+            {
+              "name": "connection_status",
+              "value": "SUCCESS"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "process-results",
+      "name": "Process Results",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [460, 300]
+    }
+  ],
+  "connections": {
+    "Test Supabase Connection": {
+      "main": [
+        [
+          {
+            "node": "Process Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "1"
+}
+
+
+

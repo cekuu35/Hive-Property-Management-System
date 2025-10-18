@@ -5,14 +5,8 @@ import { Loader2, CreditCard, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { convertToKobo } from '@/lib/paystack';
-import { createClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-
-// Admin client for accessing all tables
-const supabaseAdmin = createClient(
-  'https://kozhlejudselgtmohdfm.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g'
-);
+import { supabaseAdmin } from '@/integrations/supabase/admin';
 
 // Declare Paystack type for TypeScript
 declare global {

@@ -1,0 +1,114 @@
+{
+  "name": "Supabase Working Test",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://kozhlejudselgtmohdfm.supabase.co/rest/v1/tenants?select=*,units(*,properties(*)),tenant_info(*)&status=eq.active",
+        "authentication": "headerAuth",
+        "headerAuth": {
+          "name": "Authorization",
+          "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g"
+        },
+        "additionalHeaders": {
+          "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g",
+          "Content-Type": "application/json"
+        }
+      },
+      "id": "test-supabase",
+      "name": "Test Supabase Connection",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process the response safely\nconst items = $input.all();\n\nconsole.log('Processing Supabase response...');\nconsole.log('Number of items:', items.length);\n\nif (!items || items.length === 0) {\n  console.log('No data received');\n  return [];\n}\n\nconst processedItems = items.map(item => {\n  const data = item.json;\n  \n  // Safely extract data with fallbacks\n  return {\n    json: {\n      id: data?.id || 'unknown',\n      status: data?.status || 'unknown',\n      rent_amount: data?.rent_amount || 0,\n      lease_start_date: data?.lease_start_date || 'unknown',\n      tenant_name: data?.tenant_info?.full_name || 'Unknown Tenant',\n      phone: data?.tenant_info?.phone || 'No phone',\n      email: data?.tenant_info?.email || 'No email',\n      property_address: data?.units?.properties?.address || 'Unknown address',\n      unit_number: data?.units?.unit_number || 'Unknown unit',\n      property_name: data?.units?.properties?.name || 'Unknown property'\n    }\n  };\n});\n\nconsole.log(`Processed ${processedItems.length} tenants successfully`);\nreturn processedItems;"
+      },
+      "id": "process-response",
+      "name": "Process Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "test_result",
+              "value": "SUCCESS - Supabase connection working!"
+            },
+            {
+              "name": "tenant_count",
+              "value": "={{$json.length}}"
+            },
+            {
+              "name": "first_tenant_name",
+              "value": "={{$json[0].tenant_name}}"
+            },
+            {
+              "name": "first_property",
+              "value": "={{$json[0].property_address}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "show-results",
+      "name": "Show Results",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Test Supabase Connection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test Supabase Connection": {
+      "main": [
+        [
+          {
+            "node": "Process Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Response": {
+      "main": [
+        [
+          {
+            "node": "Show Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "1"
+}
+
+
+

@@ -6,7 +6,8 @@ import {
   CreditCard, 
   Wrench, 
   MessageCircle, 
-  User
+  User,
+  Receipt
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -21,9 +22,9 @@ interface MobileBottomNavProps {
 const bottomNavItems = [
   { id: 'overview', label: 'Home', icon: Home },
   { id: 'payments', label: 'Pay', icon: CreditCard },
+  { id: 'utility-bills', label: 'Bills', icon: Receipt },
   { id: 'maintenance', label: 'Repairs', icon: Wrench },
   { id: 'messages', label: 'Chat', icon: MessageCircle },
-  { id: 'profile', label: 'Profile', icon: User },
 ];
 
 export function MobileBottomNav({ 
@@ -39,6 +40,8 @@ export function MobileBottomNav({
         return pendingRequests;
       case 'messages':
         return unreadMessages;
+      case 'utility-bills':
+        return 0; // Could add unpaid bills count
       default:
         return 0;
     }

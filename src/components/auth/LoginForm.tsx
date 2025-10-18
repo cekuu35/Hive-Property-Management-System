@@ -162,13 +162,41 @@ export const LoginForm = () => {
       <div className="relative z-20 w-full max-w-md px-4 sm:px-6 mx-auto">
         {/* Logo */}
         <div className="text-center mb-8 animate-fade-in">
-          <div className="w-16 h-16 mx-auto mb-4 bg-gradient-logo-blue rounded-2xl flex items-center justify-center shadow-glow relative overflow-hidden">
-            {/* Subtle inner glow */}
+          <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 rounded-2xl flex items-center justify-center shadow-glow relative overflow-hidden">
+            {/* Property management building pattern */}
             <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-2xl"></div>
-            <span className="text-2xl font-bold text-white relative z-10 drop-shadow-lg">PM</span>
+            <div className="relative z-10 flex items-center justify-center">
+              <svg className="w-8 h-8 text-white drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24">
+                {/* Main building */}
+                <rect x="8" y="6" width="8" height="12" fill="currentColor" rx="0.5"/>
+                {/* Building windows */}
+                <rect x="9.5" y="8" width="1.5" height="1.5" fill="white" opacity="0.8"/>
+                <rect x="12" y="8" width="1.5" height="1.5" fill="white" opacity="0.8"/>
+                <rect x="14.5" y="8" width="1.5" height="1.5" fill="white" opacity="0.8"/>
+                <rect x="9.5" y="10.5" width="1.5" height="1.5" fill="white" opacity="0.8"/>
+                <rect x="12" y="10.5" width="1.5" height="1.5" fill="white" opacity="0.8"/>
+                <rect x="14.5" y="10.5" width="1.5" height="1.5" fill="white" opacity="0.8"/>
+                <rect x="9.5" y="13" width="1.5" height="1.5" fill="white" opacity="0.8"/>
+                <rect x="12" y="13" width="1.5" height="1.5" fill="white" opacity="0.8"/>
+                <rect x="14.5" y="13" width="1.5" height="1.5" fill="white" opacity="0.8"/>
+                {/* Door */}
+                <rect x="11.5" y="15" width="1" height="3" fill="white" opacity="0.9"/>
+                {/* Roof */}
+                <path d="M7 6L12 2L17 6V7H7V6Z" fill="currentColor"/>
+                {/* Side building */}
+                <rect x="4" y="9" width="5" height="9" fill="currentColor" opacity="0.7" rx="0.5"/>
+                <rect x="5" y="10.5" width="1" height="1" fill="white" opacity="0.6"/>
+                <rect x="7" y="10.5" width="1" height="1" fill="white" opacity="0.6"/>
+                <rect x="5" y="12.5" width="1" height="1" fill="white" opacity="0.6"/>
+                <rect x="7" y="12.5" width="1" height="1" fill="white" opacity="0.6"/>
+                {/* Key symbol */}
+                <circle cx="18" cy="8" r="1.5" fill="white" opacity="0.9"/>
+                <path d="M18 9.5L20 11.5" stroke="white" strokeWidth="0.8" strokeLinecap="round" opacity="0.9"/>
+              </svg>
+            </div>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-white text-shadow-responsive">Property Manager Pro</h1>
-          <p className="text-white/80 mt-2 text-shadow-responsive text-sm sm:text-base">Professional Rental Management</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-white text-shadow-responsive">Hive</h1>
+          <p className="text-white/80 mt-2 text-shadow-responsive text-sm sm:text-base">Smart Property Management</p>
         </div>
 
         <Card className="relative overflow-hidden animate-scale-in glass-card mx-2 sm:mx-0">
@@ -368,7 +396,7 @@ export const LoginForm = () => {
         </Card>
 
         <div className="text-center mt-6 text-xs text-white/60 drop-shadow-sm">
-          © 2024 Property Manager Pro. All rights reserved.
+          © 2024 Hive. All rights reserved.
         </div>
       </div>
     </div>

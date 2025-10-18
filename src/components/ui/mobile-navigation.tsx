@@ -16,7 +16,8 @@ import {
   Receipt,
   Calendar,
   Shield,
-  LogOut
+  LogOut,
+  UserCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -32,8 +33,12 @@ interface MobileNavigationProps {
 
 const navigationItems = [
   { id: 'overview', label: 'Overview', icon: Home, description: 'Dashboard overview' },
-  { id: 'payments', label: 'Payments', icon: CreditCard, description: 'Rent & utility payments' },
+  { id: 'browse-units', label: 'Browse Units', icon: Building2, description: 'Find available units' },
+  { id: 'my-applications', label: 'Applications', icon: FileText, description: 'My lease applications' },
+  { id: 'payments', label: 'Rent & Payments', icon: CreditCard, description: 'Rent & utility payments' },
+  { id: 'utility-bills', label: 'Utility Bills', icon: Receipt, description: 'Water, electricity, internet' },
   { id: 'maintenance', label: 'Maintenance', icon: Wrench, description: 'Request repairs' },
+  { id: 'visitors', label: 'Visitors', icon: UserCheck, description: 'Visitor management' },
   { id: 'documents', label: 'Documents', icon: FileText, description: 'Lease & receipts' },
   { id: 'messages', label: 'Messages', icon: MessageCircle, description: 'Chat with landlord' },
   { id: 'notices', label: 'Notices', icon: Bell, description: 'Important updates' },

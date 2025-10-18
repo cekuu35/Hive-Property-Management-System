@@ -1,0 +1,50 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="240" fill="url(#gradient)" stroke="#f59e0b" stroke-width="8"/>
+  
+  <!-- Bee body -->
+  <ellipse cx="256" cy="280" rx="80" ry="120" fill="#1f2937"/>
+  
+  <!-- Bee head -->
+  <circle cx="256" cy="180" r="60" fill="#1f2937"/>
+  
+  <!-- Bee stripes -->
+  <rect x="176" y="220" width="160" height="20" fill="#f59e0b" rx="10"/>
+  <rect x="176" y="260" width="160" height="20" fill="#f59e0b" rx="10"/>
+  <rect x="176" y="300" width="160" height="20" fill="#f59e0b" rx="10"/>
+  <rect x="176" y="340" width="160" height="20" fill="#f59e0b" rx="10"/>
+  
+  <!-- Wings -->
+  <ellipse cx="200" cy="200" rx="40" ry="60" fill="white" opacity="0.7" transform="rotate(-20 200 200)"/>
+  <ellipse cx="312" cy="200" rx="40" ry="60" fill="white" opacity="0.7" transform="rotate(20 312 200)"/>
+  
+  <!-- Antennae -->
+  <circle cx="220" cy="140" r="8" fill="#1f2937"/>
+  <circle cx="292" cy="140" r="8" fill="#1f2937"/>
+  <path d="M220 140L200 100" stroke="#1f2937" stroke-width="6" stroke-linecap="round"/>
+  <path d="M292 140L312 100" stroke="#1f2937" stroke-width="6" stroke-linecap="round"/>
+  
+  <!-- Eyes -->
+  <circle cx="240" cy="170" r="12" fill="white"/>
+  <circle cx="272" cy="170" r="12" fill="white"/>
+  <circle cx="240" cy="170" r="6" fill="#1f2937"/>
+  <circle cx="272" cy="170" r="6" fill="#1f2937"/>
+  
+  <!-- Smile -->
+  <path d="M230 200Q256 220 282 200" stroke="#1f2937" stroke-width="4" fill="none" stroke-linecap="round"/>
+  
+  <!-- Hive pattern in background -->
+  <path d="M100 100L150 130L200 100L250 130L300 100L350 130L400 100" stroke="#f59e0b" stroke-width="3" fill="none" opacity="0.3"/>
+  <path d="M100 140L150 170L200 140L250 170L300 140L350 170L400 140" stroke="#f59e0b" stroke-width="3" fill="none" opacity="0.3"/>
+  <path d="M100 180L150 210L200 180L250 210L300 180L350 210L400 180" stroke="#f59e0b" stroke-width="3" fill="none" opacity="0.3"/>
+  
+  <!-- Gradient definition -->
+  <defs>
+    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fbbf24;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#f59e0b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#d97706;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+</svg>
+

@@ -1,0 +1,333 @@
+{
+  "name": "Maintenance Request Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "maintenance-request",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Maintenance Request Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "webhookId": "maintenance-request-webhook"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{$json.tenant_id}}"
+            },
+            {
+              "name": "property_id",
+              "value": "={{$json.units.property_id}}"
+            },
+            {
+              "name": "issue_type",
+              "value": "={{$json.issue_type}}"
+            },
+            {
+              "name": "description",
+              "value": "={{$json.description}}"
+            },
+            {
+              "name": "priority",
+              "value": "={{$json.priority || 'medium'}}"
+            },
+            {
+              "name": "urgency",
+              "value": "={{$json.urgency || 'normal'}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "extract-request-data",
+      "name": "Extract Request Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://kozhlejudselgtmohdfm.supabase.co/rest/v1/tenants?id=eq.{{$json.tenant_id}}&select=*,properties(*)",
+        "authentication": "headerAuth",
+        "headerAuth": {
+          "name": "Authorization", "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g"
+        },
+        "additionalHeaders": {
+          "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g",
+          "Content-Type": "application/json"
+        }
+      },
+      "id": "get-tenant-details",
+      "name": "Get Tenant Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://kozhlejudselgtmohdfm.supabase.co/rest/v1/maintenance_requests",
+        "authentication": "headerAuth",
+        "headerAuth": {
+          "name": "Authorization", "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g"
+        },
+        "additionalHeaders": {
+          "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g",
+          "Content-Type": "application/json",
+          "Prefer": "return=minimal"
+        },
+        "body": {
+          "tenant_id": "={{$node['Extract Request Data'].json.tenant_id}}",
+          "property_id": "={{$node['Extract Request Data'].json.property_id}}",
+          "issue_type": "={{$node['Extract Request Data'].json.issue_type}}",
+          "description": "={{$node['Extract Request Data'].json.description}}",
+          "priority": "={{$node['Extract Request Data'].json.priority}}",
+          "urgency": "={{$node['Extract Request Data'].json.urgency}}",
+          "status": "pending",
+          "requested_date": "={{$now}}",
+          "tenant_name": "={{$node['Get Tenant Details'].json[0].name}}",
+          "property_address": "={{$node['Get Tenant Details'].json[0].properties.address}}"
+        }
+      },
+      "id": "create-maintenance-request",
+      "name": "Create Maintenance Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "urgent-request",
+              "leftValue": "={{$node['Extract Request Data'].json.urgency}}",
+              "rightValue": "urgent",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-urgency",
+      "name": "Check Urgency",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://kozhlejudselgtmohdfm.supabase.co/rest/v1/notifications",
+        "authentication": "headerAuth",
+        "headerAuth": {
+          "name": "Authorization", "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g"
+        },
+        "additionalHeaders": {
+          "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g",
+          "Content-Type": "application/json",
+          "Prefer": "return=minimal"
+        },
+        "body": {
+          "tenant_id": "={{$node['Extract Request Data'].json.tenant_id}}",
+          "type": "maintenance_request",
+          "title": "Maintenance Request Received",
+          "message": "Your maintenance request for {{$node['Get Tenant Details'].json[0].properties.address}} has been received. Issue: {{$node['Extract Request Data'].json.issue_type}}. We'll contact you soon.",
+          "status": "sent",
+          "created_at": "={{$now}}"
+        }
+      },
+      "id": "notify-tenant",
+      "name": "Notify Tenant",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://kozhlejudselgtmohdfm.supabase.co/rest/v1/notifications",
+        "authentication": "headerAuth",
+        "headerAuth": {
+          "name": "Authorization", "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g"
+        },
+        "additionalHeaders": {
+          "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g",
+          "Content-Type": "application/json",
+          "Prefer": "return=minimal"
+        },
+        "body": {
+          "type": "urgent_maintenance",
+          "title": "🚨 URGENT Maintenance Request",
+          "message": "URGENT: {{$node['Get Tenant Details'].json[0].name}} at {{$node['Get Tenant Details'].json[0].properties.address}} - {{$node['Extract Request Data'].json.issue_type}}: {{$node['Extract Request Data'].json.description}}",
+          "status": "sent",
+          "created_at": "={{$now}}"
+        }
+      },
+      "id": "notify-admin-urgent",
+      "name": "Notify Admin (Urgent)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1340, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://kozhlejudselgtmohdfm.supabase.co/rest/v1/notifications",
+        "authentication": "headerAuth",
+        "headerAuth": {
+          "name": "Authorization", "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g"
+        },
+        "additionalHeaders": {
+          "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g",
+          "Content-Type": "application/json",
+          "Prefer": "return=minimal"
+        },
+        "body": {
+          "type": "maintenance_request",
+          "title": "New Maintenance Request",
+          "message": "{{$node['Get Tenant Details'].json[0].name}} at {{$node['Get Tenant Details'].json[0].properties.address}} - {{$node['Extract Request Data'].json.issue_type}}: {{$node['Extract Request Data'].json.description}}",
+          "status": "sent",
+          "created_at": "={{$now}}"
+        }
+      },
+      "id": "notify-admin-normal",
+      "name": "Notify Admin (Normal)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1340, 500]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{{\"success\": true, \"message\": \"Maintenance request received successfully\", \"request_id\": \"{{$node['Create Maintenance Request'].json.id}}\"}}}"
+      },
+      "id": "success-response",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1560, 300]
+    }
+  ],
+  "connections": {
+    "Maintenance Request Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract Request Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Request Data": {
+      "main": [
+        [
+          {
+            "node": "Get Tenant Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Tenant Details": {
+      "main": [
+        [
+          {
+            "node": "Create Maintenance Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Maintenance Request": {
+      "main": [
+        [
+          {
+            "node": "Check Urgency",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Urgency": {
+      "main": [
+        [
+          {
+            "node": "Notify Admin (Urgent)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Admin (Normal)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Admin (Urgent)": {
+      "main": [
+        [
+          {
+            "node": "Notify Tenant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Admin (Normal)": {
+      "main": [
+        [
+          {
+            "node": "Notify Tenant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Tenant": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "1"
+}
+
+
+

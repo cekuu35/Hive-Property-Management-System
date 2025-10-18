@@ -1,0 +1,304 @@
+{
+  "name": "Tenant Onboarding Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "tenant-onboarding",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Tenant Onboarding Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "webhookId": "tenant-onboarding-webhook"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "name",
+              "value": "={{$json.tenant_info.full_name}}"
+            },
+            {
+              "name": "email",
+              "value": "={{$json.tenant_info.email}}"
+            },
+            {
+              "name": "phone_number",
+              "value": "={{$json.tenant_info.phone}}"
+            },
+            {
+              "name": "property_id",
+              "value": "={{$json.units.property_id}}"
+            },
+            {
+              "name": "rent_amount",
+              "value": "={{$json.rent_amount}}"
+            },
+            {
+              "name": "deposit_amount",
+              "value": "={{$json.deposit_amount}}"
+            },
+            {
+              "name": "move_in_date",
+              "value": "={{$json.move_in_date}}"
+            },
+            {
+              "name": "lease_duration",
+              "value": "={{$json.lease_duration || 12}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "extract-tenant-data",
+      "name": "Extract Tenant Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://kozhlejudselgtmohdfm.supabase.co/rest/v1/properties?id=eq.{{$json.property_id}}&select=*",
+        "authentication": "headerAuth",
+        "headerAuth": {
+          "name": "Authorization", "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g"
+        },
+        "additionalHeaders": {
+          "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g",
+          "Content-Type": "application/json"
+        }
+      },
+      "id": "get-property-details",
+      "name": "Get Property Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://kozhlejudselgtmohdfm.supabase.co/rest/v1/tenants",
+        "authentication": "headerAuth",
+        "headerAuth": {
+          "name": "Authorization", "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g"
+        },
+        "additionalHeaders": {
+          "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g",
+          "Content-Type": "application/json",
+          "Prefer": "return=minimal"
+        },
+        "body": {
+          "name": "={{$node['Extract Tenant Data'].json.name}}",
+          "email": "={{$node['Extract Tenant Data'].json.email}}",
+          "phone_number": "={{$node['Extract Tenant Data'].json.phone_number}}",
+          "property_id": "={{$node['Extract Tenant Data'].json.property_id}}",
+          "rent_amount": "={{$node['Extract Tenant Data'].json.rent_amount}}",
+          "deposit_amount": "={{$node['Extract Tenant Data'].json.deposit_amount}}",
+          "move_in_date": "={{$node['Extract Tenant Data'].json.move_in_date}}",
+          "lease_duration": "={{$node['Extract Tenant Data'].json.lease_duration}}",
+          "rent_due_date": "={{$node['Extract Tenant Data'].json.move_in_date}}",
+          "next_rent_due_date": "={{$node['Extract Tenant Data'].json.move_in_date}}",
+          "status": "active",
+          "rent_status": "pending",
+          "created_at": "={{$now}}"
+        }
+      },
+      "id": "create-tenant-record",
+      "name": "Create Tenant Record",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://kozhlejudselgtmohdfm.supabase.co/rest/v1/leases",
+        "authentication": "headerAuth",
+        "headerAuth": {
+          "name": "Authorization", "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g"
+        },
+        "additionalHeaders": {
+          "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g",
+          "Content-Type": "application/json",
+          "Prefer": "return=minimal"
+        },
+        "body": {
+          "tenant_id": "={{$node['Create Tenant Record'].json.id}}",
+          "property_id": "={{$node['Extract Tenant Data'].json.property_id}}",
+          "start_date": "={{$node['Extract Tenant Data'].json.move_in_date}}",
+          "end_date": "={{$node['Extract Tenant Data'].json.move_in_date.plus({months: $node['Extract Tenant Data'].json.lease_duration})}}",
+          "rent_amount": "={{$node['Extract Tenant Data'].json.rent_amount}}",
+          "deposit_amount": "={{$node['Extract Tenant Data'].json.deposit_amount}}",
+          "status": "active",
+          "created_at": "={{$now}}"
+        }
+      },
+      "id": "create-lease-agreement",
+      "name": "Create Lease Agreement",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://kozhlejudselgtmohdfm.supabase.co/rest/v1/notifications",
+        "authentication": "headerAuth",
+        "headerAuth": {
+          "name": "Authorization", "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g"
+        },
+        "additionalHeaders": {
+          "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g",
+          "Content-Type": "application/json",
+          "Prefer": "return=minimal"
+        },
+        "body": {
+          "tenant_id": "={{$node['Create Tenant Record'].json.id}}",
+          "type": "welcome",
+          "title": "Welcome to Your New Home!",
+          "message": "Welcome {{$node['Extract Tenant Data'].json.name}}! You've been successfully onboarded to {{$node['Get Property Details'].json[0].address}}. Your lease starts {{$node['Extract Tenant Data'].json.move_in_date}} and rent is KES {{$node['Extract Tenant Data'].json.rent_amount}} monthly. Please make your first payment to complete the process.",
+          "status": "sent",
+          "created_at": "={{$now}}"
+        }
+      },
+      "id": "send-welcome-notification",
+      "name": "Send Welcome Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.safaricom.co.ke/mpesa/stkpush/v1/processrequest",
+        "authentication": "headerAuth",
+        "headerAuth": {
+          "name": "Authorization", "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g"
+        },
+        "additionalHeaders": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "BusinessShortCode": "174379",
+          "Password": "{{$node['Generate Password'].json['password']}}",
+          "Timestamp": "{{$node['Generate Password'].json['timestamp']}}",
+          "TransactionType": "CustomerPayBillOnline",
+          "Amount": "={{Math.round($node['Extract Tenant Data'].json.rent_amount + $node['Extract Tenant Data'].json.deposit_amount)}}",
+          "PartyA": "={{$node['Extract Tenant Data'].json.phone_number}}",
+          "PartyB": "174379",
+          "PhoneNumber": "={{$node['Extract Tenant Data'].json.phone_number}}",
+          "CallBackURL": "https://your-domain.com/api/mpesa/onboarding-callback",
+          "AccountReference": "ONBOARD-{{$node['Create Tenant Record'].json.id}}",
+          "TransactionDesc": "First Payment - {{$node['Get Property Details'].json[0].address}}"
+        }
+      },
+      "id": "send-first-payment-request",
+      "name": "Send First Payment Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{{\"success\": true, \"message\": \"Tenant onboarded successfully\", \"tenant_id\": \"{{$node['Create Tenant Record'].json.id}}\", \"lease_id\": \"{{$node['Create Lease Agreement'].json.id}}\"}}}"
+      },
+      "id": "success-response",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1780, 300]
+    }
+  ],
+  "connections": {
+    "Tenant Onboarding Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract Tenant Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Tenant Data": {
+      "main": [
+        [
+          {
+            "node": "Get Property Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Property Details": {
+      "main": [
+        [
+          {
+            "node": "Create Tenant Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Tenant Record": {
+      "main": [
+        [
+          {
+            "node": "Create Lease Agreement",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Lease Agreement": {
+      "main": [
+        [
+          {
+            "node": "Send Welcome Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Welcome Notification": {
+      "main": [
+        [
+          {
+            "node": "Send First Payment Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send First Payment Request": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "1"
+}
+
+
+

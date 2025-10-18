@@ -1,0 +1,179 @@
+{
+  "name": "Rent Reminder Automation - Fixed",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 1 * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Monthly Rent Reminder",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://kozhlejudselgtmohdfm.supabase.co/rest/v1/tenants?select=*,units(*,properties(*)),tenant_info(*)&status=eq.active",
+        "authentication": "headerAuth",
+        "headerAuth": {
+          "name": "Authorization",
+          "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g"
+        },
+        "additionalHeaders": {
+          "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g",
+          "Content-Type": "application/json"
+        }
+      },
+      "id": "get-tenants-due",
+      "name": "Get Tenants with Rent Due",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter and validate tenant data\nconst items = $input.all();\n\nif (!items || items.length === 0) {\n  console.log('No tenants found');\n  return [];\n}\n\nconst validTenants = items.filter(item => {\n  const data = item.json;\n  \n  // Check if the data has the required structure\n  if (!data || !data.tenant_info || !data.units || !data.status) {\n    console.log('Invalid tenant data structure:', data);\n    return false;\n  }\n  \n  // Only process active tenants\n  if (data.status !== 'active') {\n    console.log('Tenant not active:', data.id);\n    return false;\n  }\n  \n  return true;\n});\n\nconsole.log(`Processing ${validTenants.length} valid tenants out of ${items.length} total`);\nreturn validTenants;"
+      },
+      "id": "filter-valid-tenants",
+      "name": "Filter Valid Tenants",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_name",
+              "value": "={{$json.tenant_info.full_name}}"
+            },
+            {
+              "name": "property_address",
+              "value": "={{$json.units.properties.address}}"
+            },
+            {
+              "name": "rent_amount",
+              "value": "={{$json.rent_amount}}"
+            },
+            {
+              "name": "due_date",
+              "value": "={{$json.lease_start_date}}"
+            },
+            {
+              "name": "phone_number",
+              "value": "={{$json.tenant_info.phone}}"
+            },
+            {
+              "name": "email",
+              "value": "={{$json.tenant_info.email}}"
+            },
+            {
+              "name": "tenant_id",
+              "value": "={{$json.id}}"
+            },
+            {
+              "name": "status",
+              "value": "={{$json.status}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "prepare-tenant-data",
+      "name": "Prepare Tenant Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://kozhlejudselgtmohdfm.supabase.co/rest/v1/notifications",
+        "authentication": "headerAuth",
+        "headerAuth": {
+          "name": "Authorization",
+          "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g"
+        },
+        "additionalHeaders": {
+          "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g",
+          "Content-Type": "application/json",
+          "Prefer": "return=minimal"
+        },
+        "body": {
+          "tenant_id": "={{$json.tenant_id}}",
+          "type": "rent_reminder",
+          "title": "Rent Payment Reminder",
+          "message": "Hello {{$json.tenant_name}}, your rent of KES {{$json.rent_amount}} for {{$json.property_address}} is due on {{$json.due_date}}. Please make payment via M-Pesa.",
+          "status": "sent",
+          "created_at": "={{$now}}"
+        }
+      },
+      "id": "log-notification",
+      "name": "Log Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "Monthly Rent Reminder": {
+      "main": [
+        [
+          {
+            "node": "Get Tenants with Rent Due",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Tenants with Rent Due": {
+      "main": [
+        [
+          {
+            "node": "Filter Valid Tenants",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Valid Tenants": {
+      "main": [
+        [
+          {
+            "node": "Prepare Tenant Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Tenant Data": {
+      "main": [
+        [
+          {
+            "node": "Log Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "1"
+}
+
+
+

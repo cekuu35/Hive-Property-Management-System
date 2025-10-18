@@ -105,7 +105,7 @@ export const PWAInstallPrompt = () => {
             </Button>
           </div>
           <CardDescription className="text-blue-100">
-            Install Lovly Property Management for a better experience
+            Install Hive for a better experience
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-0">

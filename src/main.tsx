@@ -2,6 +2,10 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 
+// Debug: Add console logs to track loading
+console.log('🚀 Main.tsx loading...');
+console.log('Root element:', document.getElementById("root"));
+
 // Register Service Worker for PWA functionality
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -30,4 +34,31 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+try {
+  console.log('🎯 Attempting to render App...');
+  const rootElement = document.getElementById("root");
+  if (!rootElement) {
+    throw new Error('Root element not found!');
+  }
+  
+  const root = createRoot(rootElement);
+  root.render(<App />);
+  console.log('✅ App rendered successfully!');
+} catch (error) {
+  console.error('❌ Error rendering app:', error);
+  
+  // Fallback: Show error message
+  const rootElement = document.getElementById("root");
+  if (rootElement) {
+    rootElement.innerHTML = `
+      <div style="padding: 20px; background: #f0f0f0; min-height: 100vh; font-family: Arial, sans-serif;">
+        <h1 style="color: #d32f2f;">❌ App Loading Error</h1>
+        <p><strong>Error:</strong> ${error}</p>
+        <p>Please check the browser console for more details.</p>
+        <button onclick="window.location.reload()" style="padding: 10px 20px; background: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer;">
+          Reload Page
+        </button>
+      </div>
+    `;
+  }
+}

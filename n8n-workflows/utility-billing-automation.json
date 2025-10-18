@@ -1,0 +1,246 @@
+{
+  "name": "Utility Billing Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 0 1 * *"
+            }
+          ]
+        }
+      },
+      "id": "monthly-trigger",
+      "name": "Monthly Utility Billing",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://kozhlejudselgtmohdfm.supabase.co/rest/v1/tenants?select=*,units(*,properties(*)),tenant_info(*)&status=eq.active",
+        "authentication": "headerAuth",
+        "headerAuth": {
+          "name": "Authorization", "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g"
+        },
+        "additionalHeaders": {
+          "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g",
+          "Content-Type": "application/json"
+        }
+      },
+      "id": "get-active-tenants",
+      "name": "Get Active Tenants",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{$json.id}}"
+            },
+            {
+              "name": "tenant_name",
+              "value": "={{$json.tenant_info.full_name}}"
+            },
+            {
+              "name": "property_id",
+              "value": "={{$json.units.property_id}}"
+            },
+            {
+              "name": "property_address",
+              "value": "={{$json.units.properties.address}}"
+            },
+            {
+              "name": "phone_number",
+              "value": "={{$json.tenant_info.phone}}"
+            },
+            {
+              "name": "email",
+              "value": "={{$json.tenant_info.email}}"
+            },
+            {
+              "name": "water_bill",
+              "value": "={{Math.round(($json.units.properties.water_rate || 1000) * 1.1)}}"
+            },
+            {
+              "name": "electricity_bill",
+              "value": "={{Math.round(($json.units.properties.electricity_rate || 2000) * 1.1)}}"
+            },
+            {
+              "name": "garbage_bill",
+              "value": "={{Math.round(($json.units.properties.garbage_rate || 500) * 1.1)}}"
+            },
+            {
+              "name": "total_utilities",
+              "value": "={{Math.round((($json.units.properties.water_rate || 1000) + ($json.units.properties.electricity_rate || 2000) + ($json.units.properties.garbage_rate || 500)) * 1.1)}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "calculate-utility-bills",
+      "name": "Calculate Utility Bills",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://kozhlejudselgtmohdfm.supabase.co/rest/v1/utility_bills",
+        "authentication": "headerAuth",
+        "headerAuth": {
+          "name": "Authorization", "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g"
+        },
+        "additionalHeaders": {
+          "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g",
+          "Content-Type": "application/json",
+          "Prefer": "return=minimal"
+        },
+        "body": {
+          "tenant_id": "={{$json.tenant_id}}",
+          "property_id": "={{$json.units.property_id}}",
+          "water_amount": "={{$json.water_bill}}",
+          "electricity_amount": "={{$json.electricity_bill}}",
+          "garbage_amount": "={{$json.garbage_bill}}",
+          "total_amount": "={{$json.total_utilities}}",
+          "billing_month": "={{$now.format('YYYY-MM')}}",
+          "due_date": "={{$now.plus({days: 7})}}",
+          "status": "pending",
+          "created_at": "={{$now}}"
+        }
+      },
+      "id": "create-utility-bill",
+      "name": "Create Utility Bill",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://kozhlejudselgtmohdfm.supabase.co/rest/v1/notifications",
+        "authentication": "headerAuth",
+        "headerAuth": {
+          "name": "Authorization", "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g"
+        },
+        "additionalHeaders": {
+          "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g",
+          "Content-Type": "application/json",
+          "Prefer": "return=minimal"
+        },
+        "body": {
+          "tenant_id": "={{$json.tenant_id}}",
+          "type": "utility_bill",
+          "title": "Utility Bill for {{$json.billing_month}}",
+          "message": "Hello {{$json.tenant_name}}, your utility bill for {{$json.property_address}} is ready. Water: KES {{$json.water_bill}}, Electricity: KES {{$json.electricity_bill}}, Garbage: KES {{$json.garbage_bill}}. Total: KES {{$json.total_utilities}}. Due: {{$json.due_date}}",
+          "status": "sent",
+          "created_at": "={{$now}}"
+        }
+      },
+      "id": "send-utility-notification",
+      "name": "Send Utility Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.safaricom.co.ke/mpesa/stkpush/v1/processrequest",
+        "authentication": "headerAuth",
+        "headerAuth": {
+          "name": "Authorization", "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g"
+        },
+        "additionalHeaders": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "BusinessShortCode": "174379",
+          "Password": "{{$node['Generate Password'].json['password']}}",
+          "Timestamp": "{{$node['Generate Password'].json['timestamp']}}",
+          "TransactionType": "CustomerPayBillOnline",
+          "Amount": "={{$json.total_utilities}}",
+          "PartyA": "={{$json.tenant_info.phone}}",
+          "PartyB": "174379",
+          "PhoneNumber": "={{$json.tenant_info.phone}}",
+          "CallBackURL": "https://your-domain.com/api/mpesa/utility-callback",
+          "AccountReference": "UTIL-{{$json.tenant_id}}",
+          "TransactionDesc": "Utility Bill - {{$json.property_address}}"
+        }
+      },
+      "id": "send-utility-payment-request",
+      "name": "Send Utility Payment Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1340, 300]
+    }
+  ],
+  "connections": {
+    "Monthly Utility Billing": {
+      "main": [
+        [
+          {
+            "node": "Get Active Tenants",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Active Tenants": {
+      "main": [
+        [
+          {
+            "node": "Calculate Utility Bills",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Utility Bills": {
+      "main": [
+        [
+          {
+            "node": "Create Utility Bill",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Utility Bill": {
+      "main": [
+        [
+          {
+            "node": "Send Utility Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Utility Notification": {
+      "main": [
+        [
+          {
+            "node": "Send Utility Payment Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "1"
+}

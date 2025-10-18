@@ -1,10 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
-
-// Service role client for server-side operations
-const supabaseAdmin = createClient(
-  'https://kozhlejudselgtmohdfm.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g'
-);
+import { supabaseAdmin } from '@/integrations/supabase/admin';
 
 export interface PaymentVerificationResult {
   success: boolean;

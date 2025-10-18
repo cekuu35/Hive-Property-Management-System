@@ -1,0 +1,113 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="240" fill="url(#gradient)" stroke="#3b82f6" stroke-width="8"/>
+  
+  <!-- Main building complex -->
+  <g transform="translate(100, 120)">
+    <!-- Main building -->
+    <rect x="80" y="60" width="120" height="200" fill="#1e40af" rx="8"/>
+    
+    <!-- Building windows grid -->
+    <g fill="white" opacity="0.9">
+      <!-- Row 1 -->
+      <rect x="95" y="80" width="20" height="20" rx="2"/>
+      <rect x="125" y="80" width="20" height="20" rx="2"/>
+      <rect x="155" y="80" width="20" height="20" rx="2"/>
+      <!-- Row 2 -->
+      <rect x="95" y="110" width="20" height="20" rx="2"/>
+      <rect x="125" y="110" width="20" height="20" rx="2"/>
+      <rect x="155" y="110" width="20" height="20" rx="2"/>
+      <!-- Row 3 -->
+      <rect x="95" y="140" width="20" height="20" rx="2"/>
+      <rect x="125" y="140" width="20" height="20" rx="2"/>
+      <rect x="155" y="140" width="20" height="20" rx="2"/>
+      <!-- Row 4 -->
+      <rect x="95" y="170" width="20" height="20" rx="2"/>
+      <rect x="125" y="170" width="20" height="20" rx="2"/>
+      <rect x="155" y="170" width="20" height="20" rx="2"/>
+      <!-- Row 5 -->
+      <rect x="95" y="200" width="20" height="20" rx="2"/>
+      <rect x="125" y="200" width="20" height="20" rx="2"/>
+      <rect x="155" y="200" width="20" height="20" rx="2"/>
+    </g>
+    
+    <!-- Main entrance -->
+    <rect x="130" y="220" width="20" height="40" fill="white" opacity="0.95" rx="4"/>
+    
+    <!-- Roof -->
+    <path d="M70 60L140 20L210 60V70H70V60Z" fill="#1e3a8a"/>
+    
+    <!-- Side building -->
+    <rect x="20" y="100" width="60" height="160" fill="#3b82f6" opacity="0.8" rx="6"/>
+    <g fill="white" opacity="0.7">
+      <rect x="30" y="120" width="15" height="15" rx="2"/>
+      <rect x="50" y="120" width="15" height="15" rx="2"/>
+      <rect x="30" y="145" width="15" height="15" rx="2"/>
+      <rect x="50" y="145" width="15" height="15" rx="2"/>
+      <rect x="30" y="170" width="15" height="15" rx="2"/>
+      <rect x="50" y="170" width="15" height="15" rx="2"/>
+      <rect x="30" y="195" width="15" height="15" rx="2"/>
+      <rect x="50" y="195" width="15" height="15" rx="2"/>
+    </g>
+    
+    <!-- Third building -->
+    <rect x="220" y="80" width="80" height="180" fill="#2563eb" opacity="0.9" rx="6"/>
+    <g fill="white" opacity="0.8">
+      <rect x="235" y="100" width="18" height="18" rx="2"/>
+      <rect x="260" y="100" width="18" height="18" rx="2"/>
+      <rect x="285" y="100" width="18" height="18" rx="2"/>
+      <rect x="235" y="130" width="18" height="18" rx="2"/>
+      <rect x="260" y="130" width="18" height="18" rx="2"/>
+      <rect x="285" y="130" width="18" height="18" rx="2"/>
+      <rect x="235" y="160" width="18" height="18" rx="2"/>
+      <rect x="260" y="160" width="18" height="18" rx="2"/>
+      <rect x="285" y="160" width="18" height="18" rx="2"/>
+      <rect x="235" y="190" width="18" height="18" rx="2"/>
+      <rect x="260" y="190" width="18" height="18" rx="2"/>
+      <rect x="285" y="190" width="18" height="18" rx="2"/>
+    </g>
+    
+    <!-- Property management symbols -->
+    <!-- Key icon -->
+    <g transform="translate(320, 50)">
+      <circle cx="0" cy="0" r="12" fill="white" opacity="0.95"/>
+      <circle cx="0" cy="0" r="6" fill="#3b82f6"/>
+      <path d="M0 6L8 14" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.95"/>
+    </g>
+    
+    <!-- Dollar sign for payments -->
+    <g transform="translate(50, 50)">
+      <circle cx="0" cy="0" r="12" fill="white" opacity="0.95"/>
+      <text x="0" y="4" text-anchor="middle" fill="#3b82f6" font-family="Arial, sans-serif" font-size="14" font-weight="bold">$</text>
+    </g>
+    
+    <!-- Wrench for maintenance -->
+    <g transform="translate(350, 200)">
+      <circle cx="0" cy="0" r="12" fill="white" opacity="0.95"/>
+      <path d="M-6 -6L6 6M-6 6L6 -6" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="0" cy="0" r="2" fill="#3b82f6"/>
+    </g>
+    
+    <!-- Document for contracts -->
+    <g transform="translate(50, 200)">
+      <rect x="-8" y="-10" width="16" height="20" fill="white" opacity="0.95" rx="2"/>
+      <rect x="-6" y="-8" width="12" height="2" fill="#3b82f6" opacity="0.7"/>
+      <rect x="-6" y="-5" width="8" height="1" fill="#3b82f6" opacity="0.5"/>
+      <rect x="-6" y="-3" width="10" height="1" fill="#3b82f6" opacity="0.5"/>
+      <rect x="-6" y="-1" width="6" height="1" fill="#3b82f6" opacity="0.5"/>
+    </g>
+  </g>
+  
+  <!-- Ground/base -->
+  <rect x="80" y="320" width="240" height="20" fill="#6b7280" opacity="0.8" rx="10"/>
+  
+  <!-- Gradient definition -->
+  <defs>
+    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#1e40af;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1e3a8a;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+</svg>
+

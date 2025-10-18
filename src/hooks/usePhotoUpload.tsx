@@ -115,8 +115,8 @@ export const usePhotoUpload = () => {
       const fileName = generateUniqueFileName(fileToUpload.name);
       const filePath = `${options.path}/${fileName}`;
 
-      // Upload to Supabase Storage
-      const { data, error } = await supabase.storage
+      // Upload to Supabase Storage using admin client for bypassing RLS
+      const { data, error } = await supabaseAdmin.storage
         .from(options.bucket)
         .upload(filePath, fileToUpload, {
           cacheControl: '3600',
@@ -130,7 +130,7 @@ export const usePhotoUpload = () => {
       }
 
       // Get public URL
-      const { data: urlData } = supabase.storage
+      const { data: urlData } = supabaseAdmin.storage
         .from(options.bucket)
         .getPublicUrl(filePath);
 
@@ -171,7 +171,7 @@ export const usePhotoUpload = () => {
 
   const deletePhoto = async (bucket: string, path: string): Promise<boolean> => {
     try {
-      const { error } = await supabase.storage
+      const { error } = await supabaseAdmin.storage
         .from(bucket)
         .remove([path]);
 

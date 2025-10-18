@@ -1,0 +1,131 @@
+{
+  "name": "Supabase Code Node Workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Use Code node to make HTTP request to Supabase\nconst https = require('https');\n\nconst SUPABASE_URL = 'kozhlejudselgtmohdfm.supabase.co';\nconst SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g';\n\nreturn new Promise((resolve, reject) => {\n  const options = {\n    hostname: SUPABASE_URL,\n    path: '/rest/v1/tenants?select=*,units(*,properties(*)),tenant_info(*)&status=eq.active',\n    method: 'GET',\n    headers: {\n      'Authorization': `Bearer ${SUPABASE_KEY}`,\n      'apikey': SUPABASE_KEY,\n      'Content-Type': 'application/json'\n    }\n  };\n  \n  const req = https.request(options, (res) => {\n    let data = '';\n    \n    res.on('data', (chunk) => {\n      data += chunk;\n    });\n    \n    res.on('end', () => {\n      try {\n        const tenants = JSON.parse(data);\n        \n        if (res.statusCode === 200) {\n          console.log(`Successfully retrieved ${tenants.length} tenants`);\n          \n          // Process each tenant\n          const processedTenants = tenants.map(tenant => {\n            return {\n              json: {\n                id: tenant.id,\n                status: tenant.status,\n                rent_amount: tenant.rent_amount,\n                lease_start_date: tenant.lease_start_date,\n                tenant_name: tenant.tenant_info?.full_name || 'N/A',\n                phone: tenant.tenant_info?.phone || 'N/A',\n                email: tenant.tenant_info?.email || 'N/A',\n                property_address: tenant.units?.properties?.address || 'N/A',\n                unit_number: tenant.units?.unit_number || 'N/A',\n                property_name: tenant.units?.properties?.name || 'N/A'\n              }\n            };\n          });\n          \n          resolve(processedTenants);\n        } else {\n          console.error(`HTTP Error: ${res.statusCode}`);\n          console.error('Response:', data);\n          reject(new Error(`HTTP ${res.statusCode}: ${data}`));\n        }\n      } catch (error) {\n        console.error('Parse Error:', error.message);\n        console.error('Raw data:', data);\n        reject(error);\n      }\n    });\n  });\n  \n  req.on('error', (error) => {\n    console.error('Request Error:', error.message);\n    reject(error);\n  });\n  \n  req.end();\n});"
+      },
+      "id": "supabase-code-request",
+      "name": "Supabase Code Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_name",
+              "value": "={{$json.tenant_name}}"
+            },
+            {
+              "name": "property_address",
+              "value": "={{$json.property_address}}"
+            },
+            {
+              "name": "rent_amount",
+              "value": "={{$json.rent_amount}}"
+            },
+            {
+              "name": "phone_number",
+              "value": "={{$json.phone}}"
+            },
+            {
+              "name": "email",
+              "value": "={{$json.email}}"
+            },
+            {
+              "name": "status",
+              "value": "={{$json.status}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "prepare-tenant-data",
+      "name": "Prepare Tenant Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://kozhlejudselgtmohdfm.supabase.co/rest/v1/notifications",
+        "authentication": "headerAuth",
+        "headerAuth": {
+          "name": "Authorization",
+          "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g"
+        },
+        "additionalHeaders": {
+          "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g",
+          "Content-Type": "application/json",
+          "Prefer": "return=minimal"
+        },
+        "body": {
+          "tenant_id": "={{$json.id}}",
+          "type": "rent_reminder",
+          "title": "Rent Payment Reminder",
+          "message": "Hello {{$json.tenant_name}}, your rent of KES {{$json.rent_amount}} for {{$json.property_address}} is due. Please make payment via M-Pesa.",
+          "status": "sent",
+          "created_at": "={{$now}}"
+        }
+      },
+      "id": "log-notification",
+      "name": "Log Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Supabase Code Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Code Request": {
+      "main": [
+        [
+          {
+            "node": "Prepare Tenant Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Tenant Data": {
+      "main": [
+        [
+          {
+            "node": "Log Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "1"
+}
+
+
+

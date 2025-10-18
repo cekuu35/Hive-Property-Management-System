@@ -1,0 +1,310 @@
+{
+  "name": "M-Pesa Payment Processing",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "mpesa-callback",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "M-Pesa Callback Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "webhookId": "mpesa-callback-webhook"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "merchant_request_id",
+              "value": "={{$json.Body.stkCallback.MerchantRequestID}}"
+            },
+            {
+              "name": "checkout_request_id",
+              "value": "={{$json.Body.stkCallback.CheckoutRequestID}}"
+            },
+            {
+              "name": "result_code",
+              "value": "={{$json.Body.stkCallback.ResultCode}}"
+            },
+            {
+              "name": "result_desc",
+              "value": "={{$json.Body.stkCallback.ResultDesc}}"
+            },
+            {
+              "name": "amount",
+              "value": "={{$json.Body.stkCallback.CallbackMetadata?.Item?.find(item => item.Name === 'Amount')?.Value}}"
+            },
+            {
+              "name": "mpesa_receipt_number",
+              "value": "={{$json.Body.stkCallback.CallbackMetadata?.Item?.find(item => item.Name === 'MpesaReceiptNumber')?.Value}}"
+            },
+            {
+              "name": "transaction_date",
+              "value": "={{$json.Body.stkCallback.CallbackMetadata?.Item?.find(item => item.Name === 'TransactionDate')?.Value}}"
+            },
+            {
+              "name": "phone_number",
+              "value": "={{$json.Body.stkCallback.CallbackMetadata?.Item?.find(item => item.Name === 'PhoneNumber')?.Value}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "extract-payment-data",
+      "name": "Extract Payment Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "payment-success",
+              "leftValue": "={{$json.result_code}}",
+              "rightValue": "0",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-payment-success",
+      "name": "Check Payment Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://kozhlejudselgtmohdfm.supabase.co/rest/v1/tenants?phone_number=eq.{{$json.phone_number}}&select=*",
+        "authentication": "headerAuth",
+        "headerAuth": {
+          "name": "Authorization", "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g"
+        },
+        "additionalHeaders": {
+          "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g",
+          "Content-Type": "application/json"
+        }
+      },
+      "id": "get-tenant-info",
+      "name": "Get Tenant Info",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://kozhlejudselgtmohdfm.supabase.co/rest/v1/payments",
+        "authentication": "headerAuth",
+        "headerAuth": {
+          "name": "Authorization", "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g"
+        },
+        "additionalHeaders": {
+          "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g",
+          "Content-Type": "application/json",
+          "Prefer": "return=minimal"
+        },
+        "body": {
+          "tenant_id": "={{$node['Get Tenant Info'].json[0].id}}",
+          "amount": "={{$node['Extract Payment Data'].json.amount}}",
+          "payment_method": "mpesa",
+          "transaction_id": "={{$node['Extract Payment Data'].json.mpesa_receipt_number}}",
+          "status": "completed",
+          "payment_date": "={{$now}}",
+          "reference": "RENT-{{$node['Get Tenant Info'].json[0].id}}",
+          "description": "Rent Payment via M-Pesa"
+        }
+      },
+      "id": "record-payment",
+      "name": "Record Payment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://kozhlejudselgtmohdfm.supabase.co/rest/v1/tenants?id=eq.{{$node['Get Tenant Info'].json[0].id}}",
+        "authentication": "headerAuth",
+        "headerAuth": {
+          "name": "Authorization", "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g"
+        },
+        "additionalHeaders": {
+          "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g",
+          "Content-Type": "application/json",
+          "Prefer": "return=minimal"
+        },
+        "body": {
+          "last_payment_date": "={{$now}}",
+          "rent_status": "paid",
+          "next_rent_due_date": "={{$now.plus({months: 1})}}"
+        }
+      },
+      "id": "update-tenant-status",
+      "name": "Update Tenant Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://kozhlejudselgtmohdfm.supabase.co/rest/v1/notifications",
+        "authentication": "headerAuth",
+        "headerAuth": {
+          "name": "Authorization", "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g"
+        },
+        "additionalHeaders": {
+          "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g",
+          "Content-Type": "application/json",
+          "Prefer": "return=minimal"
+        },
+        "body": {
+          "tenant_id": "={{$node['Get Tenant Info'].json[0].id}}",
+          "type": "payment_confirmation",
+          "title": "Payment Received",
+          "message": "Payment of KES {{$node['Extract Payment Data'].json.amount}} has been received successfully. Receipt: {{$node['Extract Payment Data'].json.mpesa_receipt_number}}",
+          "status": "sent",
+          "created_at": "={{$now}}"
+        }
+      },
+      "id": "send-confirmation",
+      "name": "Send Confirmation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1560, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{{\"ResultCode\": 0, \"ResultDesc\": \"Success\"}}}"
+      },
+      "id": "success-response",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1780, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{{\"ResultCode\": 1, \"ResultDesc\": \"Payment Failed\"}}}"
+      },
+      "id": "failure-response",
+      "name": "Failure Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [900, 400]
+    }
+  ],
+  "connections": {
+    "M-Pesa Callback Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract Payment Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Payment Data": {
+      "main": [
+        [
+          {
+            "node": "Check Payment Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Payment Success": {
+      "main": [
+        [
+          {
+            "node": "Get Tenant Info",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Failure Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Tenant Info": {
+      "main": [
+        [
+          {
+            "node": "Record Payment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record Payment": {
+      "main": [
+        [
+          {
+            "node": "Update Tenant Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Tenant Status": {
+      "main": [
+        [
+          {
+            "node": "Send Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "1"
+}
+
+
+

@@ -103,7 +103,7 @@ export function MobilePWAInstallPrompt() {
     switch (deviceType) {
       case 'mobile':
         return {
-          title: 'Install LovlyProp App',
+          title: 'Install Hive App',
           description: 'Add to your home screen for quick access',
           steps: [
             'Tap the menu button (⋮) in your browser',
@@ -114,7 +114,7 @@ export function MobilePWAInstallPrompt() {
         };
       case 'tablet':
         return {
-          title: 'Install LovlyProp App',
+          title: 'Install Hive App',
           description: 'Add to your home screen for quick access',
           steps: [
             'Tap the menu button (⋮) in your browser',
@@ -125,11 +125,11 @@ export function MobilePWAInstallPrompt() {
         };
       default:
         return {
-          title: 'Install LovlyProp App',
+          title: 'Install Hive App',
           description: 'Install as a desktop app for better experience',
           steps: [
             'Click the install button in your browser address bar',
-            'Or use the menu to find "Install LovlyProp"',
+            'Or use the menu to find "Install Hive"',
             'Follow the installation prompts'
           ],
           icon: <Monitor className="h-8 w-8" />

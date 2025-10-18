@@ -1,0 +1,103 @@
+{
+  "name": "Sample Workflows for Lovly Property Management",
+  "workflows": [
+    {
+      "name": "Tenant Payment Processing",
+      "description": "Process tenant rent payments using M-Pesa STK Push",
+      "nodes": [
+        {
+          "name": "Webhook Trigger",
+          "type": "n8n-nodes-base.webhook",
+          "parameters": {
+            "path": "tenant-payment",
+            "httpMethod": "POST"
+          }
+        },
+        {
+          "name": "Get Tenant Data",
+          "type": "n8n-nodes-base.httpRequest",
+          "parameters": {
+            "method": "GET",
+            "url": "https://kozhlejudselgtmohdfm.supabase.co/rest/v1/tenants",
+            "authentication": "headerAuth",
+            "headerAuth": {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MDQyOTgsImV4cCI6MjA3Mjk4MDI5OH0.10h-c8_GLM3aQd_AbNVXNDt2Pvr4DbQm7VjgvmyiG-M"
+            },
+            "additionalHeaders": {
+              "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MDQyOTgsImV4cCI6MjA3Mjk4MDI5OH0.10h-c8_GLM3aQd_AbNVXNDt2Pvr4DbQm7VjgvmyiG-M",
+              "Content-Type": "application/json"
+            }
+          }
+        },
+        {
+          "name": "Generate M-Pesa Payment",
+          "type": "n8n-nodes-base.httpRequest",
+          "parameters": {
+            "method": "POST",
+            "url": "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest",
+            "authentication": "headerAuth",
+            "headerAuth": {
+              "name": "Authorization",
+              "value": "Bearer {{$node['Get Access Token'].json['access_token']}}"
+            },
+            "additionalHeaders": {
+              "Content-Type": "application/json"
+            },
+            "body": {
+              "BusinessShortCode": "174379",
+              "Password": "{{$json.password}}",
+              "Timestamp": "{{$json.timestamp}}",
+              "TransactionType": "CustomerPayBillOnline",
+              "Amount": "{{$json.amount}}",
+              "PartyA": "{{$json.phone_number}}",
+              "PartyB": "174379",
+              "PhoneNumber": "{{$json.phone_number}}",
+              "CallBackURL": "https://your-callback-url.com/callback",
+              "AccountReference": "{{$json.account_reference}}",
+              "TransactionDesc": "Rent Payment"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Utility Bill Processing",
+      "description": "Process utility bill payments and updates",
+      "nodes": [
+        {
+          "name": "Schedule Trigger",
+          "type": "n8n-nodes-base.scheduleTrigger",
+          "parameters": {
+            "rule": {
+              "interval": [
+                {
+                  "field": "cronExpression",
+                  "expression": "0 0 1 * *"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Pending Bills",
+          "type": "n8n-nodes-base.httpRequest",
+          "parameters": {
+            "method": "GET",
+            "url": "https://kozhlejudselgtmohdfm.supabase.co/rest/v1/utility_bills",
+            "authentication": "headerAuth",
+            "headerAuth": {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MDQyOTgsImV4cCI6MjA3Mjk4MDI5OH0.10h-c8_GLM3aQd_AbNVXNDt2Pvr4DbQm7VjgvmyiG-M"
+            },
+            "additionalHeaders": {
+              "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MDQyOTgsImV4cCI6MjA3Mjk4MDI5OH0.10h-c8_GLM3aQd_AbNVXNDt2Pvr4DbQm7VjgvmyiG-M",
+              "Content-Type": "application/json"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
+

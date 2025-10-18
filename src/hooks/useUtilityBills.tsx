@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { supabaseAdmin } from '@/integrations/supabase/admin';
 import { useAuth } from './useAuth';
@@ -39,7 +39,7 @@ export const useUtilityBills = () => {
   const [error, setError] = useState<string | null>(null);
 
   // Fetch utilities
-  const fetchUtilities = async () => {
+  const fetchUtilities = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('utilities' as any)
@@ -51,10 +51,10 @@ export const useUtilityBills = () => {
     } catch (err) {
       console.error('Error fetching utilities:', err);
     }
-  };
+  }, []);
 
   // Fetch tenant bills
-  const fetchTenantBills = async () => {
+  const fetchTenantBills = useCallback(async () => {
     if (!profile?.id) {
       console.log('🔍 [fetchTenantBills] No profile ID, skipping fetch');
       return;
@@ -111,10 +111,10 @@ export const useUtilityBills = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [profile?.id]);
 
   // Fetch landlord bills
-  const fetchLandlordBills = async () => {
+  const fetchLandlordBills = useCallback(async () => {
     if (!profile?.id) return;
 
     try {
@@ -189,7 +189,7 @@ export const useUtilityBills = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [profile?.id]);
 
   // Create a new bill (landlord only)
   const createBill = async (billData: {
@@ -598,7 +598,7 @@ export const useUtilityBills = () => {
       fetchLandlordBills();
     }
     fetchUtilities();
-  }, [profile?.id, profile?.role]);
+  }, [profile?.id, profile?.role, fetchTenantBills, fetchLandlordBills, fetchUtilities]);
 
   // Subscribe to real-time updates on unit_bills table
   useEffect(() => {
