@@ -4,6 +4,9 @@ import { StaffCreationService, CreateStaffData, StaffCreationResult } from '@/se
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
+// Re-export CreateStaffData for use in other components
+export type { CreateStaffData };
+
 export interface StaffMember {
   id: string;
   first_name: string;

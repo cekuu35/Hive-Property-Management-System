@@ -990,9 +990,6 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
           unit_id: approvedLease.unit_id,
           tenant_id: approvedLease.tenant_id,
           tenant_info_id: approvedLease.tenant_info_id,
-          rent_amount: approvedLease.rent_amount,
-          start_date: approvedLease.start_date,
-          end_date: approvedLease.end_date,
           units: approvedLease.units ? {
             property_id: approvedLease.units.properties?.id || '',
             properties: {

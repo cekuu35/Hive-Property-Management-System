@@ -6,6 +6,7 @@ export interface PaymentVerificationResult {
   amount: number;
   reference: string;
   message: string;
+  error?: string;
 }
 
 export const verifyPaystackPayment = async (reference: string): Promise<PaymentVerificationResult> => {

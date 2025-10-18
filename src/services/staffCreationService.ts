@@ -19,6 +19,7 @@ export interface StaffCreationResult {
   role?: string;
   assigned_properties?: string[];
   error?: string;
+  warning?: string;
 }
 
 export class StaffCreationService {
