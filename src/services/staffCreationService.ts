@@ -37,7 +37,7 @@ export class StaffCreationService {
     try {
       // Check if email exists in auth.users
       const { data: existingAuthUser } = await supabaseAdmin.auth.admin.listUsers();
-      const existingUser = existingAuthUser.users.find(user => user.email === email);
+      const existingUser = existingAuthUser.users.find((user: any) => user.email === email);
       
       // Also check if profile already exists
       let existingProfile = null;

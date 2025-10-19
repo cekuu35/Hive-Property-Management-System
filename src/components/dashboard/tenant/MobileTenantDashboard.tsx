@@ -155,7 +155,7 @@ export function MobileTenantDashboard({ onTabChange }: MobileTenantDashboardProp
             <MobileListItem
               key={index}
               title={`Payment - ${payment.amount ? `KES ${payment.amount.toLocaleString()}` : 'Rent'}`}
-              subtitle={payment.payment_date ? new Date(payment.payment_date).toLocaleDateString() : 'Recent'}
+              subtitle={payment.date ? new Date(payment.date).toLocaleDateString() : 'Recent'}
               value={payment.status}
               status={getStatusColor(payment.status || 'pending')}
               icon={<Receipt className="h-4 w-4" />}
@@ -208,7 +208,7 @@ export function MobileTenantDashboard({ onTabChange }: MobileTenantDashboardProp
           <MobileListItem
             key={index}
             title={`Payment - ${payment.amount ? `KES ${payment.amount.toLocaleString()}` : 'Rent'}`}
-            subtitle={payment.payment_date ? new Date(payment.payment_date).toLocaleDateString() : 'Recent'}
+            subtitle={payment.date ? new Date(payment.date).toLocaleDateString() : 'Recent'}
             value={payment.status}
             status={getStatusColor(payment.status || 'pending')}
             icon={<Receipt className="h-4 w-4" />}
@@ -362,27 +362,35 @@ export function MobileTenantDashboard({ onTabChange }: MobileTenantDashboardProp
       />
 
       {/* Modals */}
-      {showPaymentModal && (
+      {showPaymentModal && approvedLease && (
         <MpesaRentPaymentModal
           open={showPaymentModal}
           onOpenChange={setShowPaymentModal}
-          paymentData={{
-            leaseId: approvedLease?.id || '',
-            amount: currentRentDue || 0,
-            tenantId: tenantInfo?.id || '',
-            landlordId: approvedLease?.landlord_id || ''
-          }}
+          rentAmount={currentRentDue || 0}
+          dueDate={nextPaymentDue || new Date().toISOString()}
           onPaymentSuccess={() => {
             setShowPaymentModal(false);
             handleRefresh();
+          }}
+          leaseData={{
+            id: approvedLease.id,
+            unit_id: approvedLease.unit_id,
+            tenant_id: approvedLease.tenant_id,
+            tenant_info_id: approvedLease.tenant_info_id || undefined,
+            units: approvedLease.units ? {
+              property_id: approvedLease.units.properties?.id || '',
+              properties: {
+                landlord_id: approvedLease.units.properties?.landlord_id || ''
+              }
+            } : undefined
           }}
         />
       )}
 
       {showMaintenanceModal && (
         <MaintenanceRequestModal
-          open={showMaintenanceModal}
-          onOpenChange={setShowMaintenanceModal}
+          isOpen={showMaintenanceModal}
+          onClose={() => setShowMaintenanceModal(false)}
           onSuccess={() => {
             setShowMaintenanceModal(false);
             handleRefresh();

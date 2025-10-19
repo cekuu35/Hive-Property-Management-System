@@ -33,7 +33,7 @@ export class SimpleTenantCreationService {
     try {
       // Check if email exists in auth.users
       const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-      const userExists = existingUsers?.users?.find(user => user.email === email);
+      const userExists = existingUsers?.users?.find((user: any) => user.email === email);
       
       if (userExists) {
         // Check if this user is already linked to a tenant
