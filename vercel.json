@@ -1,0 +1,15 @@
+{
+  // Use Node.js build system with npm, not Bun
+  "buildCommand": "npm run build",
+  "installCommand": "npm ci --omit=optional",
+  // Vite outputs to dist by default
+  "outputDirectory": "dist",
+  // Optional: detect framework
+  "framework": "vite",
+  // Default to Node 18+ runtime
+  "functions": {
+    "**": {
+      "runtime": "nodejs18.x"
+    }
+  }
+}
