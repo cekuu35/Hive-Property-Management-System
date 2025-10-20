@@ -98,21 +98,9 @@ export const MpesaRentPaymentModal = ({
         amount: rentAmount,
         phoneNumber: formattedPhone
       });
-
-<<<<<<< HEAD
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mpesa-stk-push/rent-payment`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({
-          leaseId: leaseData.id,
-=======
       const { data, error } = await supabase.functions.invoke('mpesa-stk-push', {
         body: {
           phoneNumber: formattedPhone,
->>>>>>> ba6a176982b7765df700151060a7798a9c265493
           amount: rentAmount,
           accountReference: leaseData.id
         }
