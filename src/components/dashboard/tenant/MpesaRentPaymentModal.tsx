@@ -98,10 +98,11 @@ export const MpesaRentPaymentModal = ({
         phoneNumber: formattedPhone
       });
 
-      const response = await fetch('http://localhost:3001/api/mpesa/rent-payment', {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mpesa-stk-push/rent-payment`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
         },
         body: JSON.stringify({
           leaseId: leaseData.id,
@@ -156,7 +157,11 @@ export const MpesaRentPaymentModal = ({
     // Poll for payment status every 2 seconds
     const pollInterval = setInterval(async () => {
       try {
-        const response = await fetch(`http://localhost:3001/api/mpesa/payment-status/${checkoutRequestID}`);
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mpesa-stk-push/payment-status/${checkoutRequestID}`, {
+          headers: {
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+        });
         const data = await response.json();
 
         if (data.success && data.data.status !== 'pending') {

@@ -18,7 +18,9 @@
     "db:test": "node scripts/testAdminConnection.js",
     "pwa:test": "npm run build && npm run preview:pwa",
     "n8n": "n8n start --config n8n.config.js",
-    "n8n:dev": "n8n start --config n8n.config.js --tunnel"
+    "n8n:dev": "n8n start --config n8n.config.js --tunnel",
+    "deploy:mpesa": "node deploy-mpesa-functions.js",
+    "test:mpesa": "node test-mpesa-edge-functions.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -1,11 +1,4 @@
-#!/usr/bin/env node
-
-import fetch from 'node-fetch';
-import dotenv from 'dotenv';
-
-// Load environment variables
-dotenv.config();
-
+// Simple M-Pesa Integration Test
 const SUPABASE_URL = 'https://kozhlejudselgtmohdfm.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MDQyOTgsImV4cCI6MjA3Mjk4MDI5OH0.10h-c8_GLM3aQd_AbNVXNDt2Pvr4DbQm7VjgvmyiG-M';
 
@@ -46,7 +39,6 @@ async function testEdgeFunction() {
   console.log('\n🔍 Testing Edge Function accessibility...');
   
   try {
-    // Test with a dummy payment to see if function responds
     const response = await fetch(`${EDGE_FUNCTION_URL}/rent-payment`, {
       method: 'POST',
       headers: {
