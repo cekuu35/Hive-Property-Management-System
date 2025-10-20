@@ -1,16 +1,10 @@
-<<<<<<< HEAD
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-=======
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
->>>>>>> ba6a176982b7765df700151060a7798a9c265493
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-<<<<<<< HEAD
 }
 
 interface MpesaConfig {
@@ -51,96 +45,81 @@ class MpesaAPI {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
-          'Authorization': `Basic ${btoa(`${this.config.clientId}:${this.config.clientSecret}`)}`
+          'Authorization': 'Basic ' + btoa(`${this.config.clientId}:${this.config.clientSecret}`)
         },
         body: 'grant_type=client_credentials'
       })
 
       if (!response.ok) {
-        throw new Error(`Token request failed: ${response.status} ${response.statusText}`)
+        const errorText = await response.text()
+        throw new Error(`Failed to get access token: ${response.status} ${errorText}`)
       }
 
       const data = await response.json()
+      this.config.accessToken = data.access_token
+      this.config.tokenExpiry = Date.now() + (data.expires_in * 1000) - 60000 // 1 minute buffer
       
-      if (data.access_token) {
-        this.config.accessToken = data.access_token
-        this.config.tokenExpiry = Date.now() + (data.expires_in * 1000) - 60000 // 1 minute buffer
-        console.log('✅ [M-Pesa] Access token obtained successfully')
-        return this.config.accessToken
-      } else {
-        throw new Error('No access token in response')
-      }
+      console.log('✅ [M-Pesa] Access token obtained')
+      return this.config.accessToken
     } catch (error) {
-      console.error('❌ [M-Pesa] Error getting KCB Buni access token:', error)
+      console.error('❌ [M-Pesa] Error getting access token:', error)
       throw error
     }
   }
 
-  async initiateSTKPush(request: any): Promise<any> {
+  async initiateSTKPush(phoneNumber: string, amount: number, accountReference: string): Promise<any> {
     try {
       const accessToken = await this.getAccessToken()
       
-      // Generate unique message ID
-      const messageId = `${Date.now()}_KCBOrg_${Math.floor(Math.random() * 10000000000)}`
-      
-      // Format request according to KCB Buni Express STK Push API documentation
-      const stkPushRequest = {
-        phoneNumber: request.PartyA,
-        amount: request.Amount.toString(),
-        invoiceNumber: request.AccountReference,
-        sharedShortCode: true,
-        orgShortCode: "",
-        orgPassKey: "",
-        callbackUrl: request.CallBackURL || 'https://posthere.io/f613-4b7f-b82b',
-        transactionDescription: request.TransactionDesc || 'Payment'
-      }
+      console.log('📱 [M-Pesa] Initiating STK Push...', { phoneNumber, amount, accountReference })
 
-      console.log('🚀 [M-Pesa] Initiating KCB Buni Express STK Push:', {
-        phoneNumber: stkPushRequest.phoneNumber,
-        amount: stkPushRequest.amount,
-        invoiceNumber: stkPushRequest.invoiceNumber,
-        transactionDescription: stkPushRequest.transactionDescription,
-        messageId: messageId
-      })
+      const timestamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0]
+      const businessShortCode = '174379'
+      const passkey = 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919'
+      const password = btoa(`${businessShortCode}${passkey}${timestamp}`)
+
+      const stkPushData = {
+        BusinessShortCode: businessShortCode,
+        Password: password,
+        Timestamp: timestamp,
+        TransactionType: 'CustomerPayBillOnline',
+        Amount: amount,
+        PartyA: phoneNumber,
+        PartyB: businessShortCode,
+        PhoneNumber: phoneNumber,
+        CallBackURL: `${Deno.env.get('SUPABASE_URL')}/functions/v1/mpesa-stk-push/callback`,
+        AccountReference: accountReference,
+        TransactionDesc: 'Property Management Payment'
+      }
 
       const response = await fetch(this.config.stkPushURL, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-          'routeCode': '207',
-          'operation': 'STKPush',
-          'messageId': messageId
+          'Authorization': `Bearer ${accessToken}`,
+          'X-API-Key': this.config.apiKey
         },
-        body: JSON.stringify(stkPushRequest),
+        body: JSON.stringify(stkPushData)
       })
 
-      console.log(`STK Push Status: ${response.status} ${response.statusText}`)
-
-      if (response.ok) {
-        const data = await response.json()
-        console.log('✅ [M-Pesa] STK Push response:', data)
-        return data
-      } else {
+      if (!response.ok) {
         const errorText = await response.text()
-        console.error('❌ [M-Pesa] STK Push failed:', errorText)
-        throw new Error(`STK Push failed: ${response.status} ${response.statusText} - ${errorText}`)
+        throw new Error(`STK Push failed: ${response.status} ${errorText}`)
       }
+
+      const result = await response.json()
+      console.log('✅ [M-Pesa] STK Push initiated successfully:', result)
+      return result
     } catch (error) {
       console.error('❌ [M-Pesa] Error in initiateSTKPush:', error)
       throw error
     }
   }
 }
-=======
-};
->>>>>>> ba6a176982b7765df700151060a7798a9c265493
 
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-<<<<<<< HEAD
     return new Response('ok', { headers: corsHeaders })
   }
 
@@ -150,32 +129,29 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    const { method } = req
     const url = new URL(req.url)
     const path = url.pathname
 
     // Route handling
-    if (method === 'POST' && path.endsWith('/rent-payment')) {
+    if (path.endsWith('/rent-payment') && req.method === 'POST') {
       return await handleRentPayment(req, supabase)
-    } else if (method === 'POST' && path.endsWith('/utility-payment')) {
+    } else if (path.endsWith('/utility-payment') && req.method === 'POST') {
       return await handleUtilityPayment(req, supabase)
-    } else if (method === 'POST' && path.endsWith('/callback')) {
+    } else if (path.endsWith('/callback') && req.method === 'POST') {
       return await handleCallback(req, supabase)
-    } else if (method === 'GET' && path.includes('/payment-status/')) {
-      return await handlePaymentStatus(req, supabase)
+    } else if (path.includes('/payment-status/') && req.method === 'GET') {
+      return await handlePaymentStatus(req, supabase, path)
     } else {
       return new Response(
         JSON.stringify({ error: 'Not found' }),
-        { 
-          status: 404, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
   } catch (error) {
-    console.error('❌ [M-Pesa] Edge function error:', error)
+    console.error('❌ [M-Pesa] Server error:', error)
     return new Response(
       JSON.stringify({ 
+        success: false, 
         error: 'Internal server error',
         details: error.message 
       }),
@@ -190,22 +166,23 @@ serve(async (req) => {
 async function handleRentPayment(req: Request, supabase: any) {
   try {
     const { leaseId, amount, phoneNumber } = await req.json()
-
+    
     console.log('🏠 [M-Pesa] Processing rent payment:', { leaseId, amount, phoneNumber })
 
-    // 1. Get lease details with landlord information
+    // Get lease details
     const { data: lease, error: leaseError } = await supabase
       .from('leases')
       .select(`
-        *,
+        id,
+        rent_amount,
         units!inner(
-          property_id,
+          id,
           properties!inner(
-            landlord_id,
+            id,
             landlords!inner(
               id,
-              paybill_number,
-              account_reference
+              mpesa_shortcode,
+              mpesa_passkey
             )
           )
         )
@@ -214,101 +191,63 @@ async function handleRentPayment(req: Request, supabase: any) {
       .single()
 
     if (leaseError || !lease) {
-      console.error('❌ [M-Pesa] Lease not found:', leaseError)
-      return new Response(
-        JSON.stringify({ 
-          success: false,
-          error: 'Lease not found' 
-        }),
-        { 
-          status: 404, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
+      throw new Error('Lease not found')
     }
 
-    const landlord = lease.units?.properties?.landlords
-    if (!landlord?.paybill_number || !landlord?.account_reference) {
-      console.error('❌ [M-Pesa] Landlord M-Pesa details not configured')
-      return new Response(
-        JSON.stringify({ 
-          success: false,
-          error: 'Landlord M-Pesa details not configured' 
-        }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
+    // Get landlord M-Pesa details
+    const landlord = lease.units.properties.landlords
+    if (!landlord.mpesa_shortcode || !landlord.mpesa_passkey) {
+      throw new Error('Landlord M-Pesa details not configured')
     }
 
-    // 2. Initialize M-Pesa API
-    const mpesaAPI = new MpesaAPI()
+    // Initialize M-Pesa API
+    const mpesa = new MpesaAPI()
+    
+    // Initiate STK Push
+    const result = await mpesa.initiateSTKPush(
+      phoneNumber,
+      amount,
+      `RENT_${leaseId}`
+    )
 
-    // 3. Initiate STK Push
-    const stkPushRequest = {
-      BusinessShortCode: landlord.paybill_number,
-      TransactionType: 'CustomerPayBillOnline',
-      Amount: Math.round(amount),
-      PartyA: phoneNumber,
-      PartyB: landlord.paybill_number,
-      PhoneNumber: phoneNumber,
-      CallBackURL: Deno.env.get('DARAJA_CALLBACK_URL') || 'https://posthere.io/f613-4b7f-b82b',
-      AccountReference: landlord.account_reference,
-      TransactionDesc: 'Rent Payment for current month'
-    }
+    // Store payment request
+    const { error: insertError } = await supabase
+      .from('payment_requests')
+      .insert({
+        checkout_request_id: result.CheckoutRequestID,
+        merchant_request_id: result.MerchantRequestID,
+        type: 'rent',
+        lease_id: leaseId,
+        amount: amount,
+        phone_number: phoneNumber,
+        status: 'pending'
+      })
 
-    const stkResponse = await mpesaAPI.initiateSTKPush(stkPushRequest)
-
-    console.log('✅ [M-Pesa] STK Push initiated successfully:', stkResponse)
-
-    // 4. Store payment request for tracking
-    if (stkResponse.CheckoutRequestID) {
-      const { error: insertError } = await supabase
-        .from('payment_requests')
-        .insert({
-          checkout_request_id: stkResponse.CheckoutRequestID,
-          merchant_request_id: stkResponse.MerchantRequestID,
-          type: 'rent',
-          lease_id: leaseId,
-          amount: amount,
-          phone_number: phoneNumber,
-          status: 'pending',
-          created_at: new Date().toISOString()
-        })
-
-      if (insertError) {
-        console.error('❌ [M-Pesa] Error storing payment request:', insertError)
-      }
+    if (insertError) {
+      console.error('❌ [M-Pesa] Error storing payment request:', insertError)
     }
 
     return new Response(
       JSON.stringify({
         success: true,
-        data: {
-          checkoutRequestID: stkResponse.CheckoutRequestID,
-          merchantRequestID: stkResponse.MerchantRequestID,
-          responseCode: stkResponse.ResponseCode,
-          responseDescription: stkResponse.ResponseDescription,
-          customerMessage: stkResponse.CustomerMessage
-        }
+        message: 'STK Push initiated successfully',
+        data: result,
+        checkoutRequestID: result.CheckoutRequestID
       }),
       { 
         status: 200, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     )
-
   } catch (error) {
-    console.error('❌ [M-Pesa] Rent payment error:', error)
+    console.error('❌ [M-Pesa] Error in rent payment:', error)
     return new Response(
       JSON.stringify({ 
-        success: false,
-        error: 'Internal server error',
-        details: error.message 
+        success: false, 
+        error: error.message 
       }),
       { 
-        status: 500, 
+        status: 400, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     )
@@ -318,126 +257,88 @@ async function handleRentPayment(req: Request, supabase: any) {
 async function handleUtilityPayment(req: Request, supabase: any) {
   try {
     const { billId, amount, phoneNumber } = await req.json()
-
+    
     console.log('⚡ [M-Pesa] Processing utility payment:', { billId, amount, phoneNumber })
 
-    // 1. Get bill details with landlord information
+    // Get bill details
     const { data: bill, error: billError } = await supabase
       .from('unit_bills')
       .select(`
-        *,
+        id,
+        amount,
         units!inner(
-          property_id,
+          id,
           properties!inner(
-            landlord_id,
+            id,
             landlords!inner(
               id,
-              paybill_number,
-              account_reference
+              mpesa_shortcode,
+              mpesa_passkey
             )
           )
-        ),
-        utilities(name)
+        )
       `)
       .eq('id', billId)
       .single()
 
     if (billError || !bill) {
-      console.error('❌ [M-Pesa] Bill not found:', billError)
-      return new Response(
-        JSON.stringify({ 
-          success: false,
-          error: 'Bill not found' 
-        }),
-        { 
-          status: 404, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
+      throw new Error('Utility bill not found')
     }
 
-    const landlord = bill.units?.properties?.landlords
-    if (!landlord?.paybill_number || !landlord?.account_reference) {
-      console.error('❌ [M-Pesa] Landlord M-Pesa details not configured')
-      return new Response(
-        JSON.stringify({ 
-          success: false,
-          error: 'Landlord M-Pesa details not configured' 
-        }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
+    // Get landlord M-Pesa details
+    const landlord = bill.units.properties.landlords
+    if (!landlord.mpesa_shortcode || !landlord.mpesa_passkey) {
+      throw new Error('Landlord M-Pesa details not configured')
     }
 
-    // 2. Initialize M-Pesa API
-    const mpesaAPI = new MpesaAPI()
+    // Initialize M-Pesa API
+    const mpesa = new MpesaAPI()
+    
+    // Initiate STK Push
+    const result = await mpesa.initiateSTKPush(
+      phoneNumber,
+      amount,
+      `UTILITY_${billId}`
+    )
 
-    // 3. Initiate STK Push
-    const stkPushRequest = {
-      BusinessShortCode: landlord.paybill_number,
-      TransactionType: 'CustomerPayBillOnline',
-      Amount: Math.round(amount),
-      PartyA: phoneNumber,
-      PartyB: landlord.paybill_number,
-      PhoneNumber: phoneNumber,
-      CallBackURL: Deno.env.get('DARAJA_CALLBACK_URL') || 'https://posthere.io/f613-4b7f-b82b',
-      AccountReference: landlord.account_reference,
-      TransactionDesc: `Utility Payment - ${bill.utilities?.name || 'Utility Bill'}`
-    }
+    // Store payment request
+    const { error: insertError } = await supabase
+      .from('payment_requests')
+      .insert({
+        checkout_request_id: result.CheckoutRequestID,
+        merchant_request_id: result.MerchantRequestID,
+        type: 'utility',
+        bill_id: billId,
+        amount: amount,
+        phone_number: phoneNumber,
+        status: 'pending'
+      })
 
-    const stkResponse = await mpesaAPI.initiateSTKPush(stkPushRequest)
-
-    console.log('✅ [M-Pesa] STK Push initiated successfully:', stkResponse)
-
-    // 4. Store payment request for tracking
-    if (stkResponse.CheckoutRequestID) {
-      const { error: insertError } = await supabase
-        .from('payment_requests')
-        .insert({
-          checkout_request_id: stkResponse.CheckoutRequestID,
-          merchant_request_id: stkResponse.MerchantRequestID,
-          type: 'utility',
-          bill_id: billId,
-          amount: amount,
-          phone_number: phoneNumber,
-          status: 'pending',
-          created_at: new Date().toISOString()
-        })
-
-      if (insertError) {
-        console.error('❌ [M-Pesa] Error storing payment request:', insertError)
-      }
+    if (insertError) {
+      console.error('❌ [M-Pesa] Error storing payment request:', insertError)
     }
 
     return new Response(
       JSON.stringify({
         success: true,
-        data: {
-          checkoutRequestID: stkResponse.CheckoutRequestID,
-          merchantRequestID: stkResponse.MerchantRequestID,
-          responseCode: stkResponse.ResponseCode,
-          responseDescription: stkResponse.ResponseDescription,
-          customerMessage: stkResponse.CustomerMessage
-        }
+        message: 'STK Push initiated successfully',
+        data: result,
+        checkoutRequestID: result.CheckoutRequestID
       }),
       { 
         status: 200, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     )
-
   } catch (error) {
-    console.error('❌ [M-Pesa] Utility payment error:', error)
+    console.error('❌ [M-Pesa] Error in utility payment:', error)
     return new Response(
       JSON.stringify({ 
-        success: false,
-        error: 'Internal server error',
-        details: error.message 
+        success: false, 
+        error: error.message 
       }),
       { 
-        status: 500, 
+        status: 400, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     )
@@ -447,43 +348,15 @@ async function handleUtilityPayment(req: Request, supabase: any) {
 async function handleCallback(req: Request, supabase: any) {
   try {
     const callbackData = await req.json()
-    console.log('📞 [M-Pesa] Callback received:', JSON.stringify(callbackData, null, 2))
-    
-    const stkCallback = callbackData.Body?.stkCallback
-    
-    if (!stkCallback) {
-      console.error('❌ [M-Pesa] Invalid callback data')
-      return new Response(
-        JSON.stringify({ error: 'Invalid callback data' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
-    }
+    console.log('📞 [M-Pesa] Received callback:', callbackData)
 
-    const { 
-      MerchantRequestID, 
-      CheckoutRequestID, 
-      ResultCode, 
-      ResultDesc,
-      CallbackMetadata 
-    } = stkCallback
-
-    console.log('🔍 [M-Pesa] Callback details:', {
-      MerchantRequestID,
-      CheckoutRequestID,
-      ResultCode,
-      ResultDesc
-    })
+    const { CheckoutRequestID, ResultCode, ResultDesc } = callbackData.Body.stkCallback
 
     // Update payment request status
-    const status = ResultCode === 0 ? 'success' : ResultCode === 1 ? 'cancelled' : 'failed'
-    
     const { error: updateError } = await supabase
       .from('payment_requests')
       .update({
-        status: status,
+        status: ResultCode === 0 ? 'completed' : 'failed',
         result_code: ResultCode,
         result_description: ResultDesc,
         updated_at: new Date().toISOString()
@@ -491,339 +364,106 @@ async function handleCallback(req: Request, supabase: any) {
       .eq('checkout_request_id', CheckoutRequestID)
 
     if (updateError) {
-      console.error('❌ [M-Pesa] Error updating payment request:', updateError)
+      console.error('❌ [M-Pesa] Error updating payment status:', updateError)
     }
 
-    // Check payment result
+    // If payment was successful, process the payment
     if (ResultCode === 0) {
-      console.log('✅ [M-Pesa] Payment successful!')
-      
-      // Get payment request details
-      const { data: paymentRequest } = await supabase
-        .from('payment_requests')
-        .select('*')
-        .eq('checkout_request_id', CheckoutRequestID)
-        .single()
-
-      if (paymentRequest) {
-        // Handle successful payment based on type
-        if (paymentRequest.type === 'rent') {
-          await handleSuccessfulRentPayment(paymentRequest, supabase)
-        } else if (paymentRequest.type === 'utility') {
-          await handleSuccessfulUtilityPayment(paymentRequest, supabase)
-        }
-      }
-    } else {
-      console.log(`❌ [M-Pesa] Payment failed: ${ResultDesc}`)
+      await processSuccessfulPayment(supabase, CheckoutRequestID)
     }
 
-    return new Response(
-      JSON.stringify({ 
-        success: true,
-        message: 'Callback processed successfully' 
-      }),
-      { 
-        status: 200, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    )
-
+    return new Response('OK', { status: 200 })
   } catch (error) {
-    console.error('❌ [M-Pesa] Callback error:', error)
-    return new Response(
-      JSON.stringify({ 
-        error: 'Internal server error',
-        details: error.message 
-      }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    )
+    console.error('❌ [M-Pesa] Error in callback:', error)
+    return new Response('Error', { status: 500 })
   }
 }
 
-async function handlePaymentStatus(req: Request, supabase: any) {
+async function handlePaymentStatus(req: Request, supabase: any, path: string) {
   try {
-    const url = new URL(req.url)
-    const checkoutRequestID = url.pathname.split('/').pop()
-
-    if (!checkoutRequestID) {
-      return new Response(
-        JSON.stringify({ error: 'Checkout request ID required' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
-    }
-
-    const { data: paymentRequest, error } = await supabase
+    const checkoutRequestId = path.split('/').pop()
+    
+    const { data: payment, error } = await supabase
       .from('payment_requests')
       .select('*')
-      .eq('checkout_request_id', checkoutRequestID)
+      .eq('checkout_request_id', checkoutRequestId)
       .single()
 
-    if (error || !paymentRequest) {
+    if (error || !payment) {
       return new Response(
-        JSON.stringify({ 
-          success: false,
-          error: 'Payment request not found' 
-        }),
-        { 
-          status: 404, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
+        JSON.stringify({ error: 'Payment not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        data: {
-          status: paymentRequest.status,
-          resultCode: paymentRequest.result_code,
-          resultDesc: paymentRequest.result_description,
-          amount: paymentRequest.amount,
-          phoneNumber: paymentRequest.phone_number,
-          createdAt: paymentRequest.created_at,
-          updatedAt: paymentRequest.updated_at
-        }
-      }),
+      JSON.stringify(payment),
       { 
         status: 200, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     )
-
   } catch (error) {
-    console.error('❌ [M-Pesa] Payment status error:', error)
+    console.error('❌ [M-Pesa] Error getting payment status:', error)
     return new Response(
-      JSON.stringify({ 
-        success: false,
-        error: 'Internal server error',
-        details: error.message 
-      }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      JSON.stringify({ error: 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 }
 
-async function handleSuccessfulRentPayment(paymentRequest: any, supabase: any) {
+async function processSuccessfulPayment(supabase: any, checkoutRequestId: string) {
   try {
-    console.log('🏠 [M-Pesa] Processing successful rent payment:', paymentRequest.lease_id)
-    
-    // Update lease payment status
-    const { error: leaseError } = await supabase
-      .from('leases')
-      .update({
-        payment_status: 'paid',
-        last_payment_date: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', paymentRequest.lease_id)
+    // Get payment details
+    const { data: payment, error: paymentError } = await supabase
+      .from('payment_requests')
+      .select('*')
+      .eq('checkout_request_id', checkoutRequestId)
+      .single()
 
-    if (leaseError) {
-      console.error('❌ [M-Pesa] Error updating lease:', leaseError)
+    if (paymentError || !payment) {
+      console.error('❌ [M-Pesa] Payment not found for processing')
+      return
     }
 
-    // Create payment record
-    const { error: paymentError } = await supabase
-      .from('payments')
-      .insert({
-        lease_id: paymentRequest.lease_id,
-        amount: paymentRequest.amount,
-        payment_method: 'mpesa',
-        status: 'completed',
-        transaction_id: paymentRequest.checkout_request_id,
-        phone_number: paymentRequest.phone_number,
-        created_at: new Date().toISOString()
-      })
+    if (payment.type === 'rent') {
+      // Process rent payment
+      const { error: rentError } = await supabase
+        .from('rent_payments')
+        .insert({
+          lease_id: payment.lease_id,
+          amount: payment.amount,
+          payment_date: new Date().toISOString(),
+          status: 'completed',
+          payment_method: 'mpesa',
+          transaction_id: checkoutRequestId
+        })
 
-    if (paymentError) {
-      console.error('❌ [M-Pesa] Error creating payment record:', paymentError)
+      if (rentError) {
+        console.error('❌ [M-Pesa] Error creating rent payment record:', rentError)
+      } else {
+        console.log('✅ [M-Pesa] Rent payment processed successfully')
+      }
+    } else if (payment.type === 'utility') {
+      // Process utility payment
+      const { error: utilityError } = await supabase
+        .from('utility_payments')
+        .insert({
+          bill_id: payment.bill_id,
+          amount: payment.amount,
+          payment_date: new Date().toISOString(),
+          status: 'completed',
+          payment_method: 'mpesa',
+          transaction_id: checkoutRequestId
+        })
+
+      if (utilityError) {
+        console.error('❌ [M-Pesa] Error creating utility payment record:', utilityError)
+      } else {
+        console.log('✅ [M-Pesa] Utility payment processed successfully')
+      }
     }
-
-    console.log('✅ [M-Pesa] Rent payment processed successfully')
   } catch (error) {
-    console.error('❌ [M-Pesa] Error processing successful rent payment:', error)
+    console.error('❌ [M-Pesa] Error processing successful payment:', error)
   }
 }
-
-async function handleSuccessfulUtilityPayment(paymentRequest: any, supabase: any) {
-  try {
-    console.log('⚡ [M-Pesa] Processing successful utility payment:', paymentRequest.bill_id)
-    
-    // Update utility bill payment status
-    const { error: billError } = await supabase
-      .from('unit_bills')
-      .update({
-        status: 'paid',
-        paystack_reference: paymentRequest.checkout_request_id,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', paymentRequest.bill_id)
-
-    if (billError) {
-      console.error('❌ [M-Pesa] Error updating utility bill:', billError)
-    }
-
-    // Create payment record
-    const { error: paymentError } = await supabase
-      .from('payments')
-      .insert({
-        bill_id: paymentRequest.bill_id,
-        amount: paymentRequest.amount,
-        payment_method: 'mpesa',
-        status: 'completed',
-        transaction_id: paymentRequest.checkout_request_id,
-        phone_number: paymentRequest.phone_number,
-        created_at: new Date().toISOString()
-      })
-
-    if (paymentError) {
-      console.error('❌ [M-Pesa] Error creating payment record:', paymentError)
-    }
-
-    console.log('✅ [M-Pesa] Utility payment processed successfully')
-  } catch (error) {
-    console.error('❌ [M-Pesa] Error processing successful utility payment:', error)
-  }
-}
-=======
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  try {
-    console.log('🚀 Starting KCB Buni M-Pesa STK Push request');
-
-    const { phoneNumber, amount, accountReference } = await req.json();
-    
-    console.log('📋 Request details:', { phoneNumber, amount, accountReference });
-
-    // Get KCB Buni credentials from environment
-    const clientId = Deno.env.get('MPESA_CONSUMER_KEY');
-    const clientSecret = Deno.env.get('MPESA_CONSUMER_SECRET');
-    
-    if (!clientId || !clientSecret) {
-      throw new Error('KCB Buni credentials not configured');
-    }
-
-    // Step 1: Get OAuth access token
-    console.log('🔑 Getting KCB Buni OAuth token...');
-    
-    const authString = btoa(`${clientId}:${clientSecret}`);
-    const tokenResponse = await fetch('https://accounts.buni.kcbgroup.com/oauth2/token', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${authString}`,
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: 'grant_type=client_credentials'
-    });
-
-    if (!tokenResponse.ok) {
-      const errorText = await tokenResponse.text();
-      console.error('❌ OAuth failed:', tokenResponse.status, errorText);
-      throw new Error(`OAuth failed: ${tokenResponse.status} - ${errorText}`);
-    }
-
-    const tokenData = await tokenResponse.json();
-    const accessToken = tokenData.access_token;
-    console.log('✅ Access token obtained successfully');
-
-    // Step 2: Initiate STK Push
-    console.log('📱 Initiating STK Push...');
-    
-    // Generate unique message ID
-    const messageId = `${Date.now()}_KCBOrg_${Math.floor(Math.random() * 10000000000)}`;
-    
-    const stkPushRequest = {
-      phoneNumber: phoneNumber.replace(/^\+/, ''), // Remove + prefix if present
-      amount: amount.toString(),
-      invoiceNumber: accountReference,
-      sharedShortCode: true,
-      orgShortCode: "",
-      orgPassKey: "",
-      callbackUrl: `${Deno.env.get('SUPABASE_URL')}/functions/v1/mpesa-callback`,
-      transactionDescription: 'Rent Payment'
-    };
-
-    console.log('📤 STK Push request:', stkPushRequest);
-
-    const stkResponse = await fetch('https://uat.buni.kcbgroup.com/mm/api/request/1.0.0/stkpush', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'routeCode': '207',
-        'operation': 'STKPush',
-        'messageId': messageId
-      },
-      body: JSON.stringify(stkPushRequest)
-    });
-
-    const responseText = await stkResponse.text();
-    console.log(`📥 STK Push response status: ${stkResponse.status}`);
-    console.log(`📥 STK Push response body: ${responseText}`);
-
-    if (!stkResponse.ok) {
-      throw new Error(`STK Push failed: ${stkResponse.status} - ${responseText}`);
-    }
-
-    const stkData = JSON.parse(responseText);
-    console.log('✅ STK Push initiated successfully:', stkData);
-
-    // Initialize Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // Log the payment attempt
-    const { error: logError } = await supabase
-      .from('payments')
-      .insert({
-        reference: stkData.checkoutRequestID || messageId,
-        amount: parseFloat(amount),
-        status: 'pending',
-        payment_method: 'mpesa',
-        paystack_response: stkData
-      });
-
-    if (logError) {
-      console.error('⚠️ Failed to log payment:', logError);
-    }
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: 'STK Push initiated successfully',
-        data: stkData,
-        checkoutRequestID: stkData.checkoutRequestID || messageId
-      }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200
-      }
-    );
-
-  } catch (error) {
-    console.error('❌ Error in mpesa-stk-push function:', error);
-    return new Response(
-      JSON.stringify({ 
-        success: false,
-        error: error.message,
-        details: error.toString()
-      }),
-      { 
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
-    );
-  }
-});
->>>>>>> ba6a176982b7765df700151060a7798a9c265493
