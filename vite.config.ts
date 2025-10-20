@@ -4,6 +4,10 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { VitePWA } from 'vite-plugin-pwa';
 
+// Force React to resolve to a single instance
+const reactPath = path.resolve(__dirname, 'node_modules/react');
+const reactDomPath = path.resolve(__dirname, 'node_modules/react-dom');
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
@@ -157,6 +161,8 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      'react': reactPath,
+      'react-dom': reactDomPath
     },
     dedupe: ['react', 'react-dom']
   },
