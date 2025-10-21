@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Smartphone, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 interface MpesaUtilityPaymentModalProps {
   open: boolean;
@@ -31,13 +32,10 @@ export const MpesaUtilityPaymentModal = ({
   const [error, setError] = useState<string | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'processing' | 'success' | 'failed'>('idle');
 
-  // Cleanup timeout on unmount
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if ((window as any).mpesaTimeoutId) {
-        clearTimeout((window as any).mpesaTimeoutId);
-        (window as any).mpesaTimeoutId = null;
-      }
+      // No cleanup needed with new approach
     };
   }, []);
 
@@ -88,37 +86,30 @@ export const MpesaUtilityPaymentModal = ({
         phoneNumber: formattedPhone
       });
 
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mpesa-stk-push/utility-payment`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({
+      const { data: result, error: invokeError } = await supabase.functions.invoke('mpesa-stk-push', {
+        body: {
+          type: 'utility',
           billId: paymentData.billId,
           amount: paymentData.amount,
           phoneNumber: formattedPhone
-        }),
+        }
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to initiate payment');
+      if (invokeError) {
+        throw new Error(invokeError.message || 'Failed to initiate payment');
       }
 
-      const { data } = await response.json();
+      if (!result || !result.success) {
+        throw new Error(result?.error || 'Failed to initiate payment');
+      }
       
-      console.log('✅ [M-Pesa] STK Push initiated:', data);
+      console.log('✅ [M-Pesa] STK Push initiated:', result);
 
-      if (data.responseCode === '0') {
-        setPaymentStatus('processing');
-        toast.success('Payment request sent! Please check your phone and enter your M-Pesa PIN to complete the payment. You have 10 seconds.');
-        
-        // Start polling for payment status (simplified - in production, use WebSockets or server-sent events)
-        pollPaymentStatus(data.checkoutRequestID);
-      } else {
-        throw new Error(data.responseDescription || 'Payment request failed');
-      }
+      setPaymentStatus('processing');
+      toast.success('Payment request sent! Please check your phone and enter your M-Pesa PIN to complete the payment.');
+      
+      // Start polling for payment status
+      pollPaymentStatus(result.checkoutRequestID);
 
     } catch (error) {
       console.error('❌ [M-Pesa] Payment error:', error);
@@ -132,70 +123,46 @@ export const MpesaUtilityPaymentModal = ({
   };
 
   const pollPaymentStatus = async (checkoutRequestID: string) => {
-    // Set up 10-second timeout to cancel payment if not completed
-    const timeoutId = setTimeout(() => {
-      if (paymentStatus === 'processing') {
-        setPaymentStatus('failed');
-        setError('Payment timeout - please try again. You have 10 seconds to complete the payment.');
-        toast.error('Payment timeout! Please try again. You have 10 seconds to complete the payment.');
-      }
-    }, 10000); // 10 seconds timeout
-
-    // Store timeout ID for cleanup
-    (window as any).mpesaTimeoutId = timeoutId;
-
     // Poll for payment status every 2 seconds
     const pollInterval = setInterval(async () => {
       try {
-        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mpesa-stk-push/payment-status/${checkoutRequestID}`, {
-          headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          },
-        });
-        const data = await response.json();
+        const { data: statusData, error } = await supabase.functions.invoke(`mpesa-stk-push/payment-status/${checkoutRequestID}`);
 
-        if (data.success && data.data.status !== 'pending') {
+        if (error) {
+          console.error('Error polling payment status:', error);
+          return;
+        }
+
+        if (statusData && statusData.status !== 'pending') {
           clearInterval(pollInterval);
-          clearTimeout(timeoutId);
-          (window as any).mpesaTimeoutId = null;
 
-          if (data.data.status === 'success') {
+          if (statusData.status === 'completed') {
             setPaymentStatus('success');
             onPaymentSuccess();
             onOpenChange(false);
             toast.success('Payment successful! Your utility bill has been paid.');
-          } else if (data.data.status === 'cancelled') {
+          } else if (statusData.status === 'failed') {
             setPaymentStatus('failed');
-            setError('Payment was cancelled. Please try again.');
-            toast.error('Payment was cancelled. Please try again.');
-          } else if (data.data.status === 'failed') {
-            setPaymentStatus('failed');
-            setError(`Payment failed: ${data.data.resultDesc || 'Unknown error'}`);
-            toast.error(`Payment failed: ${data.data.resultDesc || 'Unknown error'}`);
+            setError(`Payment failed: ${statusData.result_description || 'Unknown error'}`);
+            toast.error(`Payment failed: ${statusData.result_description || 'Unknown error'}`);
           }
         }
       } catch (error) {
         console.error('Error polling payment status:', error);
       }
-    }, 2000);
+    }, 3000);
 
-    // Clean up polling after 30 seconds
+    // Clean up polling after 60 seconds
     setTimeout(() => {
       clearInterval(pollInterval);
       if (paymentStatus === 'processing') {
         setPaymentStatus('idle');
         toast.info('Payment is still being processed. You will be notified when it completes.');
       }
-    }, 30000);
+    }, 60000);
   };
 
   const handleSuccess = () => {
-    // Clear any pending timeout
-    if ((window as any).mpesaTimeoutId) {
-      clearTimeout((window as any).mpesaTimeoutId);
-      (window as any).mpesaTimeoutId = null;
-    }
-    
     setPaymentStatus('success');
     onPaymentSuccess();
     onOpenChange(false);
@@ -203,12 +170,6 @@ export const MpesaUtilityPaymentModal = ({
   };
 
   const handleClose = () => {
-    // Clear any pending timeout
-    if ((window as any).mpesaTimeoutId) {
-      clearTimeout((window as any).mpesaTimeoutId);
-      (window as any).mpesaTimeoutId = null;
-    }
-    
     if (paymentStatus === 'processing') {
       toast.info('Payment is being processed. You will be notified of the result.');
     }
@@ -257,7 +218,7 @@ export const MpesaUtilityPaymentModal = ({
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
               <p className="text-sm text-blue-800">
-                Processing payment... Please check your phone and enter your M-Pesa PIN. You have 10 seconds to complete the payment. If you cancel on your phone, the payment will be cancelled here too.
+                Processing payment... Please check your phone and enter your M-Pesa PIN to complete the payment.
               </p>
             </div>
           )}
@@ -312,7 +273,7 @@ export const MpesaUtilityPaymentModal = ({
           </div>
 
           <div className="text-xs text-muted-foreground text-center">
-            <p>Powered by Safaricom M-Pesa • Secure payment processing</p>
+            <p>Powered by KCB Buni M-Pesa Express • Secure payment processing</p>
             <p>You will receive an STK Push notification on your phone</p>
           </div>
         </div>

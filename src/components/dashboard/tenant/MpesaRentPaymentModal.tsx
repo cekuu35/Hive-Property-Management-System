@@ -100,9 +100,10 @@ export const MpesaRentPaymentModal = ({
       });
       const { data, error } = await supabase.functions.invoke('mpesa-stk-push', {
         body: {
+          type: 'rent',
+          leaseId: leaseData.id,
           phoneNumber: formattedPhone,
-          amount: rentAmount,
-          accountReference: leaseData.id
+          amount: rentAmount
         }
       });
 
@@ -262,7 +263,7 @@ export const MpesaRentPaymentModal = ({
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
               <p className="text-sm text-blue-800">
-                Processing payment... Please check your phone and enter your M-Pesa PIN. You have 10 seconds to complete the payment. If you cancel on your phone, the payment will be cancelled here too.
+                Processing payment... Please check your phone and enter your M-Pesa PIN to complete the payment.
               </p>
             </div>
           )}
