@@ -72,9 +72,12 @@ export const useUtilityBills = () => {
         .eq('profile_id', profile.id)
         .single();
 
-      if (tenantError || !tenantInfo) {
+      console.log('🔍 [fetchTenantBills] Tenant info query result:', { tenantInfo, tenantError });
+
+      if (tenantError || !tenantInfo || !tenantInfo.id) {
         console.error('❌ [fetchTenantBills] Error fetching tenant_info:', tenantError);
-        throw new Error('Tenant info not found');
+        setBills([]);
+        return;
       }
 
       console.log('🔍 [fetchTenantBills] Tenant info found:', tenantInfo.id);

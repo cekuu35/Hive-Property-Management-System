@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -56,7 +56,7 @@ export const UtilityBillsSection = () => {
   const [paymentData, setPaymentData] = useState<any>(null);
   const { toast } = useToast();
 
-  const totals = getTotals();
+  const totals = useMemo(() => getTotals(), [bills, loading]);
 
   // Detect balance changes and show toast
   useEffect(() => {
@@ -71,8 +71,12 @@ export const UtilityBillsSection = () => {
         });
       }
     }
+  }, [totals.totalUnpaid, totals.totalPaid, previousTotals, loading, toast]);
+
+  // Update previous totals separately to avoid infinite loop
+  useEffect(() => {
     setPreviousTotals(totals);
-  }, [totals, previousTotals, loading, toast]);
+  }, [totals]);
 
   // Auto-refresh bills every 30 seconds to catch webhook updates
   useEffect(() => {
@@ -83,7 +87,7 @@ export const UtilityBillsSection = () => {
     }, 30000); // 30 seconds
 
     return () => clearInterval(interval);
-  }, [loading, refreshing, fetchTenantBills]);
+  }, [loading, refreshing]); // Removed fetchTenantBills from dependencies to prevent infinite loop
 
   // Refresh when component becomes visible (user returns from payment)
   useEffect(() => {
@@ -100,7 +104,7 @@ export const UtilityBillsSection = () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleVisibilityChange);
     };
-  }, [loading, refreshing, fetchTenantBills]);
+  }, [loading, refreshing]); // Removed fetchTenantBills from dependencies to prevent infinite loop
 
   // Check for payment completion flag and refresh
   useEffect(() => {
@@ -127,7 +131,7 @@ export const UtilityBillsSection = () => {
     const interval = setInterval(checkPaymentFlag, 10000); // Every 10 seconds
 
     return () => clearInterval(interval);
-  }, [fetchTenantBills]);
+  }, []); // Removed fetchTenantBills from dependencies to prevent infinite loop
 
   const handlePayBill = async (billId: string) => {
     try {

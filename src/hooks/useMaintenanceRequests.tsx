@@ -61,19 +61,9 @@ export const useMaintenanceRequests = () => {
         // TODO: Implement proper staff assignment filtering when staff_assignments table is available
         console.log(`Fetching maintenance requests for ${profile.role}...`);
       } else if (profile.role === 'tenant') {
-        // Tenants see only their own requests - need to find tenant_info first
-        const { data: tenantInfo } = await supabase
-          .from('tenant_info')
-          .select('id')
-          .eq('profile_id', profile.id)
-          .maybeSingle();
-        
-        if (tenantInfo) {
-          query = query.eq('tenant_id', tenantInfo.id);
-        } else {
-          // If no tenant_info found, return empty results
-          query = query.eq('tenant_id', '00000000-0000-0000-0000-000000000000');
-        }
+        // Tenants see only their own requests using profile ID
+        console.log('🔍 [useMaintenanceRequests] Filtering by tenant_id (profile ID):', profile.id);
+        query = query.eq('tenant_id', profile.id);
       } else if (profile.role === 'landlord') {
         // Landlords see requests for their properties
         const { data: properties } = await supabase
@@ -115,7 +105,7 @@ export const useMaintenanceRequests = () => {
         id: request.id,
         title: request.title,
         description: request.description,
-        tenant: request.tenant ? `${request.tenant.first_name} ${request.tenant.last_name}` : 'Unknown Tenant',
+        tenant: request.tenant ? `${request.tenant.first_name || ''} ${request.tenant.last_name || ''}`.trim() : 'Unknown Tenant',
         tenant_id: request.tenant_id,
         unit: request.unit ? `${request.unit.property?.name || 'Property'} ${request.unit.unit_number}` : 'Unknown Unit',
         category: request.category,

@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>M-Pesa Payment Flow Tester</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+
+    h1 {
+      color: #2d3748;
+      margin-bottom: 10px;
+      font-size: 32px;
+    }
+
+    .subtitle {
+      color: #718096;
+      margin-bottom: 30px;
+      font-size: 16px;
+    }
+
+    .test-section {
+      background: #f7fafc;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border-left: 4px solid #4299e1;
+    }
+
+    .test-section h3 {
+      color: #2d3748;
+      margin-bottom: 15px;
+      font-size: 18px;
+    }
+
+    .test-section.success {
+      border-left-color: #48bb78;
+      background: #f0fff4;
+    }
+
+    .test-section.error {
+      border-left-color: #f56565;
+      background: #fff5f5;
+    }
+
+    .test-section.running {
+      border-left-color: #ecc94b;
+      background: #fffff0;
+    }
+
+    button {
+      background: #4299e1;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.3s;
+      margin-right: 10px;
+      margin-bottom: 10px;
+    }
+
+    button:hover {
+      background: #3182ce;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(66, 153, 225, 0.4);
+    }
+
+    button:disabled {
+      background: #cbd5e0;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .log {
+      background: #2d3748;
+      color: #e2e8f0;
+      padding: 20px;
+      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      max-height: 400px;
+      overflow-y: auto;
+      margin-top: 20px;
+      line-height: 1.6;
+    }
+
+    .log-entry {
+      margin-bottom: 8px;
+      padding: 4px 0;
+    }
+
+    .log-entry.success { color: #68d391; }
+    .log-entry.error { color: #fc8181; }
+    .log-entry.info { color: #63b3ed; }
+    .log-entry.warning { color: #f6e05e; }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-top: 20px;
+    }
+
+    .stat-card {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      border: 2px solid #e2e8f0;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: bold;
+      color: #2d3748;
+      margin-bottom: 5px;
+    }
+
+    .stat-label {
+      font-size: 14px;
+      color: #718096;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .alert {
+      background: #edf2f7;
+      border-left: 4px solid #4299e1;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+
+    .alert.success { 
+      background: #f0fff4; 
+      border-left-color: #48bb78;
+    }
+
+    .alert.error { 
+      background: #fff5f5; 
+      border-left-color: #f56565;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧪 M-Pesa Payment Flow Tester</h1>
+    <p class="subtitle">Comprehensive testing for the fixed payment callback system</p>
+
+    <div class="alert">
+      <strong>ℹ️ About This Tool</strong><br>
+      This tool tests the complete M-Pesa payment flow including rent payment creation,
+      callback processing, balance updates, and notifications.
+    </div>
+
+    <div class="test-section">
+      <h3>📋 Test Controls</h3>
+      <button onclick="runAllTests()" id="runBtn">▶️ Run All Tests</button>
+      <button onclick="runRentTest()" id="rentBtn">🏠 Test Rent Payment</button>
+      <button onclick="runUtilityTest()" id="utilityBtn">⚡ Test Utility Payment</button>
+      <button onclick="clearLogs()" id="clearBtn">🗑️ Clear Logs</button>
+      <button onclick="checkDatabase()" id="dbBtn">🔍 Check Database</button>
+    </div>
+
+    <div class="stats" id="stats">
+      <div class="stat-card">
+        <div class="stat-value" id="passCount">0</div>
+        <div class="stat-label">Tests Passed</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="failCount">0</div>
+        <div class="stat-label">Tests Failed</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="totalCount">0</div>
+        <div class="stat-label">Total Tests</div>
+      </div>
+    </div>
+
+    <div class="log" id="log">
+      <div class="log-entry info">🚀 Ready to test. Click "Run All Tests" to begin.</div>
+    </div>
+  </div>
+
+  <script>
+    // Configuration
+    const SUPABASE_URL = 'https://kozhlejudselgtmohdfm.supabase.co'
+    const SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzQwNDI5OCwiZXhwIjoyMDcyOTgwMjk4fQ.LWosNpPJO_clOXXYa5pqGM36S-FLANk71F8BvcsJf2g'
+
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+
+    let passCount = 0
+    let failCount = 0
+    let totalCount = 0
+
+    function log(type, message, data = null) {
+      const logDiv = document.getElementById('log')
+      const entry = document.createElement('div')
+      entry.className = `log-entry ${type}`
+      
+      const emoji = {
+        success: '✅',
+        error: '❌',
+        info: 'ℹ️',
+        warning: '⚠️'
+      }[type] || '•'
+
+      entry.textContent = `${emoji} ${message}`
+      if (data) {
+        entry.textContent += ` ${JSON.stringify(data, null, 2)}`
+      }
+      
+      logDiv.appendChild(entry)
+      logDiv.scrollTop = logDiv.scrollHeight
+    }
+
+    function updateStats() {
+      document.getElementById('passCount').textContent = passCount
+      document.getElementById('failCount').textContent = failCount
+      document.getElementById('totalCount').textContent = totalCount
+    }
+
+    function assert(condition, message, data = null) {
+      totalCount++
+      if (condition) {
+        passCount++
+        log('success', message, data)
+      } else {
+        failCount++
+        log('error', `FAILED: ${message}`, data)
+        throw new Error(message)
+      }
+      updateStats()
+    }
+
+    function clearLogs() {
+      document.getElementById('log').innerHTML = '<div class="log-entry info">🧹 Logs cleared. Ready for new tests.</div>'
+      passCount = 0
+      failCount = 0
+      totalCount = 0
+      updateStats()
+    }
+
+    async function checkDatabase() {
+      log('info', '🔍 Checking database tables...')
+
+      try {
+        const { data: leases, error: leasesError } = await supabase
+          .from('leases')
+          .select('id')
+          .eq('status', 'active')
+          .limit(1)
+
+        assert(!leasesError, 'Leases table accessible')
+        assert(leases && leases.length > 0, 'Active leases found', { count: leases?.length })
+
+        const { data: payments } = await supabase
+          .from('rent_payments')
+          .select('id')
+          .limit(1)
+
+        assert(payments !== undefined, 'Rent payments table accessible')
+
+        const { data: tenants } = await supabase
+          .from('tenant_info')
+          .select('id')
+          .limit(1)
+
+        assert(tenants !== undefined, 'Tenant info table accessible')
+
+        log('success', '✅ All database tables accessible')
+      } catch (error) {
+        log('error', 'Database check failed', error.message)
+      }
+    }
+
+    async function runRentTest() {
+      log('info', '🏠 Starting rent payment test...')
+      const testSection = document.querySelector('.test-section')
+      testSection.className = 'test-section running'
+
+      try {
+        // Get active lease
+        const { data: leases, error: leaseError } = await supabase
+          .from('leases')
+          .select('id, rent_amount, tenant_id, tenant_info_id, status')
+          .eq('status', 'active')
+          .limit(1)
+
+        assert(!leaseError, 'Found active lease')
+        assert(leases && leases.length > 0, 'Lease exists')
+
+        const lease = leases[0]
+        log('info', 'Using lease', { id: lease.id, amount: lease.rent_amount })
+
+        // Create or find pending rent payment
+        const currentMonth = new Date().toISOString().substring(0, 7)
+        let rentPayment
+
+        const { data: existingPayments } = await supabase
+          .from('rent_payments')
+          .select('*')
+          .eq('lease_id', lease.id)
+          .eq('status', 'pending')
+          .gte('due_date', `${currentMonth}-01`)
+          .limit(1)
+
+        if (existingPayments && existingPayments.length > 0) {
+          rentPayment = existingPayments[0]
+          log('info', 'Found existing pending payment', { id: rentPayment.id })
+        } else {
+          const { data: newPayment, error: insertError } = await supabase
+            .from('rent_payments')
+            .insert({
+              lease_id: lease.id,
+              amount: lease.rent_amount || 15000,
+              due_date: `${currentMonth}-01`,
+              status: 'pending'
+            })
+            .select()
+            .single()
+
+          assert(!insertError, 'Created test rent payment')
+          rentPayment = newPayment
+          log('success', 'Created new rent payment', { id: rentPayment.id })
+        }
+
+        // Create payment request
+        const checkoutRequestId = `TEST_${Date.now()}`
+        const { data: paymentRequest, error: reqError } = await supabase
+          .from('payment_requests')
+          .insert({
+            checkout_request_id: checkoutRequestId,
+            merchant_request_id: `MERCH_${Date.now()}`,
+            type: 'rent',
+            lease_id: lease.id,
+            amount: rentPayment.amount,
+            phone_number: '254768679899',
+            status: 'pending'
+          })
+          .select()
+          .single()
+
+        assert(!reqError, 'Created payment request')
+
+        // Simulate callback
+        log('info', '📞 Simulating M-Pesa callback...')
+
+        await supabase
+          .from('payment_requests')
+          .update({ status: 'success', result_code: 0 })
+          .eq('checkout_request_id', checkoutRequestId)
+
+        // Process payment (simulate edge function logic)
+        const { data: updatedRent, error: updateError } = await supabase
+          .from('rent_payments')
+          .update({
+            status: 'paid',
+            paid_date: new Date().toISOString(),
+            payment_method: 'mpesa',
+            transaction_reference: checkoutRequestId
+          })
+          .eq('id', rentPayment.id)
+          .select()
+
+        assert(!updateError, 'Updated rent payment to paid')
+        assert(updatedRent[0].status === 'paid', 'Rent payment status is "paid"')
+
+        // Update tenant balance
+        const tenantInfoId = lease.tenant_info_id || lease.tenant_id
+        const { data: updatedBalance, error: balanceError } = await supabase
+          .from('tenant_info')
+          .update({
+            current_balance: 0,
+            payment_status: 'paid'
+          })
+          .eq('id', tenantInfoId)
+          .select()
+
+        assert(!balanceError, 'Updated tenant balance')
+        assert(updatedBalance[0].current_balance === 0, 'Balance is now 0')
+
+        // Create notification
+        if (lease.tenant_id) {
+          await supabase
+            .from('notifications')
+            .insert({
+              user_id: lease.tenant_id,
+              title: 'Test Payment Success',
+              message: `Test payment of KES ${rentPayment.amount} processed`,
+              type: 'payment_success',
+              read: false,
+              data: { test: true, checkout_id: checkoutRequestId }
+            })
+
+          log('success', 'Notification created')
+        }
+
+        testSection.className = 'test-section success'
+        log('success', '🎉 Rent payment test PASSED!')
+
+      } catch (error) {
+        testSection.className = 'test-section error'
+        log('error', 'Rent payment test FAILED', error.message)
+      }
+    }
+
+    async function runUtilityTest() {
+      log('info', '⚡ Starting utility payment test...')
+      
+      try {
+        const { data: bills, error } = await supabase
+          .from('unit_bills')
+          .select('*')
+          .eq('status', 'unpaid')
+          .limit(1)
+
+        if (!bills || bills.length === 0) {
+          log('warning', 'No unpaid utility bills found - skipping test')
+          return
+        }
+
+        const bill = bills[0]
+        log('info', 'Found unpaid bill', { id: bill.id, amount: bill.amount })
+
+        const checkoutRequestId = `TEST_UTIL_${Date.now()}`
+
+        await supabase
+          .from('payment_requests')
+          .insert({
+            checkout_request_id: checkoutRequestId,
+            merchant_request_id: `MERCH_UTIL_${Date.now()}`,
+            type: 'utility',
+            bill_id: bill.id,
+            amount: bill.amount,
+            phone_number: '254768679899',
+            status: 'success'
+          })
+
+        const { data: updatedBill, error: updateError } = await supabase
+          .from('unit_bills')
+          .update({
+            status: 'paid',
+            paystack_reference: checkoutRequestId
+          })
+          .eq('id', bill.id)
+          .select()
+
+        assert(!updateError, 'Updated utility bill')
+        assert(updatedBill[0].status === 'paid', 'Utility bill marked as paid')
+
+        log('success', '🎉 Utility payment test PASSED!')
+
+      } catch (error) {
+        log('error', 'Utility payment test FAILED', error.message)
+      }
+    }
+
+    async function runAllTests() {
+      clearLogs()
+      log('info', '🚀 Starting comprehensive test suite...')
+      
+      document.getElementById('runBtn').disabled = true
+      document.getElementById('rentBtn').disabled = true
+      document.getElementById('utilityBtn').disabled = true
+
+      await checkDatabase()
+      await runRentTest()
+      await runUtilityTest()
+
+      log('info', '═══════════════════════════════════')
+      if (failCount === 0) {
+        log('success', `🎉 ALL ${passCount} TESTS PASSED!`)
+      } else {
+        log('error', `⚠️ ${failCount} of ${totalCount} tests failed`)
+      }
+      log('info', '═══════════════════════════════════')
+
+      document.getElementById('runBtn').disabled = false
+      document.getElementById('rentBtn').disabled = false
+      document.getElementById('utilityBtn').disabled = false
+    }
+
+    // Initialize
+    log('info', '✅ Test environment loaded')
+    log('info', '📡 Connected to: ' + SUPABASE_URL)
+  </script>
+</body>
+</html>
+

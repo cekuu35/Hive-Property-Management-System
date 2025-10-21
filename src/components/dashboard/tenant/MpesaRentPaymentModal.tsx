@@ -98,36 +98,47 @@ export const MpesaRentPaymentModal = ({
         amount: rentAmount,
         phoneNumber: formattedPhone
       });
-      const { data, error } = await supabase.functions.invoke('mpesa-stk-push', {
-        body: {
-          phoneNumber: formattedPhone,
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mpesa-stk-push/rent-payment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          leaseId: leaseData.id,
           amount: rentAmount,
-          accountReference: leaseData.id
-        }
+          phoneNumber: formattedPhone
+        }),
       });
 
-      console.log('📥 [KCB Buni M-Pesa] Response:', { data, error });
-
-      if (error) {
-        throw new Error(error.message || 'Failed to initiate payment');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to initiate payment');
       }
 
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to initiate payment');
-      }
+      const result = await response.json();
       
-      console.log('✅ [KCB Buni M-Pesa] STK Push initiated:', data);
+      console.log('✅ [KCB M-Pesa] Rent payment response:', result);
 
-      setPaymentStatus('processing');
-      toast.success('Payment request sent! Please check your phone and enter your M-Pesa PIN to complete the payment.');
+      // KCB Buni response format: { header: { statusCode, statusDescription }, response: {...} }
+      const { header, response: kcbResponse } = result;
       
-      // For KCB Buni, we'll monitor via callbacks rather than polling
-      // The payment will be updated in the database when the callback is received
-      setTimeout(() => {
-        setPaymentStatus('idle');
-        onOpenChange(false);
-        toast.info('Payment is being processed. You will be notified when it completes.');
-      }, 5000);
+      // statusCode "0" = success, "1" = error
+      if (header && header.statusCode === '0') {
+        setPaymentStatus('processing');
+        toast.success('Payment request sent! Please check your phone and enter your M-Pesa PIN to complete the payment.');
+        
+        // KCB Buni processes payments via callback
+        // Show success message and close modal after a few seconds
+        setTimeout(() => {
+          setPaymentStatus('idle');
+          onOpenChange(false);
+          toast.info('Payment is being processed. You will be notified when it completes.');
+        }, 5000);
+      } else {
+        throw new Error(header?.statusDescription || 'Payment request failed');
+      }
 
     } catch (error) {
       console.error('❌ [KCB Buni M-Pesa] Payment error:', error);
@@ -141,17 +152,8 @@ export const MpesaRentPaymentModal = ({
   };
 
   const pollPaymentStatus = async (checkoutRequestID: string) => {
-    // Set up 10-second timeout to cancel payment if not completed
-    const timeoutId = setTimeout(() => {
-      if (paymentStatus === 'processing') {
-        setPaymentStatus('failed');
-        setError('Payment timeout - please try again. You have 10 seconds to complete the payment.');
-        toast.error('Payment timeout! Please try again. You have 10 seconds to complete the payment.');
-      }
-    }, 10000); // 10 seconds timeout
-
-    // Store timeout ID for cleanup
-    (window as any).mpesaTimeoutId = timeoutId;
+    // Removed 10-second timeout - allow user to complete payment at their own pace
+    // Payment will be updated via callback
 
     // Poll for payment status every 2 seconds
     const pollInterval = setInterval(async () => {
@@ -231,11 +233,11 @@ export const MpesaRentPaymentModal = ({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Smartphone className="h-5 w-5" />
-            M-Pesa Rent Payment
+            <Smartphone className="h-5 w-5 text-green-600" />
+            KCB M-Pesa Rent Payment
           </DialogTitle>
           <DialogDescription>
-            Pay your rent securely via M-Pesa STK Push
+            Pay your rent securely via KCB Buni M-Pesa Express STK Push
           </DialogDescription>
         </DialogHeader>
 
@@ -262,7 +264,7 @@ export const MpesaRentPaymentModal = ({
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
               <p className="text-sm text-blue-800">
-                Processing payment... Please check your phone and enter your M-Pesa PIN. You have 10 seconds to complete the payment. If you cancel on your phone, the payment will be cancelled here too.
+                Processing payment... Please check your phone and enter your M-Pesa PIN to complete the payment.
               </p>
             </div>
           )}
@@ -310,13 +312,22 @@ export const MpesaRentPaymentModal = ({
               ) : (
                 <>
                   <Smartphone className="mr-2 h-4 w-4" />
-                  Pay KES {rentAmount.toLocaleString()} via M-Pesa
+                  Pay KES {rentAmount.toLocaleString()} via KCB M-Pesa
                 </>
               )}
             </Button>
           </div>
 
-          <div className="text-xs text-muted-foreground text-center">
+          <div className="text-xs text-muted-foreground text-center space-y-1">
+            <div className="flex items-center justify-center gap-2">
+              <div className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-semibold">
+                KCB BUNI
+              </div>
+              <span>•</span>
+              <div className="px-2 py-1 bg-green-600 text-white rounded text-xs font-semibold">
+                M-PESA
+              </div>
+            </div>
             <p>Powered by KCB Buni M-Pesa Express • Secure payment processing</p>
             <p>You will receive an STK Push notification on your phone</p>
           </div>

@@ -57,7 +57,7 @@ export const useTenantNotices = () => {
       generatedNotices.push(...utilityNotices);
 
       // 3. Maintenance notices
-      const maintenanceNotices = await generateMaintenanceNotices(tenantInfo.id);
+      const maintenanceNotices = await generateMaintenanceNotices(profile.id);
       generatedNotices.push(...maintenanceNotices);
 
       // 4. General notices from database
@@ -225,7 +225,7 @@ export const useTenantNotices = () => {
     return notices;
   };
 
-  const generateMaintenanceNotices = async (tenantInfoId: string): Promise<TenantNotice[]> => {
+  const generateMaintenanceNotices = async (profileId: string): Promise<TenantNotice[]> => {
     const notices: TenantNotice[] = [];
 
     try {
@@ -233,7 +233,7 @@ export const useTenantNotices = () => {
       const { data: pendingRequests } = await (supabase as any)
         .from('maintenance_requests')
         .select('id, title, description, status, created_at')
-        .eq('tenant_info_id', tenantInfoId)
+        .eq('tenant_id', profileId)
         .eq('status', 'pending')
         .order('created_at', { ascending: false })
         .limit(3);

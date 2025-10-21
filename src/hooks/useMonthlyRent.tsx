@@ -56,41 +56,40 @@ export const useMonthlyRent = () => {
         return;
       }
 
-      // Now fetch the lease using tenant_info_id
-      let { data: lease, error: leaseError } = await supabase
+      // Now fetch the lease - try BOTH tenant_info_id AND tenant_id for compatibility
+      let { data: lease, error: leaseError } = await supabaseAdmin
         .from('leases')
         .select('id, rent_amount, start_date')
         .eq('tenant_info_id', tenantInfo[0].id)
         .eq('status', 'active')
         .maybeSingle();
 
-      // If RLS blocks the query, try with admin client
-      if (leaseError && (leaseError.code === '42501' || leaseError.message.includes('RLS') || leaseError.code === '406')) {
-        console.log('🔄 [useMonthlyRent] RLS blocked query, trying with admin client...');
-        const { data: adminLease, error: adminLeaseError } = await supabaseAdmin
+      console.log('🔍 [useMonthlyRent] Lease query by tenant_info_id:', { lease, leaseError });
+
+      // If no lease found by tenant_info_id, try by tenant_id (profile.id)
+      if (!lease && profile.id) {
+        console.log('🔄 [useMonthlyRent] No lease found by tenant_info_id, trying with tenant_id (profile.id):', profile.id);
+        const { data: profileLease, error: profileLeaseError } = await supabaseAdmin
           .from('leases')
           .select('id, rent_amount, start_date')
-          .eq('tenant_info_id', tenantInfo[0].id)
+          .eq('tenant_id', profile.id)
           .eq('status', 'active')
           .maybeSingle();
 
-        if (adminLeaseError) {
-          console.error('❌ [useMonthlyRent] Admin client also failed:', adminLeaseError);
-          throw adminLeaseError;
+        if (!profileLeaseError && profileLease) {
+          lease = profileLease;
+          leaseError = null;
+          console.log('✅ [useMonthlyRent] Found lease by tenant_id (profile.id)');
+        } else {
+          console.error('❌ [useMonthlyRent] No lease found by tenant_id either:', profileLeaseError);
         }
-
-        lease = adminLease;
-        leaseError = null;
-        console.log('✅ [useMonthlyRent] Admin client succeeded');
       }
 
       // Log the result
-      if (leaseError) {
-        console.error('Error fetching lease:', leaseError);
-      } else if (lease) {
-        console.log('✅ Found active lease for monthly rent:', lease.id);
+      if (lease) {
+        console.log('✅ [useMonthlyRent] Found active lease:', lease.id);
       } else {
-        console.log('No active lease found for tenant_info_id:', tenantInfo[0].id);
+        console.log('⚠️ [useMonthlyRent] No active lease found');
       }
 
       if (leaseError) throw leaseError;
@@ -98,7 +97,7 @@ export const useMonthlyRent = () => {
       console.log('🔍 [useMonthlyRent] Profile ID:', profile.id);
       console.log('🔍 [useMonthlyRent] Active lease found:', lease);
 
-      if (!lease) {
+      if (!lease || !lease.id) {
         console.log('⚠️ [useMonthlyRent] No active lease found for tenant');
         setMonthlyRentData({
           currentRentDue: 0,
@@ -107,10 +106,12 @@ export const useMonthlyRent = () => {
           daysUntilDue: 0,
           lateFee: 0
         });
+        setLoading(false);
         return;
       }
 
       console.log('💰 [useMonthlyRent] Lease rent amount:', lease.rent_amount);
+      console.log('💰 [useMonthlyRent] Lease ID:', lease.id);
 
       const today = new Date();
       const currentMonth = today.getMonth();

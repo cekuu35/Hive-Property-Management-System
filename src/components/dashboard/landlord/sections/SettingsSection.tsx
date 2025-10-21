@@ -375,6 +375,90 @@ export const SettingsSection = () => {
         </TabsContent>
 
         <TabsContent value="payments" className="space-y-6">
+          {/* KCB Bank Account Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-green-600 rounded flex items-center justify-center">
+                  <span className="text-white text-xs font-bold">KCB</span>
+                </div>
+                KCB Bank Account
+              </CardTitle>
+              <CardDescription>
+                Configure your KCB bank account to receive M-Pesa payments directly. No paybill needed - payments go straight to your bank account.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                <div className="flex items-start gap-2">
+                  <div className="w-5 h-5 bg-green-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <div className="text-sm text-green-800">
+                    <strong>Direct Bank Transfer:</strong> Tenants pay via M-Pesa, funds are deposited directly into your KCB bank account. No manual transfers needed!
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="kcb-account-number">KCB Account Number</Label>
+                  <Input 
+                    id="kcb-account-number"
+                    placeholder="1234567890" 
+                    defaultValue={profileSettings.kcb_account_number || ''}
+                    onChange={(e) => handleProfileChange('kcb_account_number', e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">Your 10-13 digit KCB account number</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="kcb-account-name">Account Name</Label>
+                  <Input 
+                    id="kcb-account-name"
+                    placeholder="John Doe"
+                    defaultValue={profileSettings.kcb_account_name || ''}
+                    onChange={(e) => handleProfileChange('kcb_account_name', e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">Name as registered with KCB</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="kcb-branch">KCB Branch</Label>
+                <Input 
+                  id="kcb-branch"
+                  placeholder="Nairobi Branch"
+                  defaultValue={profileSettings.kcb_branch || ''}
+                  onChange={(e) => handleProfileChange('kcb_branch', e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">Your KCB branch name (optional)</p>
+              </div>
+
+              <div className="flex items-center space-x-2 pt-2">
+                <input 
+                  type="checkbox" 
+                  id="kcb-enabled"
+                  className="rounded"
+                  defaultChecked={profileSettings.kcb_payments_enabled || false}
+                  onChange={(e) => handleProfileChange('kcb_payments_enabled', e.target.checked.toString())}
+                />
+                <Label htmlFor="kcb-enabled" className="text-sm font-normal cursor-pointer">
+                  Enable KCB M-Pesa payments for my properties
+                </Label>
+              </div>
+
+              <div className="pt-4 border-t">
+                <Button onClick={handleSaveSettings} className="w-full bg-green-600 hover:bg-green-700">
+                  <Save className="h-4 w-4 mr-2" />
+                  Save KCB Account Details
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>Payment Gateway Setup</CardTitle>

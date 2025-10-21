@@ -67,13 +67,34 @@ export const useTenantPayments = () => {
 
       if (tinfo && tinfo.length > 0) {
         console.log('📋 [useTenantPayments] Step 2: Fetching active lease...');
-        // Find active lease using tenant_info_id
-        const { data: leaseByTenantInfo, error: leaseError } = await supabase
+        // Find active lease - try BOTH tenant_info_id AND tenant_id for compatibility
+        let { data: leaseByTenantInfo, error: leaseError } = await supabaseAdmin
           .from('leases')
-          .select('id, rent_amount, status, tenant_info_id')
+          .select('id, rent_amount, status, tenant_info_id, tenant_id')
           .eq('tenant_info_id', tinfo[0].id)
           .eq('status', 'active')
           .maybeSingle();
+        
+        console.log('🔍 [useTenantPayments] Lease query by tenant_info_id:', { leaseByTenantInfo, leaseError });
+        
+        // If no lease found by tenant_info_id, try by tenant_id (profile.id)
+        if (!leaseByTenantInfo && profile.id) {
+          console.log('🔄 [useTenantPayments] No lease found by tenant_info_id, trying with tenant_id (profile.id):', profile.id);
+          const { data: profileLease, error: profileLeaseError } = await supabaseAdmin
+            .from('leases')
+            .select('id, rent_amount, status, tenant_info_id, tenant_id')
+            .eq('tenant_id', profile.id)
+            .eq('status', 'active')
+            .maybeSingle();
+
+          if (!profileLeaseError && profileLease) {
+            leaseByTenantInfo = profileLease;
+            leaseError = null;
+            console.log('✅ [useTenantPayments] Found lease by tenant_id (profile.id)');
+          } else {
+            console.error('❌ [useTenantPayments] No lease found by tenant_id either:', profileLeaseError);
+          }
+        }
         
         if (leaseError) {
           console.error('❌ [useTenantPayments] Error fetching lease:', leaseError);

@@ -91,6 +91,8 @@ export const TenantPaymentModal = ({ open, onOpenChange, rentAmount, dueDate, on
       console.log('🔍 [TenantPaymentModal] Processing rent payment via verification API...');
       
       // Import the verification function
+      // NOTE: Actual payment recording is handled by Paystack webhook (supabase/functions/paystack-webhook/index.ts)
+      // which correctly updates rent_payments using .update() not .insert()
       const { verifyPaystackPayment, updateRentPayment } = await import('@/lib/paymentVerification');
       
       // Verify the payment with Paystack

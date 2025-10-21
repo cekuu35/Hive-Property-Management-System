@@ -71,33 +71,38 @@ class MpesaAPI {
     try {
       const accessToken = await this.getAccessToken()
       
-      console.log('📱 [M-Pesa] Initiating STK Push...', { phoneNumber, amount, accountReference })
+      console.log('📱 [KCB Buni M-Pesa] Initiating STK Push...', { phoneNumber, amount, accountReference })
 
-      const timestamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0]
+      // KCB Buni format (not Safaricom format)
       const businessShortCode = '174379'
       const passkey = 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919'
-      const password = btoa(`${businessShortCode}${passkey}${timestamp}`)
+      
+      // Generate unique message ID
+      const messageId = `${Date.now()}_KCB_${Math.random().toString(36).substring(7)}`
 
       const stkPushData = {
-        BusinessShortCode: businessShortCode,
-        Password: password,
-        Timestamp: timestamp,
-        TransactionType: 'CustomerPayBillOnline',
-        Amount: amount,
-        PartyA: phoneNumber,
-        PartyB: businessShortCode,
-        PhoneNumber: phoneNumber,
-        CallBackURL: `${Deno.env.get('SUPABASE_URL')}/functions/v1/mpesa-stk-push/callback`,
-        AccountReference: accountReference,
-        TransactionDesc: 'Property Management Payment'
+        phoneNumber: phoneNumber,
+        amount: amount.toString(),
+        invoiceNumber: accountReference,
+        sharedShortCode: true,
+        orgShortCode: businessShortCode,
+        orgPassKey: passkey,
+        callbackUrl: `${Deno.env.get('SUPABASE_URL')}/functions/v1/mpesa-stk-push/callback`,
+        transactionDescription: 'Property Management Payment'
       }
+
+      console.log('📤 [KCB Buni] Request payload:', stkPushData)
 
       const response = await fetch(this.config.stkPushURL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${accessToken}`,
-          'X-API-Key': this.config.apiKey
+          'X-API-Key': this.config.apiKey,
+          'Access-Control-Allow-Origin': '*',
+          'routeCode': '207',
+          'operation': 'STKPush',
+          'messageId': messageId
         },
         body: JSON.stringify(stkPushData)
       })
@@ -169,7 +174,7 @@ async function handleRentPayment(req: Request, supabase: any) {
     
     console.log('🏠 [M-Pesa] Processing rent payment:', { leaseId, amount, phoneNumber })
 
-    // Get lease details
+    // Get lease details with unit relationship
     const { data: lease, error: leaseError } = await supabase
       .from('leases')
       .select(`
@@ -179,11 +184,7 @@ async function handleRentPayment(req: Request, supabase: any) {
           id,
           properties!inner(
             id,
-            landlords!inner(
-              id,
-              mpesa_shortcode,
-              mpesa_passkey
-            )
+            landlord_id
           )
         )
       `)
@@ -191,14 +192,27 @@ async function handleRentPayment(req: Request, supabase: any) {
       .single()
 
     if (leaseError || !lease) {
+      console.error('❌ [M-Pesa] Lease query error:', leaseError)
       throw new Error('Lease not found')
     }
 
-    // Get landlord M-Pesa details
-    const landlord = lease.units.properties.landlords
-    if (!landlord.mpesa_shortcode || !landlord.mpesa_passkey) {
-      throw new Error('Landlord M-Pesa details not configured')
+    console.log('✅ [M-Pesa] Lease found:', lease)
+
+    const landlordId = lease.units.properties.landlord_id
+
+    // Verify landlord exists
+    const { data: landlord, error: landlordError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', landlordId)
+      .single()
+
+    if (landlordError || !landlord) {
+      console.error('❌ [M-Pesa] Landlord query error:', landlordError)
+      throw new Error('Landlord not found')
     }
+
+    console.log('✅ [M-Pesa] Landlord verified, initiating payment...')
 
     // Initialize M-Pesa API
     const mpesa = new MpesaAPI()
@@ -260,36 +274,33 @@ async function handleUtilityPayment(req: Request, supabase: any) {
     
     console.log('⚡ [M-Pesa] Processing utility payment:', { billId, amount, phoneNumber })
 
-    // Get bill details
+    // Get bill details with landlord_id
     const { data: bill, error: billError } = await supabase
       .from('unit_bills')
-      .select(`
-        id,
-        amount,
-        units!inner(
-          id,
-          properties!inner(
-            id,
-            landlords!inner(
-              id,
-              mpesa_shortcode,
-              mpesa_passkey
-            )
-          )
-        )
-      `)
+      .select('id, amount, landlord_id')
       .eq('id', billId)
       .single()
 
     if (billError || !bill) {
+      console.error('❌ [M-Pesa] Bill query error:', billError)
       throw new Error('Utility bill not found')
     }
 
-    // Get landlord M-Pesa details
-    const landlord = bill.units.properties.landlords
-    if (!landlord.mpesa_shortcode || !landlord.mpesa_passkey) {
-      throw new Error('Landlord M-Pesa details not configured')
+    console.log('✅ [M-Pesa] Bill found:', bill)
+
+    // Verify landlord exists
+    const { data: landlord, error: landlordError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', bill.landlord_id)
+      .single()
+
+    if (landlordError || !landlord) {
+      console.error('❌ [M-Pesa] Landlord query error:', landlordError)
+      throw new Error('Landlord not found')
     }
+
+    console.log('✅ [M-Pesa] Landlord verified, initiating payment...')
 
     // Initialize M-Pesa API
     const mpesa = new MpesaAPI()
@@ -356,7 +367,7 @@ async function handleCallback(req: Request, supabase: any) {
     const { error: updateError } = await supabase
       .from('payment_requests')
       .update({
-        status: ResultCode === 0 ? 'completed' : 'failed',
+        status: ResultCode === 0 ? 'success' : 'failed',
         result_code: ResultCode,
         result_description: ResultDesc,
         updated_at: new Date().toISOString()
@@ -414,6 +425,8 @@ async function handlePaymentStatus(req: Request, supabase: any, path: string) {
 
 async function processSuccessfulPayment(supabase: any, checkoutRequestId: string) {
   try {
+    console.log('🔄 [M-Pesa] Processing successful payment for:', checkoutRequestId)
+
     // Get payment details
     const { data: payment, error: paymentError } = await supabase
       .from('payment_requests')
@@ -422,48 +435,228 @@ async function processSuccessfulPayment(supabase: any, checkoutRequestId: string
       .single()
 
     if (paymentError || !payment) {
-      console.error('❌ [M-Pesa] Payment not found for processing')
+      console.error('❌ [M-Pesa] Payment not found for processing:', paymentError)
+      // Log to monitoring table
+      await logPaymentError(supabase, 'payment_not_found', checkoutRequestId, paymentError)
       return
     }
 
+    console.log('📋 [M-Pesa] Payment details:', { type: payment.type, amount: payment.amount })
+
     if (payment.type === 'rent') {
-      // Process rent payment
-      const { error: rentError } = await supabase
+      console.log('🏠 [M-Pesa] Processing RENT payment...')
+
+      // UPDATE existing rent_payment record (don't create new one)
+      const { data: updatedRent, error: rentError } = await supabase
         .from('rent_payments')
-        .insert({
-          lease_id: payment.lease_id,
-          amount: payment.amount,
-          payment_date: new Date().toISOString(),
-          status: 'completed',
+        .update({
+          status: 'paid',
+          paid_date: new Date().toISOString(),
           payment_method: 'mpesa',
-          transaction_id: checkoutRequestId
+          transaction_reference: checkoutRequestId,
+          updated_at: new Date().toISOString()
         })
+        .eq('lease_id', payment.lease_id)
+        .eq('status', 'pending')
+        .select()
 
       if (rentError) {
-        console.error('❌ [M-Pesa] Error creating rent payment record:', rentError)
-      } else {
-        console.log('✅ [M-Pesa] Rent payment processed successfully')
-      }
-    } else if (payment.type === 'utility') {
-      // Process utility payment
-      const { error: utilityError } = await supabase
-        .from('utility_payments')
-        .insert({
-          bill_id: payment.bill_id,
-          amount: payment.amount,
-          payment_date: new Date().toISOString(),
-          status: 'completed',
-          payment_method: 'mpesa',
-          transaction_id: checkoutRequestId
-        })
+        console.error('❌ [M-Pesa] Error updating rent payment record:', rentError)
+        await logPaymentError(supabase, 'rent_update_failed', checkoutRequestId, rentError)
+        throw rentError // Propagate error to trigger retry
+      } 
+      
+      if (!updatedRent || updatedRent.length === 0) {
+        console.warn('⚠️ [M-Pesa] No pending rent payment found to update. Checking for overdue...')
+        
+        // Try updating overdue payments as well
+        const { data: overdueUpdate, error: overdueError } = await supabase
+          .from('rent_payments')
+          .update({
+            status: 'paid',
+            paid_date: new Date().toISOString(),
+            payment_method: 'mpesa',
+            transaction_reference: checkoutRequestId,
+            updated_at: new Date().toISOString()
+          })
+          .eq('lease_id', payment.lease_id)
+          .eq('status', 'overdue')
+          .select()
 
-      if (utilityError) {
-        console.error('❌ [M-Pesa] Error creating utility payment record:', utilityError)
+        if (overdueError || !overdueUpdate || overdueUpdate.length === 0) {
+          console.error('❌ [M-Pesa] No rent payment record found (pending or overdue):', overdueError)
+          await logPaymentError(supabase, 'no_rent_record', checkoutRequestId, overdueError)
+          throw new Error('No rent payment record found to update')
+        } else {
+          console.log('✅ [M-Pesa] Overdue rent payment updated:', overdueUpdate)
+        }
       } else {
-        console.log('✅ [M-Pesa] Utility payment processed successfully')
+        console.log('✅ [M-Pesa] Rent payment record updated:', updatedRent)
       }
+
+      // Get lease details to find tenant
+      const { data: lease, error: leaseError } = await supabase
+        .from('leases')
+        .select('tenant_info_id, tenant_id, rent_amount')
+        .eq('id', payment.lease_id)
+        .single()
+
+      if (leaseError || !lease) {
+        console.error('❌ [M-Pesa] Lease not found:', leaseError)
+        await logPaymentError(supabase, 'lease_not_found', checkoutRequestId, leaseError)
+        throw leaseError
+      }
+      
+      console.log('📋 [M-Pesa] Lease details:', lease)
+
+      // Determine which tenant ID to use
+      const tenantInfoId = lease.tenant_info_id || lease.tenant_id
+
+      if (tenantInfoId) {
+        // Get current balance first
+        const { data: currentTenant, error: getTenantError } = await supabase
+          .from('tenant_info')
+          .select('current_balance')
+          .eq('id', tenantInfoId)
+          .single()
+
+        if (getTenantError) {
+          console.error('❌ [M-Pesa] Error fetching tenant info:', getTenantError)
+          await logPaymentError(supabase, 'tenant_fetch_failed', checkoutRequestId, getTenantError)
+        } else {
+          // Calculate new balance (subtract payment amount from current balance)
+          const currentBalance = currentTenant?.current_balance || 0
+          const newBalance = Math.max(0, currentBalance - payment.amount)
+          const isPaidInFull = newBalance === 0
+
+          // Update tenant_info balance
+          const { data: updatedBalance, error: balanceError } = await supabase
+            .from('tenant_info')
+            .update({
+              current_balance: newBalance,
+              payment_status: isPaidInFull ? 'paid' : 'partial',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', tenantInfoId)
+            .select()
+
+          if (balanceError) {
+            console.error('❌ [M-Pesa] Error updating tenant balance:', balanceError)
+            await logPaymentError(supabase, 'balance_update_failed', checkoutRequestId, balanceError)
+          } else {
+            console.log(`✅ [M-Pesa] Tenant balance updated: ${currentBalance} → ${newBalance} (paid: ${isPaidInFull})`, updatedBalance)
+          }
+        }
+      }
+
+      // Send notification to tenant
+      if (lease.tenant_id) {
+        const { error: notifyError } = await supabase
+          .from('notifications')
+          .insert({
+            user_id: lease.tenant_id,
+            title: 'Rent Payment Successful',
+            message: `Your rent payment of KES ${payment.amount.toLocaleString()} has been processed successfully via M-Pesa.`,
+            type: 'payment_success',
+            read: false,
+            data: { 
+              lease_id: payment.lease_id, 
+              transaction_id: checkoutRequestId,
+              amount: payment.amount,
+              payment_method: 'mpesa'
+            },
+            created_at: new Date().toISOString()
+          })
+
+        if (notifyError) {
+          console.error('❌ [M-Pesa] Error sending notification:', notifyError)
+          // Don't throw - notification failure shouldn't fail the payment
+        } else {
+          console.log('✅ [M-Pesa] Notification sent to tenant')
+        }
+      }
+
+      console.log('✅ [M-Pesa] Rent payment processed successfully')
+
+    } else if (payment.type === 'utility') {
+      console.log('⚡ [M-Pesa] Processing UTILITY payment...')
+
+      // UPDATE utility bill status (don't create new record)
+      const { data: updatedBill, error: billError } = await supabase
+        .from('unit_bills')
+        .update({
+          status: 'paid',
+          paystack_reference: checkoutRequestId,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', payment.bill_id)
+        .select('*, unit:units(id, tenant_id)')
+
+      if (billError) {
+        console.error('❌ [M-Pesa] Error updating utility bill:', billError)
+        await logPaymentError(supabase, 'utility_update_failed', checkoutRequestId, billError)
+        throw billError
+      }
+      
+      if (!updatedBill || updatedBill.length === 0) {
+        console.error('❌ [M-Pesa] No utility bill found to update')
+        await logPaymentError(supabase, 'no_utility_record', checkoutRequestId, new Error('Bill not found'))
+        throw new Error('No utility bill found to update')
+      }
+      
+      console.log('✅ [M-Pesa] Utility bill updated:', updatedBill)
+
+      // Get tenant from bill
+      const bill = updatedBill[0]
+      const tenantId = bill.unit?.tenant_id || bill.tenant_id
+
+      // Send notification to tenant
+      if (tenantId) {
+        const { error: notifyError } = await supabase
+          .from('notifications')
+          .insert({
+            user_id: tenantId,
+            title: 'Utility Bill Payment Successful',
+            message: `Your utility bill payment of KES ${payment.amount.toLocaleString()} has been processed successfully via M-Pesa.`,
+            type: 'payment_success',
+            read: false,
+            data: { 
+              bill_id: payment.bill_id, 
+              transaction_id: checkoutRequestId,
+              amount: payment.amount,
+              payment_method: 'mpesa'
+            },
+            created_at: new Date().toISOString()
+          })
+
+        if (notifyError) {
+          console.error('❌ [M-Pesa] Error sending notification:', notifyError)
+          // Don't throw - notification failure shouldn't fail the payment
+        } else {
+          console.log('✅ [M-Pesa] Notification sent to tenant')
+        }
+      }
+
+      console.log('✅ [M-Pesa] Utility payment processed successfully')
     }
   } catch (error) {
     console.error('❌ [M-Pesa] Error processing successful payment:', error)
+    await logPaymentError(supabase, 'processing_failed', checkoutRequestId, error)
+    throw error // Re-throw to ensure proper error handling upstream
+  }
+}
+
+// Helper function to log payment errors for monitoring
+async function logPaymentError(supabase: any, errorType: string, checkoutRequestId: string, error: any) {
+  try {
+    await supabase
+      .from('cron_log')
+      .insert({
+        message: `[M-Pesa Error] ${errorType} - CheckoutID: ${checkoutRequestId} - ${error?.message || JSON.stringify(error)}`,
+        created_at: new Date().toISOString()
+      })
+    console.log(`📝 [M-Pesa] Error logged: ${errorType}`)
+  } catch (logError) {
+    console.error('❌ [M-Pesa] Failed to log error:', logError)
   }
 }

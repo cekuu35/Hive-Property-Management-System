@@ -155,7 +155,8 @@ export default defineConfig({
         ]
       },
       devOptions: {
-        enabled: true
+        enabled: false, // Disable PWA in development to prevent caching
+        type: 'module'
       }
     })
   ]

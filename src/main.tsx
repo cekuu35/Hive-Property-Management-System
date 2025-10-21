@@ -6,8 +6,8 @@ import "./index.css";
 console.log('🚀 Main.tsx loading...');
 console.log('Root element:', document.getElementById("root"));
 
-// Register Service Worker for PWA functionality
-if ('serviceWorker' in navigator) {
+// Register Service Worker for PWA functionality (only in production)
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
       .then((registration) => {
@@ -32,6 +32,19 @@ if ('serviceWorker' in navigator) {
         console.error('❌ Service Worker registration failed:', error);
       });
   });
+} else if (import.meta.env.DEV) {
+  console.log('🚫 Service Worker disabled in development mode to prevent caching');
+  
+  // Unregister any existing service workers in development
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      registrations.forEach((registration) => {
+        registration.unregister().then(() => {
+          console.log('🗑️ Unregistered existing service worker');
+        });
+      });
+    });
+  }
 }
 
 try {

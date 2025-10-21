@@ -242,6 +242,7 @@ export const PaymentCallback = () => {
       };
     } else {
       // Use the payment verification service for proper database updates
+      // NOTE: Actual payment recording is handled by Paystack webhook (supabase/functions/paystack-webhook/index.ts)
       const { updateRentPayment } = await import('@/lib/paymentVerification');
       
       const updateSuccess = await updateRentPayment(leaseId, reference, amount);

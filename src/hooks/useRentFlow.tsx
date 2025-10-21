@@ -59,44 +59,41 @@ export const useRentFlow = () => {
         return;
       }
 
-      // Now fetch the lease using tenant_info_id
-      // Try the direct query first
-      let { data: leaseData, error: leaseError } = await supabase
+      // Now fetch the lease - try BOTH tenant_info_id AND tenant_id for compatibility
+      let { data: leaseData, error: leaseError } = await supabaseAdmin
         .from('leases')
-        .select('id, rent_amount, start_date, status')
+        .select('id, rent_amount, start_date, status, tenant_info_id, tenant_id')
         .eq('tenant_info_id', tenantInfo[0].id)
         .eq('status', 'active')
         .limit(1);
       
       let lease = leaseData?.[0] || null;
+      console.log('🔍 [useRentFlow] Lease query by tenant_info_id:', { lease, leaseError });
 
-      // If the query fails due to RLS, try with admin client
-      if (leaseError && (leaseError.code === '42501' || leaseError.message.includes('RLS') || leaseError.code === '406')) {
-        console.log('🔄 [useRentFlow] RLS blocked query, trying with admin client...');
-        const { data: adminLease, error: adminLeaseError } = await supabaseAdmin
+      // If no lease found by tenant_info_id, try by tenant_id (profile.id)
+      if (!lease && profile.id) {
+        console.log('🔄 [useRentFlow] No lease found by tenant_info_id, trying with tenant_id (profile.id):', profile.id);
+        const { data: profileLeaseData, error: profileLeaseError } = await supabaseAdmin
           .from('leases')
-          .select('id, rent_amount, start_date, status, tenant_info_id')
-          .eq('tenant_info_id', tenantInfo[0].id)
+          .select('id, rent_amount, start_date, status, tenant_info_id, tenant_id')
+          .eq('tenant_id', profile.id)
           .eq('status', 'active')
           .maybeSingle();
 
-        if (adminLeaseError) {
-          console.error('❌ [useRentFlow] Admin client also failed:', adminLeaseError);
-          throw adminLeaseError;
+        if (!profileLeaseError && profileLeaseData) {
+          lease = profileLeaseData;
+          leaseError = null;
+          console.log('✅ [useRentFlow] Found lease by tenant_id (profile.id)');
+        } else {
+          console.error('❌ [useRentFlow] No lease found by tenant_id either:', profileLeaseError);
         }
-
-        lease = adminLease;
-        leaseError = null;
-        console.log('✅ [useRentFlow] Admin client succeeded');
       }
 
       // Log the result
-      if (leaseError) {
-        console.error('Error fetching lease:', leaseError);
-      } else if (lease) {
-        console.log('✅ Found active lease for rent flow:', lease.id);
+      if (lease) {
+        console.log('✅ [useRentFlow] Found active lease:', lease.id);
       } else {
-        console.log('No active lease found for tenant_info_id:', tenantInfo[0].id);
+        console.log('⚠️ [useRentFlow] No active lease found');
       }
 
       if (leaseError) throw leaseError;

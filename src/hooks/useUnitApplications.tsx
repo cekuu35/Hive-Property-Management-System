@@ -344,8 +344,10 @@ export const useUnitApplications = () => {
   };
 
   const createTenantFromApplicationSimple = async (application: any) => {
+    let createdTenantInfoId: string | null = null;
+    
     try {
-      console.log('Creating tenant from application:', application);
+      console.log('✨ [Application Approval] Creating tenant from application:', application.id);
       
       // Get applicant's profile information
       const { data: applicantProfile, error: applicantError } = await supabase
@@ -355,64 +357,88 @@ export const useUnitApplications = () => {
         .single();
 
       if (applicantError) {
-        console.error('Error fetching applicant profile:', applicantError);
+        console.error('❌ [Application Approval] Error fetching applicant profile:', applicantError);
         throw applicantError;
       }
 
-      console.log('Applicant profile:', applicantProfile);
+      console.log('✅ [Application Approval] Applicant profile found:', applicantProfile.email);
 
       // Check if tenant already exists
       const { data: existingTenant } = await supabase
         .from('tenant_info')
-        .select('id')
+        .select('id, tenant_status')
         .eq('profile_id', application.tenant_id)
         .single();
 
       if (existingTenant) {
-        console.log('Tenant already exists, skipping creation');
-        return;
+        console.log('⚠️ [Application Approval] Tenant already exists, using existing tenant_info:', existingTenant.id);
+        createdTenantInfoId = existingTenant.id;
+        
+        // If tenant exists, check if they already have an active lease for this unit
+        const { data: existingLease } = await supabase
+          .from('leases')
+          .select('id, status')
+          .eq('unit_id', application.unit_id)
+          .eq('tenant_info_id', existingTenant.id)
+          .in('status', ['active', 'approved'])
+          .single();
+        
+        if (existingLease) {
+          console.log('✅ [Application Approval] Tenant already has an active lease for this unit');
+          return;
+        }
+        
+        // Continue to create lease with existing tenant_info
+      } else {
+        // Create new tenant_info record
+        console.log('📝 [Application Approval] Creating new tenant_info record...');
+        
+        const { data: tenantInfo, error: tenantError } = await supabase
+          .from('tenant_info')
+          .insert({
+            profile_id: application.tenant_id,
+            first_name: applicantProfile.first_name || 'N/A',
+            last_name: applicantProfile.last_name || 'N/A',
+            email: applicantProfile.email || `tenant-${application.tenant_id.substring(0, 8)}@example.com`,
+            phone: applicantProfile.phone || null,
+            landlord_id: application.units?.properties?.landlord_id,
+            tenant_status: 'active',
+            current_balance: 0, // Will be set when first rent payment is generated
+            payment_status: 'unpaid',
+            auth_user_id: applicantProfile.user_id,
+            move_in_date: application.preferred_move_in_date || new Date().toISOString().split('T')[0],
+            emergency_contact_name: null,
+            emergency_contact_phone: null,
+            notes: 'Created from approved application',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (tenantError) {
+          console.error('❌ [Application Approval] Error creating tenant_info:', tenantError);
+          throw tenantError;
+        }
+
+        createdTenantInfoId = tenantInfo.id;
+        console.log('✅ [Application Approval] Tenant info created:', tenantInfo.id);
       }
-
-      // Create tenant_info record
-      const { data: tenantInfo, error: tenantError } = await supabase
-        .from('tenant_info')
-        .insert({
-          profile_id: application.tenant_id,
-          first_name: applicantProfile.first_name || 'N/A',
-          last_name: applicantProfile.last_name || 'N/A',
-          email: applicantProfile.email || `tenant-${application.tenant_id.substring(0, 8)}@example.com`,
-          phone: applicantProfile.phone || null,
-          landlord_id: application.units?.properties?.landlord_id,
-          tenant_status: 'active',
-          current_balance: application.units?.rent_amount || 0,
-          payment_status: 'unpaid',
-          auth_user_id: applicantProfile.user_id,
-          move_in_date: application.preferred_move_in_date || new Date().toISOString().split('T')[0],
-          emergency_contact_name: null,
-          emergency_contact_phone: null,
-          notes: 'Created from approved application',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-
-      if (tenantError) {
-        console.error('Error creating tenant_info:', tenantError);
-        throw tenantError;
-      }
-
-      console.log('Tenant info created:', tenantInfo.id);
 
       // Create lease record
       const leaseStartDate = application.preferred_move_in_date || new Date().toISOString().split('T')[0];
       const leaseEndDate = new Date(new Date(leaseStartDate).getTime() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
+      console.log('📋 [Application Approval] Creating lease record...');
+      console.log(`   Lease: ${leaseStartDate} → ${leaseEndDate}`);
+      console.log(`   Tenant ID (profile.id): ${application.tenant_id}`);
+      console.log(`   Tenant Info ID: ${createdTenantInfoId}`);
+
       const { data: lease, error: leaseError } = await supabase
         .from('leases')
         .insert({
-          tenant_id: tenantInfo.id,
-          tenant_info_id: tenantInfo.id,
+          tenant_id: application.tenant_id,  // ✅ FIXED: Use profile.id, not tenant_info.id
+          tenant_info_id: createdTenantInfoId,  // ✅ Also set tenant_info_id
           unit_id: application.unit_id,
           start_date: leaseStartDate,
           end_date: leaseEndDate,
@@ -427,47 +453,106 @@ export const useUnitApplications = () => {
         .single();
 
       if (leaseError) {
-        console.error('Error creating lease:', leaseError);
+        console.error('❌ [Application Approval] Error creating lease:', leaseError);
         throw leaseError;
       }
 
-      console.log('Lease created:', lease.id);
+      console.log('✅ [Application Approval] Lease created:', lease.id);
+
+      // Generate first month's rent payment
+      console.log('💰 [Application Approval] Generating first rent payment...');
+      
+      const { data: rentPayment, error: rentPaymentError } = await supabase
+        .from('rent_payments')
+        .insert({
+          lease_id: lease.id,
+          amount: lease.rent_amount,
+          due_date: leaseStartDate,
+          status: 'pending',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (rentPaymentError) {
+        console.error('⚠️ [Application Approval] Error generating first rent payment:', rentPaymentError);
+        // Don't throw - this is not critical, monthly cron will handle it
+      } else {
+        console.log('✅ [Application Approval] First rent payment generated:', rentPayment.id);
+        
+        // Update tenant balance
+        await supabase
+          .from('tenant_info')
+          .update({
+            current_balance: lease.rent_amount,
+            payment_status: 'unpaid',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', createdTenantInfoId);
+      }
 
       // Update unit status to occupied
       const { error: unitUpdateError } = await supabase
         .from('units')
         .update({ 
           status: 'occupied',
+          tenant_id: application.tenant_id, // Link tenant to unit
           updated_at: new Date().toISOString()
         })
         .eq('id', application.unit_id);
 
       if (unitUpdateError) {
-        console.error('Error updating unit status:', unitUpdateError);
+        console.error('⚠️ [Application Approval] Error updating unit status:', unitUpdateError);
         // Don't throw error here as lease was created successfully
       } else {
-        console.log('Unit status updated to occupied');
+        console.log('✅ [Application Approval] Unit status updated to occupied');
       }
 
       // Send notification to tenant
-      await supabase
+      const { error: notificationError } = await supabase
         .from('notifications')
         .insert({
           user_id: application.tenant_id,
           title: 'Application Approved!',
           message: `Your application for Unit ${application.units?.unit_number} at ${application.units?.properties?.name} has been approved. Your lease has been created and you can now access your tenant portal.`,
           type: 'application_approved',
+          read: false,
           data: { 
             application_id: application.id,
             unit_id: application.unit_id,
-            lease_id: lease.id
-          }
+            lease_id: lease.id,
+            rent_amount: lease.rent_amount,
+            move_in_date: leaseStartDate
+          },
+          created_at: new Date().toISOString()
         });
 
+      if (notificationError) {
+        console.error('⚠️ [Application Approval] Error sending notification:', notificationError);
+        // Don't throw - notification failure is not critical
+      } else {
+        console.log('✅ [Application Approval] Notification sent to tenant');
+      }
+
       toast.success('Tenant and lease created successfully from application!');
+      console.log('🎉 [Application Approval] Complete! Lease ID:', lease.id);
       
     } catch (error) {
-      console.error('Error creating tenant from application:', error);
+      console.error('❌ [Application Approval] Error creating tenant from application:', error);
+      
+      // ROLLBACK: Delete tenant_info if we created it and something failed
+      if (createdTenantInfoId && !existingTenant) {
+        console.log('🔄 [Application Approval] Rolling back - deleting tenant_info:', createdTenantInfoId);
+        
+        await supabase
+          .from('tenant_info')
+          .delete()
+          .eq('id', createdTenantInfoId)
+          .then(() => console.log('✅ [Application Approval] Rollback successful'))
+          .catch((rollbackError) => console.error('❌ [Application Approval] Rollback failed:', rollbackError));
+      }
+      
       toast.error('Failed to create tenant from application: ' + (error as Error).message);
       throw error;
     }

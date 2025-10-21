@@ -132,6 +132,7 @@ export const UtilityBillPaymentModal = ({
       console.log('Reference:', reference);
       
       // Import the verification service dynamically to avoid circular imports
+      // NOTE: Actual payment recording is handled by Paystack webhook (supabase/functions/paystack-webhook/index.ts)
       const { verifyPaystackPayment, updateUtilityBillPayment } = await import('@/lib/paymentVerification');
       
       // Verify the payment with Paystack
