@@ -8,6 +8,8 @@ import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 
+// KCB Buni M-Pesa Express integration for utility bill payments
+
 interface MpesaUtilityPaymentModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
