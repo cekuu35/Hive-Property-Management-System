@@ -10,13 +10,16 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Wrench, Clock, CheckCircle, AlertTriangle, User, Calendar, DollarSign, Search, Filter, Loader2, Edit, Eye, MoreHorizontal, Plus, Phone, Mail, MapPin, Star, Trash2 } from 'lucide-react';
+import { Wrench, Clock, CheckCircle, AlertTriangle, User, Calendar, DollarSign, Search, Filter, Loader2, Edit, Eye, MoreHorizontal, Plus, Phone, Mail, MapPin, Star, Trash2, Camera, X } from 'lucide-react';
 import { useMaintenanceRequests } from '@/hooks/useMaintenanceRequests';
 import { useContractors } from '@/hooks/useContractors';
 import { MaintenanceRequestModal } from '@/components/dashboard/maintenance/MaintenanceRequestModal';
 import { ContractorModal } from '@/components/dashboard/maintenance/ContractorModal';
+import { EmergencyContactsManagement } from '../EmergencyContactsManagement';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { PhotoGallery } from '@/components/ui/PhotoGallery';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 export const MaintenanceSection = () => {
   const [statusFilter, setStatusFilter] = useState('all');
@@ -27,6 +30,7 @@ export const MaintenanceSection = () => {
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [isCostModalOpen, setIsCostModalOpen] = useState(false);
+  const [isViewDetailsOpen, setIsViewDetailsOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
   const [assignmentData, setAssignmentData] = useState({
     contractorId: '',
@@ -361,6 +365,7 @@ export const MaintenanceSection = () => {
         <TabsList>
           <TabsTrigger value="requests">Active Requests</TabsTrigger>
           <TabsTrigger value="contractors">Contractors</TabsTrigger>
+          <TabsTrigger value="emergency">Emergency Contacts</TabsTrigger>
           <TabsTrigger value="history">History</TabsTrigger>
         </TabsList>
 
@@ -444,6 +449,17 @@ export const MaintenanceSection = () => {
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => {
+                              setSelectedRequest(request);
+                              setIsViewDetailsOpen(true);
+                            }}
+                            title="View Details"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
                           {request.status === 'pending' && (
                             <>
                               <Button 
@@ -682,6 +698,10 @@ export const MaintenanceSection = () => {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="emergency" className="space-y-4">
+          <EmergencyContactsManagement />
+        </TabsContent>
       </Tabs>
 
       <MaintenanceRequestModal 
@@ -851,6 +871,208 @@ export const MaintenanceSection = () => {
                 Update Cost
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Details Modal */}
+      <Dialog open={isViewDetailsOpen} onOpenChange={setIsViewDetailsOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wrench className="h-5 w-5" />
+              Maintenance Request Details
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedRequest && (
+            <ScrollArea className="h-[70vh] pr-4">
+              <div className="space-y-6">
+                {/* Request Header */}
+                <div>
+                  <h3 className="text-xl font-semibold mb-2">{selectedRequest.title}</h3>
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    <Badge variant={
+                      selectedRequest.status === 'completed' ? 'success' :
+                      selectedRequest.status === 'in-progress' ? 'default' :
+                      selectedRequest.status === 'pending' ? 'secondary' :
+                      'destructive'
+                    }>
+                      {selectedRequest.status.replace(/-/g, ' ').replace('_', ' ')}
+                    </Badge>
+                    <Badge variant={
+                      selectedRequest.priority === 'emergency' ? 'destructive' :
+                      selectedRequest.priority === 'high' ? 'destructive' :
+                      selectedRequest.priority === 'medium' ? 'default' :
+                      'secondary'
+                    }>
+                      {selectedRequest.priority} Priority
+                    </Badge>
+                    <Badge variant="outline">{selectedRequest.category}</Badge>
+                  </div>
+                </div>
+
+                {/* Description */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Description</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {selectedRequest.description}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Photos */}
+                {selectedRequest.images && selectedRequest.images.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <Camera className="h-4 w-4" />
+                        Photos ({selectedRequest.images.length})
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <PhotoGallery
+                        photos={selectedRequest.images}
+                        maxColumns={3}
+                        showActions={false}
+                        allowFullscreen={true}
+                        className="mt-2"
+                      />
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Request Details */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <User className="h-4 w-4" />
+                        Tenant Information
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div>
+                        <span className="text-sm font-medium">Name:</span>
+                        <span className="text-sm text-muted-foreground ml-2">
+                          {selectedRequest.tenantName || 'N/A'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium">Unit:</span>
+                        <span className="text-sm text-muted-foreground ml-2">
+                          {selectedRequest.unitNumber || 'N/A'}
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <Calendar className="h-4 w-4" />
+                        Timeline
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div>
+                        <span className="text-sm font-medium">Created:</span>
+                        <span className="text-sm text-muted-foreground ml-2">
+                          {selectedRequest.createdDate}
+                        </span>
+                      </div>
+                      {selectedRequest.scheduledDate && (
+                        <div>
+                          <span className="text-sm font-medium">Scheduled:</span>
+                          <span className="text-sm text-muted-foreground ml-2">
+                            {selectedRequest.scheduledDate}
+                          </span>
+                        </div>
+                      )}
+                      {selectedRequest.completedDate && (
+                        <div>
+                          <span className="text-sm font-medium">Completed:</span>
+                          <span className="text-sm text-muted-foreground ml-2">
+                            {selectedRequest.completedDate}
+                          </span>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {(selectedRequest.estimatedCost || selectedRequest.actualCost) && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <DollarSign className="h-4 w-4" />
+                          Cost Information
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        {selectedRequest.estimatedCost && (
+                          <div>
+                            <span className="text-sm font-medium">Estimated:</span>
+                            <span className="text-sm text-muted-foreground ml-2">
+                              KES {selectedRequest.estimatedCost.toLocaleString()}
+                            </span>
+                          </div>
+                        )}
+                        {selectedRequest.actualCost && (
+                          <div>
+                            <span className="text-sm font-medium">Actual:</span>
+                            <span className="text-sm text-muted-foreground ml-2">
+                              KES {selectedRequest.actualCost.toLocaleString()}
+                            </span>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {selectedRequest.assignedTo && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <Wrench className="h-4 w-4" />
+                          Assignment
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div>
+                          <span className="text-sm font-medium">Assigned To:</span>
+                          <span className="text-sm text-muted-foreground ml-2">
+                            {selectedRequest.assignedTo}
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+
+                {/* Notes */}
+                {selectedRequest.notes && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm">Additional Notes</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                        {selectedRequest.notes}
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </ScrollArea>
+          )}
+
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button variant="outline" onClick={() => setIsViewDetailsOpen(false)}>
+              Close
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

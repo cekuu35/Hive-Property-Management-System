@@ -16,6 +16,7 @@ import { usePhotoUpload } from '@/hooks/usePhotoUpload';
 import { useAuth } from '@/hooks/useAuth';
 import { DataIntegrityCheck } from '../DataIntegrityCheck';
 import { LandlordPasswordChangeModal } from '../LandlordPasswordChangeModal';
+import { NotificationSettings } from '../../NotificationSettings';
 
 export const SettingsSection = () => {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -280,6 +281,8 @@ export const SettingsSection = () => {
         </TabsContent>
 
         <TabsContent value="notifications" className="space-y-6">
+          <NotificationSettings />
+          
           <Card>
             <CardHeader>
               <CardTitle>Notification Preferences</CardTitle>

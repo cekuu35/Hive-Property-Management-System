@@ -78,18 +78,37 @@ export const usePushNotifications = () => {
   };
 
   const urlBase64ToUint8Array = (base64String: string): Uint8Array => {
-    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-    const base64 = (base64String + padding)
-      .replace(/\\-/g, '+')
-      .replace(/_/g, '/');
+    try {
+      // Remove any whitespace
+      const cleanString = base64String.trim();
+      
+      // Add padding if needed
+      const padding = '='.repeat((4 - (cleanString.length % 4)) % 4);
+      
+      // Convert URL-safe base64 to standard base64
+      const base64 = (cleanString + padding)
+        .replace(/-/g, '+')
+        .replace(/_/g, '/');
 
-    const rawData = window.atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
+      console.log('[usePushNotifications] Converting VAPID key:', {
+        original: cleanString.substring(0, 20) + '...',
+        withPadding: base64.substring(0, 20) + '...',
+        length: base64.length
+      });
 
-    for (let i = 0; i < rawData.length; ++i) {
-      outputArray[i] = rawData.charCodeAt(i);
+      const rawData = window.atob(base64);
+      const outputArray = new Uint8Array(rawData.length);
+
+      for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+      }
+      
+      console.log('[usePushNotifications] VAPID key converted successfully, length:', outputArray.length);
+      return outputArray;
+    } catch (error) {
+      console.error('[usePushNotifications] Failed to convert VAPID key:', error);
+      throw new Error('Invalid VAPID public key format. Please check your environment configuration.');
     }
-    return outputArray;
   };
 
   const requestPermission = async (): Promise<boolean> => {
@@ -130,6 +149,13 @@ export const usePushNotifications = () => {
       return false;
     }
 
+    // Validate VAPID key
+    if (!VAPID_PUBLIC_KEY || VAPID_PUBLIC_KEY.length < 20) {
+      console.error('[usePushNotifications] Invalid VAPID public key');
+      toast.error('Push notification configuration error. Please contact support.');
+      return false;
+    }
+
     setLoading(true);
 
     try {
@@ -151,6 +177,8 @@ export const usePushNotifications = () => {
 
       // Subscribe to push
       console.log('[usePushNotifications] Subscribing to push...');
+      console.log('[usePushNotifications] VAPID key length:', VAPID_PUBLIC_KEY.length);
+      
       const pushSubscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
@@ -270,24 +298,51 @@ export const usePushNotifications = () => {
       return;
     }
 
+    if (!user || !profile) {
+      toast.error('You must be logged in to test notifications');
+      return;
+    }
+
+    setLoading(true);
+
     try {
-      const registration = await navigator.serviceWorker.ready;
+      console.log('[usePushNotifications] Sending real push notification via Edge Function...');
       
-      await registration.showNotification('Test Notification', {
-        body: 'This is a test notification from Property Manager',
-        icon: '/logo.png',
-        badge: '/badge.png',
-        tag: 'test',
-        vibrate: [200, 100, 200],
-        data: {
-          url: '/dashboard',
+      // Call the Edge Function to send a real push notification
+      const { data, error } = await supabase.functions.invoke('send-push-notification', {
+        body: {
+          userId: user.id,
+          notification: {
+            title: 'Test Notification 🔔',
+            message: 'This is a real push notification from the server!',
+            body: 'If you can see this, push notifications are working correctly.',
+            type: 'test',
+            action_url: '/dashboard',
+            data: {
+              timestamp: new Date().toISOString(),
+              test: true,
+            },
+          },
         },
       });
 
-      toast.success('Test notification sent!');
-    } catch (error) {
+      if (error) {
+        console.error('[usePushNotifications] Edge Function error:', error);
+        throw error;
+      }
+
+      console.log('[usePushNotifications] Edge Function response:', data);
+      
+      if (data.sent > 0) {
+        toast.success(`Test notification sent to ${data.sent} device(s)! Check your notifications.`);
+      } else {
+        toast.info(`Test notification queued but not sent. Reason: ${data.message}`);
+      }
+    } catch (error: any) {
       console.error('[usePushNotifications] Test notification error:', error);
-      toast.error('Failed to send test notification');
+      toast.error(`Failed to send test notification: ${error.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 

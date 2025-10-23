@@ -29,6 +29,9 @@ import { VisitorsSection } from './VisitorsSection';
 import { UtilityBillsSection } from './UtilityBillsSection';
 import { TenantNotices } from './TenantNotices';
 import { LandlordInfoCard } from './LandlordInfoCard';
+import { NotificationSettings } from '../NotificationSettings';
+import { LeaseDetailsCard } from './LeaseDetailsCard';
+import { LeaseDocumentViewer } from './LeaseDocumentViewer';
 import { useMaintenanceRequests } from '@/hooks/useMaintenanceRequests';
 import { useApprovedLease } from '@/hooks/useApprovedLease';
 import { supabase } from '@/integrations/supabase/client';
@@ -36,6 +39,7 @@ import { useTenantPayments } from '@/hooks/useTenantPayments';
 import { useRentFlow } from '@/hooks/useRentFlow';
 import { useMessages } from '@/hooks/useMessages';
 import { useTenantInfo } from '@/hooks/useTenantInfo';
+import { useEmergencyContacts } from '@/hooks/useEmergencyContacts';
 
 interface TenantDashboardProps {
   activeTab?: string;
@@ -46,6 +50,7 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
   const [showMaintenanceView, setShowMaintenanceView] = useState(false);
+  const [showLeaseDocument, setShowLeaseDocument] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
   const [rentBalance, setRentBalance] = useState(25000);
   const [maintenanceFilter, setMaintenanceFilter] = useState('all');
@@ -72,6 +77,7 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
   } = useRentFlow();
   const { tenantInfo, refetch: refetchTenantInfo } = useTenantInfo();
   const { conversations } = useMessages();
+  const { contacts: emergencyContacts, loading: emergencyContactsLoading } = useEmergencyContacts();
   const pendingRequestsCount = maintenanceRequests.filter(r => r.status === 'pending').length;
   const unreadCount = conversations.reduce((sum, c) => sum + (c.unread_count || 0), 0);
   
@@ -449,7 +455,15 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
           </div>
 
           {/* Landlord Information */}
-          <LandlordInfoCard />
+          <LandlordInfoCard 
+            onSendMessage={() => {
+              console.log('🔍 [TenantDashboard] Landlord Send Message clicked');
+              if (onTabChange) {
+                onTabChange("messages");
+                console.log('✅ [TenantDashboard] Switched to messages tab from landlord card');
+              }
+            }}
+          />
 
           {/* Quick Actions */}
           <Card>
@@ -497,14 +511,26 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
                   <Wrench className="h-6 w-6" />
                   <span>Request Maintenance</span>
                 </Button>
-                <Button className="h-auto p-4 flex flex-col items-center gap-2" variant="outline">
+                <Button 
+                  className="h-auto p-4 flex flex-col items-center gap-2" 
+                  variant="outline"
+                  onClick={() => onTabChange?.("documents")}
+                >
                   <FileText className="h-6 w-6" />
                   <span>View Documents</span>
                 </Button>
                 <Button 
                   className="h-auto p-4 flex flex-col items-center gap-2" 
                   variant="outline"
-                  onClick={() => onTabChange?.("messages")}
+                  onClick={() => {
+                    console.log('🔍 [TenantDashboard] Contact Landlord button clicked');
+                    if (onTabChange) {
+                      onTabChange("messages");
+                      console.log('✅ [TenantDashboard] Switched to messages tab');
+                    } else {
+                      console.error('❌ [TenantDashboard] onTabChange is not defined');
+                    }
+                  }}
                 >
                   <MessageCircle className="h-6 w-6" />
                   <span>Contact Landlord</span>
@@ -741,26 +767,50 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
               <CardDescription>For urgent repairs that require immediate attention</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-destructive/10 rounded-lg flex items-center justify-center">
-                    <Wrench className="h-5 w-5 text-destructive" />
-                  </div>
-                  <div>
-                    <p className="font-medium">Emergency Maintenance</p>
-                    <p className="text-sm text-muted-foreground">+254 700 123 456</p>
-                  </div>
+              {emergencyContactsLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-destructive/10 rounded-lg flex items-center justify-center">
-                    <Shield className="h-5 w-5 text-destructive" />
-                  </div>
-                  <div>
-                    <p className="font-medium">Security Emergency</p>
-                    <p className="text-sm text-muted-foreground">+254 700 789 012</p>
-                  </div>
+              ) : emergencyContacts.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No emergency contacts available. Please contact your landlord.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {emergencyContacts.map((contact) => {
+                    const Icon = contact.contact_type === 'security' ? Shield : 
+                                 contact.contact_type === 'plumbing' ? DollarSign :
+                                 contact.contact_type === 'electrical' ? DollarSign :
+                                 contact.contact_type === 'hvac' ? DollarSign :
+                                 Wrench;
+                    
+                    return (
+                      <div key={contact.id} className="flex items-start gap-3">
+                        <div className="w-10 h-10 bg-destructive/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <Icon className="h-5 w-5 text-destructive" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium">{contact.contact_name}</p>
+                          <p className="text-sm text-muted-foreground break-all">{contact.contact_phone}</p>
+                          {contact.contact_email && (
+                            <p className="text-xs text-muted-foreground break-all">{contact.contact_email}</p>
+                          )}
+                          {contact.is_24_7 ? (
+                            <Badge variant="outline" className="mt-1 text-xs bg-success/10 text-success border-success/20">
+                              24/7 Available
+                            </Badge>
+                          ) : contact.available_hours && (
+                            <p className="text-xs text-muted-foreground mt-1">{contact.available_hours}</p>
+                          )}
+                          {contact.description && (
+                            <p className="text-xs text-muted-foreground mt-1">{contact.description}</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              </div>
+              )}
             </CardContent>
           </Card>
 
@@ -971,7 +1021,14 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
         {activeTab === "profile" && (
           <div className="space-y-6">
           <ProfileEditForm />
+          
+          {/* Lease Information - Only show if tenant has active lease */}
+          {hasApprovedLease && (
+            <LeaseDetailsCard onViewDocument={() => setShowLeaseDocument(true)} />
+          )}
+          
           <CoTenantManagement />
+          <NotificationSettings />
           <PaymentMethodsManagement />
           <PasswordChangeForm />
           <SessionsManagement />
@@ -1009,6 +1066,11 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
         isOpen={showMaintenanceView}
         onClose={() => setShowMaintenanceView(false)}
         request={selectedRequest}
+      />
+
+      <LeaseDocumentViewer
+        open={showLeaseDocument}
+        onClose={() => setShowLeaseDocument(false)}
       />
     </div>
   );

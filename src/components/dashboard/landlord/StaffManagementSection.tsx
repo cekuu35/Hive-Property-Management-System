@@ -31,8 +31,15 @@ export const StaffManagementSection: React.FC = () => {
   const [showPasswordReset, setShowPasswordReset] = useState(false);
   const [resetPassword, setResetPassword] = useState<string>('');
   const [resetLoading, setResetLoading] = useState(false);
-  const { staffMembers, loading, deactivateStaffMember, resetStaffPassword } = useStaffMembers();
+  const { staffMembers, loading, deactivateStaffMember, resetStaffPassword, refreshStaffMembers } = useStaffMembers();
   const { toast } = useToast();
+
+  const handleStaffCreated = () => {
+    console.log('✅ [StaffManagementSection] Staff member created, refreshing list...');
+    setShowCreateForm(false);
+    // Explicitly refresh the staff list
+    refreshStaffMembers();
+  };
 
   const handleDeactivateStaff = async (staffId: string) => {
     if (window.confirm('Are you sure you want to deactivate this staff member? This action cannot be undone.')) {
@@ -82,7 +89,7 @@ export const StaffManagementSection: React.FC = () => {
   if (showCreateForm) {
     return (
       <StaffCreationForm
-        onSuccess={() => setShowCreateForm(false)}
+        onSuccess={handleStaffCreated}
         onCancel={() => setShowCreateForm(false)}
       />
     );

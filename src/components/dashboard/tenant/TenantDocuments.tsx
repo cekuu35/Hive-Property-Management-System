@@ -15,7 +15,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { supabaseAdmin } from '@/integrations/supabase/admin';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
+import { useApprovedLease } from '@/hooks/useApprovedLease';
 import { TenantNotices } from './TenantNotices';
+import { LeaseDocumentViewer } from './LeaseDocumentViewer';
 
 interface Document {
   id: string;
@@ -44,7 +46,9 @@ export const TenantDocuments = ({ className }: TenantDocumentsProps) => {
   const [selectedCategory, setSelectedCategory] = useState<Document['category']>('tenant_upload');
   const [viewingDoc, setViewingDoc] = useState<Document | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [showLeaseDocument, setShowLeaseDocument] = useState(false);
   const { user, profile } = useAuth();
+  const { hasApprovedLease, approvedLease } = useApprovedLease();
 
   // Load tenant documents
   useEffect(() => {
@@ -763,6 +767,61 @@ ${doc.noticeData.content}`;
         </Card>
       ) : (
         <div className="space-y-4">
+          {/* Lease Document Card */}
+          {hasApprovedLease && (
+            <Card className="border-2 border-primary/20 bg-primary/5">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                      <FileText className="h-6 w-6 text-primary" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="font-semibold text-lg">Lease Agreement</p>
+                        <Badge variant="default">Official Document</Badge>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <span>Unit: {approvedLease?.units?.unit_number}</span>
+                        <span>•</span>
+                        <span>{approvedLease?.units?.properties?.name}</span>
+                        <span>•</span>
+                        <span>
+                          {approvedLease?.start_date 
+                            ? new Date(approvedLease.start_date).toLocaleDateString()
+                            : 'N/A'
+                          }
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Your complete rental agreement with all terms and conditions
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <Button 
+                      variant="default" 
+                      size="sm" 
+                      onClick={() => setShowLeaseDocument(true)}
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      View Lease
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => setShowLeaseDocument(true)}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Download
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          
           {filteredDocuments.map((doc) => {
             const Icon = getCategoryIcon(doc.category, doc);
             return (
@@ -922,6 +981,12 @@ ${doc.noticeData.content}`;
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Lease Document Viewer */}
+      <LeaseDocumentViewer
+        open={showLeaseDocument}
+        onClose={() => setShowLeaseDocument(false)}
+      />
     </div>
   );
 };

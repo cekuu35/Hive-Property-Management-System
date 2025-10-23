@@ -125,7 +125,13 @@ export function MobileTenantDashboard({ onTabChange }: MobileTenantDashboardProp
       )}
 
       {/* Landlord Info */}
-      <LandlordInfoCard />
+      <LandlordInfoCard 
+        onSendMessage={() => {
+          console.log('🔍 [MobileTenantDashboard] Landlord Send Message clicked');
+          handleTabChange("messages");
+          console.log('✅ [MobileTenantDashboard] Switched to messages tab from landlord card');
+        }}
+      />
 
       {/* Quick Actions */}
       <MobileCard title="Quick Actions">

@@ -162,6 +162,42 @@ export const useStaffMembers = () => {
   useEffect(() => {
     if (profile?.id) {
       fetchStaffMembers();
+
+      // Set up real-time subscription for staff members
+      const channel = supabase
+        .channel('staff_members_changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'profiles',
+            filter: `role=in.(security,caretaker)`
+          },
+          (payload) => {
+            console.log('🔄 [useStaffMembers] Staff member change detected:', payload);
+            // Refresh staff list when any staff member is added, updated, or deleted
+            fetchStaffMembers();
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'staff_assignments'
+          },
+          (payload) => {
+            console.log('🔄 [useStaffMembers] Staff assignment change detected:', payload);
+            // Refresh when staff assignments change
+            fetchStaffMembers();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
   }, [profile?.id]);
 

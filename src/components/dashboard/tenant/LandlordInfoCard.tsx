@@ -6,7 +6,11 @@ import { Mail, Phone, Building, MessageCircle } from 'lucide-react';
 import { useLandlordInfo } from '@/hooks/useLandlordInfo';
 import { Loader2 } from 'lucide-react';
 
-export const LandlordInfoCard = () => {
+interface LandlordInfoCardProps {
+  onSendMessage?: () => void;
+}
+
+export const LandlordInfoCard = ({ onSendMessage }: LandlordInfoCardProps = {}) => {
   const { landlordInfo, loading, error } = useLandlordInfo();
 
   if (loading) {
@@ -82,7 +86,20 @@ export const LandlordInfoCard = () => {
         </div>
 
         <div className="pt-2">
-          <Button variant="outline" size="sm" className="w-full">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="w-full"
+            onClick={() => {
+              console.log('🔍 [LandlordInfoCard] Send Message button clicked');
+              if (onSendMessage) {
+                onSendMessage();
+                console.log('✅ [LandlordInfoCard] Opening messages tab');
+              } else {
+                console.error('❌ [LandlordInfoCard] onSendMessage callback not provided');
+              }
+            }}
+          >
             <MessageCircle className="h-4 w-4 mr-2" />
             Send Message
           </Button>

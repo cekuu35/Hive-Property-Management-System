@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { User, Mail, Phone, MapPin, Briefcase, Camera } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { NotificationSettings } from '../NotificationSettings';
 
 export const ProfileSection = () => {
   const { profile } = useAuth();
@@ -260,6 +261,9 @@ export const ProfileSection = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Push Notification Settings */}
+      <NotificationSettings />
 
       {/* Account Information */}
       <Card>

@@ -19,6 +19,7 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { NotificationSettings } from '../NotificationSettings';
 
 export const SettingsSection: React.FC = () => {
   const { profile, user } = useAuth();

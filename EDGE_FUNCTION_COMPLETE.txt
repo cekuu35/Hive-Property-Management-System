@@ -141,7 +141,7 @@ serve(async (req) => {
     const results = [];
     for (const subscription of subscriptions) {
       try {
-        const pushResponse = await sendWebPush(subscription, pushPayload);
+        await sendWebPush(subscription, pushPayload);
         results.push({ subscriptionId: subscription.id, success: true });
         
         // Update last_used_at
@@ -241,10 +241,23 @@ async function processNotificationQueue(supabaseClient: any) {
           .eq('is_active', true);
 
         if (subscriptions && subscriptions.length > 0) {
+          // Prepare push payload
+          const pushPayload: PushPayload = {
+            title: notification.title || 'Property Manager',
+            body: notification.message || notification.body || '',
+            icon: '/logo.png',
+            badge: '/badge.png',
+            tag: notification.type || 'general',
+            data: {
+              url: notification.action_url || '/dashboard',
+              ...notification.data,
+            },
+          };
+
           // Send to each subscription
           for (const subscription of subscriptions) {
             try {
-              await sendWebPush(subscription, notification);
+              await sendWebPush(subscription, pushPayload);
             } catch (error) {
               console.error('[processQueue] Failed to send:', error);
             }
@@ -317,9 +330,6 @@ async function sendWebPush(subscription: any, payload: PushPayload) {
     throw new Error('VAPID keys not configured');
   }
 
-  console.log('[sendWebPush] Sending to:', subscription.endpoint);
-  console.log('[sendWebPush] Payload:', payload);
-
   try {
     // Set VAPID details for web-push
     webpush.setVapidDetails(
@@ -342,7 +352,7 @@ async function sendWebPush(subscription: any, payload: PushPayload) {
       pushSubscription,
       JSON.stringify(payload),
       {
-        TTL: 86400, // 24 hours
+        TTL: 86400,
       }
     );
 
@@ -350,8 +360,6 @@ async function sendWebPush(subscription: any, payload: PushPayload) {
     return { success: true, statusCode: result.statusCode };
   } catch (error: any) {
     console.error('[sendWebPush] Error:', error);
-    
-    // Set status code for error handling (e.g., 410 for expired subscriptions)
     error.statusCode = error.statusCode || error.body?.statusCode || 500;
     throw error;
   }

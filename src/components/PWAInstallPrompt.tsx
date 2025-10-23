@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Download, X, Smartphone, Monitor, Tablet } from 'lucide-react';
+import { Download, X, Bell, Zap, WifiOff } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface BeforeInstallPromptEvent extends Event {
@@ -111,16 +111,16 @@ export const PWAInstallPrompt = () => {
         <CardContent className="pt-0">
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-sm">
-              <Smartphone className="h-4 w-4" />
-              <span>Access from your home screen</span>
+              <Bell className="h-4 w-4" />
+              <span><strong>Native notifications</strong> - Shows "Hive" not "Chrome"</span>
             </div>
             <div className="flex items-center gap-2 text-sm">
-              <Monitor className="h-4 w-4" />
+              <Zap className="h-4 w-4" />
+              <span>Instant access - No typing URLs</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <WifiOff className="h-4 w-4" />
               <span>Works offline with cached data</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <Tablet className="h-4 w-4" />
-              <span>Native app-like experience</span>
             </div>
             
             <Button

@@ -109,6 +109,8 @@ export const NotificationSettings = () => {
         .upsert({
           profile_id: profile.id,
           ...newPreferences,
+        }, {
+          onConflict: 'profile_id'
         });
 
       if (error) throw error;

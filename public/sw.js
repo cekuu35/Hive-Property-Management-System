@@ -58,19 +58,23 @@ self.addEventListener('push', (event) => {
     }
   }
 
-  event.waitUntil(
-    self.registration.showNotification(notificationData.title, {
-      body: notificationData.body,
-      icon: notificationData.icon,
-      badge: notificationData.badge,
-      tag: notificationData.tag,
-      data: notificationData.data,
-      requireInteraction: notificationData.requireInteraction,
-      actions: notificationData.actions,
-      vibrate: [200, 100, 200],
-      timestamp: Date.now(),
-    })
-  );
+  const notificationPromise = self.registration.showNotification(notificationData.title, {
+    body: notificationData.body,
+    icon: notificationData.icon,
+    badge: notificationData.badge,
+    tag: notificationData.tag,
+    data: notificationData.data,
+    requireInteraction: notificationData.requireInteraction,
+    actions: notificationData.actions,
+    vibrate: [200, 100, 200],
+    timestamp: Date.now(),
+  }).then(() => {
+    console.log('[Service Worker] ✅ Notification displayed successfully!');
+  }).catch((error) => {
+    console.error('[Service Worker] ❌ Failed to show notification:', error);
+  });
+
+  event.waitUntil(notificationPromise);
 });
 
 // Notification click event
