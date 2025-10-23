@@ -168,6 +168,9 @@ export const SettingsSection: React.FC = () => {
         </div>
       </div>
 
+      {/* Push Notifications */}
+      <NotificationSettings />
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Profile Information */}
         <Card>

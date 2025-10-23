@@ -9,6 +9,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
 import { MobilePWAInstallPrompt } from "@/components/MobilePWAInstallPrompt";
+import { PushNotificationProvider } from "@/components/PushNotificationProvider";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import TestRoleSwitching from "./pages/TestRoleSwitching";
@@ -23,12 +24,13 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider defaultTheme="light" storageKey="property-manager-theme">
       <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <PWAInstallPrompt />
-          <MobilePWAInstallPrompt />
-          <BrowserRouter>
+        <PushNotificationProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <PWAInstallPrompt />
+            <MobilePWAInstallPrompt />
+            <BrowserRouter>
             <Routes>
               <Route path="/" element={<Index />} />
               <Route 
@@ -76,6 +78,7 @@ const App = () => (
             </Routes>
           </BrowserRouter>
         </TooltipProvider>
+        </PushNotificationProvider>
       </AuthProvider>
     </ThemeProvider>
   </QueryClientProvider>

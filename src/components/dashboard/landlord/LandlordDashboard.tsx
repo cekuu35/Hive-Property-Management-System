@@ -9,6 +9,7 @@ import { MaintenanceSection } from './sections/MaintenanceSection';
 import { ReportsSection } from './sections/ReportsSection';
 import { SettingsSection } from './sections/SettingsSection';
 import { MessagesSection } from './sections/MessagesSection';
+import { IncidentsSection } from './sections/IncidentsSection';
 import { UtilityBillsManagement } from './UtilityBillsManagement';
 import { UnitApplicationsSection } from './UnitApplicationsSection';
 import { PropertyForm } from './PropertyForm';
@@ -38,6 +39,7 @@ const LandlordDashboard = ({ activeSection = 'dashboard', onSectionChange }: Lan
       case 'financials': return <FinancialsSection />;
       case 'utility-bills': return <UtilityBillsManagement />;
       case 'maintenance': return <MaintenanceSection />;
+      case 'incidents': return <IncidentsSection />;
       case 'messages': return <MessagesSection />;
       case 'reports': return <ReportsSection />;
       case 'settings': return <SettingsSection />;

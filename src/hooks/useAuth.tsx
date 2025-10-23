@@ -20,6 +20,7 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   signOut: () => Promise<void>;
+  refetchProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -127,6 +128,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setProfile(profileData as Profile);
       } else if (tenantData) {
         // User is only a tenant, create a minimal profile
+        console.log('🔍 [useAuth] Raw tenant data from DB:', tenantData);
         const tenantProfile = {
           id: tenantData.profile_id, // Use the actual profile_id from tenant_info
           user_id: userId,
@@ -134,12 +136,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           first_name: tenantData.first_name,
           last_name: tenantData.last_name,
           phone: tenantData.phone,
-          avatar_url: null,
+          avatar_url: tenantData.avatar_url || null,
           emergency_contact_name: tenantData.emergency_contact_name,
           emergency_contact_phone: tenantData.emergency_contact_phone,
-          bio: null
+          bio: tenantData.bio || null
         };
-        console.log('🔍 [useAuth] Setting tenant profile:', tenantProfile);
+        console.log('🔍 [useAuth] Setting tenant profile with avatar_url:', tenantProfile.avatar_url);
+        console.log('🔍 [useAuth] Complete tenant profile:', tenantProfile);
         setProfile(tenantProfile as Profile);
       } else if (profileData) {
         // User has only profile data
@@ -229,11 +232,18 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
+  const refetchProfile = async () => {
+    if (user?.id) {
+      await fetchProfile(user.id);
+    }
+  };
+
   const value = {
     user,
     profile,
     loading,
     signOut,
+    refetchProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

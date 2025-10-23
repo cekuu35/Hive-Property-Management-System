@@ -8,13 +8,16 @@ import { useState, useEffect } from 'react';
 import { DateRange } from 'react-day-picker';
 import { useVisitors } from '@/hooks/useVisitors';
 import { useVisitorRequests } from '@/hooks/useVisitorRequests';
+import { useSecurityPatrols } from '@/hooks/useSecurityPatrols';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
 import { format, subDays, startOfMonth, endOfMonth } from 'date-fns';
 
 const SecurityReportsSection = () => {
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [reportType, setReportType] = useState('all');
+  const [incidents, setIncidents] = useState<any[]>([]);
   const [reportData, setReportData] = useState({
     incidentsByType: [],
     incidentsTrend: [],
@@ -29,7 +32,9 @@ const SecurityReportsSection = () => {
 
   const { visitors, getStats: getVisitorStats } = useVisitors();
   const { requests } = useVisitorRequests();
+  const { patrols, stats: patrolStats } = useSecurityPatrols();
   const { profile } = useAuth();
+  const { toast } = useToast();
 
   // Fetch real data
   const fetchReportData = async () => {
@@ -43,14 +48,17 @@ const SecurityReportsSection = () => {
       const endDate = dateRange?.to || endOfMonth(new Date());
 
       // Fetch incidents
-      const { data: incidents } = await supabase
+      const { data: incidentsData } = await supabase
         .from('security_logs')
         .select('*')
         .gte('created_at', startDate.toISOString())
         .lte('created_at', endDate.toISOString());
+      
+      // Save incidents to state for summary calculations
+      setIncidents(incidentsData || []);
 
       // Process incidents by type
-      const incidentsByType = incidents?.reduce((acc: any[], incident: any) => {
+      const incidentsByType = incidentsData?.reduce((acc: any[], incident: any) => {
         const existing = acc.find(item => item.type === incident.incident_type);
         if (existing) {
           existing.count += 1;
@@ -70,7 +78,7 @@ const SecurityReportsSection = () => {
         const monthStart = startOfMonth(subDays(new Date(), i * 30));
         const monthEnd = endOfMonth(monthStart);
         
-        const monthIncidents = incidents?.filter(incident => {
+        const monthIncidents = incidentsData?.filter(incident => {
           const incidentDate = new Date(incident.created_at);
           return incidentDate >= monthStart && incidentDate <= monthEnd;
         }) || [];
@@ -84,14 +92,22 @@ const SecurityReportsSection = () => {
         });
       }
 
-      // Mock patrol data (you can implement patrols table)
-      const patrolMetrics = [
-        { location: 'Building A', completed: 28, scheduled: 30 },
-        { location: 'Building B', completed: 25, scheduled: 30 },
-        { location: 'Parking Lot', completed: 22, scheduled: 25 },
-        { location: 'Common Areas', completed: 20, scheduled: 20 },
-        { location: 'Perimeter', completed: 18, scheduled: 20 }
-      ];
+      // Get patrol metrics from real data
+      const patrolsByLocation = patrols.reduce((acc: any, patrol) => {
+        const location = patrol.location;
+        if (!acc[location]) {
+          acc[location] = { location, completed: 0, scheduled: 0 };
+        }
+        
+        if (patrol.status === 'completed') {
+          acc[location].completed += 1;
+        }
+        acc[location].scheduled += 1;
+        
+        return acc;
+      }, {});
+      
+      const patrolMetrics = Object.values(patrolsByLocation).slice(0, 5);
 
       // Process visitor stats (last 7 days)
       const visitorStats = [];
@@ -109,13 +125,13 @@ const SecurityReportsSection = () => {
       }
 
       // Calculate metrics
-      const totalIncidents = incidents?.length || 0;
-      const patrolsCompleted = patrolMetrics.reduce((sum, patrol) => sum + patrol.completed, 0);
+      const totalIncidents = incidentsData?.length || 0;
+      const patrolsCompleted = patrolStats.completed_patrols;
       const visitorStatsData = getVisitorStats();
       const totalVisitors = visitorStatsData.todaysVisitors;
 
       // Calculate average response time
-      const resolvedIncidents = incidents?.filter(incident => 
+      const resolvedIncidents = incidentsData?.filter(incident => 
         incident.status === 'resolved' && incident.resolved_date
       ) || [];
       
@@ -162,8 +178,12 @@ const SecurityReportsSection = () => {
   }, [profile?.id, dateRange, visitors, requests]);
 
   const exportReport = () => {
-    // Simulate report export
-    console.log('Exporting security report...');
+    // TODO: Implement report export functionality (PDF/CSV)
+    toast({
+      title: "Export Feature",
+      description: "Report export will be available soon",
+      variant: "default"
+    });
   };
 
   return (
@@ -383,20 +403,36 @@ const SecurityReportsSection = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="p-4 border rounded-lg">
                 <h4 className="font-medium text-sm text-muted-foreground">Incident Resolution Rate</h4>
-                <p className="text-2xl font-bold text-success">96.7%</p>
-                <p className="text-xs text-muted-foreground">29 of 30 incidents resolved</p>
+                <p className="text-2xl font-bold text-success">
+                  {loading ? '...' : `${reportData.totalIncidents > 0 
+                    ? Math.round((reportData.totalIncidents - 
+                        incidents?.filter(i => i.status === 'open' || i.status === 'investigating').length || 0) 
+                        / reportData.totalIncidents * 100) 
+                    : 0}%`}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {loading ? '...' : `${reportData.totalIncidents - (incidents?.filter(i => i.status === 'open' || i.status === 'investigating').length || 0)} of ${reportData.totalIncidents} incidents resolved`}
+                </p>
               </div>
               
               <div className="p-4 border rounded-lg">
                 <h4 className="font-medium text-sm text-muted-foreground">Patrol Completion Rate</h4>
-                <p className="text-2xl font-bold text-primary">90.4%</p>
-                <p className="text-xs text-muted-foreground">113 of 125 patrols completed</p>
+                <p className="text-2xl font-bold text-primary">
+                  {loading ? '...' : `${patrolStats.completion_rate}%`}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {loading ? '...' : `${patrolStats.completed_patrols} of ${patrolStats.total_patrols} patrols completed`}
+                </p>
               </div>
               
               <div className="p-4 border rounded-lg">
                 <h4 className="font-medium text-sm text-muted-foreground">Average Response Time</h4>
-                <p className="text-2xl font-bold text-warning">12 minutes</p>
-                <p className="text-xs text-muted-foreground">Target: &lt;15 minutes</p>
+                <p className="text-2xl font-bold text-warning">
+                  {loading ? '...' : `${reportData.responseTime}h`}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Average time to resolve
+                </p>
               </div>
             </div>
           </div>

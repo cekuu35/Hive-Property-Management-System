@@ -22,6 +22,7 @@ import { IncidentsSection } from './IncidentsSection';
 import { PatrolsSection } from './PatrolsSection';
 import { SecurityReportsSection } from './SecurityReportsSection';
 import { SettingsSection } from './SettingsSection';
+import { VisitorHistorySection } from './VisitorHistorySection';
 
 interface SecurityDashboardProps {
   className?: string;
@@ -65,6 +66,19 @@ export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ className,
   const { profile } = useAuth();
   const { toast } = useToast();
 
+  // Role verification
+  if (profile && profile.role !== 'security') {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <Shield className="h-12 w-12 text-destructive mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-foreground mb-2">Access Denied</h2>
+          <p className="text-muted-foreground">You do not have permission to access the security portal.</p>
+        </div>
+      </div>
+    );
+  }
+
   useEffect(() => {
     if (profile?.id) {
       fetchDashboardData();
@@ -74,6 +88,10 @@ export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ className,
   // Handle different sections - connect to your existing components
   if (activeSection === 'visitors') {
     return <VisitorsSection />;
+  }
+  
+  if (activeSection === 'visitor-history') {
+    return <VisitorHistorySection />;
   }
   
   if (activeSection === 'incidents') {
@@ -114,64 +132,106 @@ export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ className,
           .eq('role', 'security')
           .eq('is_active', true);
 
-        properties = assignments?.map((a: any) => ({
+        // Get assigned properties
+        const propertyList = assignments?.map((a: any) => ({
           id: a.property.id,
           name: a.property.name,
           address: a.property.address,
           total_units: a.property.total_units,
-          occupied_units: 0 // This would need to be calculated
-        })) || [];
-      } catch (error) {
-        console.warn('staff_assignments table not found, using fallback data');
-        // Fallback: show all properties for soft landing during development
-        const { data: allProperties } = await supabase
-          .from('properties')
-          .select('id, name, address, total_units')
-          .order('name', { ascending: true }); // Show all properties, sorted by name
-
-        properties = allProperties?.map(p => ({
-          id: p.id,
-          name: p.name,
-          address: p.address,
-          total_units: p.total_units,
           occupied_units: 0
         })) || [];
+
+        // Calculate occupied units for each property
+        if (propertyList.length > 0) {
+          for (const property of propertyList) {
+            const { count } = await supabase
+              .from('leases')
+              .select('*', { count: 'exact', head: true })
+              .eq('status', 'active')
+              .in('unit_id', 
+                (await supabase
+                  .from('units')
+                  .select('id')
+                  .eq('property_id', property.id)
+                ).data?.map(u => u.id) || []
+              );
+            property.occupied_units = count || 0;
+          }
+        }
+        
+        properties = propertyList;
+      } catch (error) {
+        console.error('Staff assignments table not found or error fetching assignments:', error);
+        // Security: Don't show any properties if assignments can't be verified
+        properties = [];
+        toast({
+          title: 'Property Assignments Not Configured',
+          description: 'Please contact your administrator to configure property assignments.',
+          variant: 'destructive'
+        });
       }
 
       setAssignedProperties(properties);
 
-      // Fetch recent security logs
-      const { data: logs } = await supabase
-        .from('security_logs')
-        .select('*')
-        .eq('security_id', profile.id)
-        .order('created_at', { ascending: false })
-        .limit(5);
+      // Fetch recent security logs (filtered by assigned properties)
+      let logs: SecurityLog[] = [];
+      
+      if (properties.length > 0) {
+        const propertyIds = properties.map(p => p.id);
+        const { data: logsData } = await supabase
+          .from('security_logs')
+          .select('*')
+          .in('property_id', propertyIds)
+          .order('created_at', { ascending: false })
+          .limit(10);
+        
+        logs = logsData || [];
+      }
 
-      setRecentLogs(logs || []);
+      setRecentLogs(logs);
 
-      // Fetch pending visitor requests
+      // Fetch pending visitor requests (filtered by assigned properties)
       let visitorRequests: VisitorRequest[] = [];
       
       try {
-        const { data: visitors } = await supabase
-          .from('visitor_requests')
-          .select('*')
-          .in('status', ['pending', 'approved'])
-          .order('created_at', { ascending: false })
-          .limit(10);
-
-        visitorRequests = visitors?.map((v: any) => ({
-          id: v.id,
-          visitor_name: v.visitor_name,
-          visitor_phone: v.visitor_phone || '',
-          unit_number: 'N/A', // Will be populated by the proper visitor management component
-          purpose: v.purpose,
-          status: v.status,
-          created_at: v.created_at
-        })) || [];
+        if (properties.length > 0) {
+          const propertyIds = properties.map(p => p.id);
+          
+          // Fetch visitor requests with unit data, filter by property
+          const { data: visitors, error } = await supabase
+            .from('visitor_requests')
+            .select(`
+              *,
+              unit:units!visitor_requests_unit_id_fkey(
+                id,
+                unit_number,
+                property_id
+              )
+            `)
+            .in('status', ['pending', 'approved'])
+            .order('created_at', { ascending: false })
+            .limit(50); // Fetch more, then filter client-side
+          
+          if (error) {
+            console.warn('Error fetching visitor requests:', error);
+          } else if (visitors) {
+            // Filter client-side by property_id to avoid URL length issues
+            visitorRequests = visitors
+              .filter((v: any) => v.unit && propertyIds.includes(v.unit.property_id))
+              .slice(0, 10) // Limit to 10 after filtering
+              .map((v: any) => ({
+                id: v.id,
+                visitor_name: v.visitor_name,
+                visitor_phone: v.visitor_phone || '',
+                unit_number: v.unit?.unit_number || 'N/A',
+                purpose: v.purpose,
+                status: v.status,
+                created_at: v.created_at
+              }));
+          }
+        }
       } catch (error) {
-        console.warn('visitor_requests table not found or has different structure');
+        console.warn('Error fetching visitor requests:', error);
         // Fallback: show empty array
         visitorRequests = [];
       }
@@ -248,8 +308,74 @@ export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ className,
         </div>
       </div>
 
+      {/* Quick Actions */}
+      {assignedProperties.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Button 
+            onClick={() => onSectionChange?.('visitors')}
+            className="w-full h-auto flex flex-col items-center gap-2 p-6"
+            variant="outline"
+          >
+            <Plus className="h-6 w-6" />
+            <div className="text-center">
+              <p className="font-semibold">Register Visitor</p>
+              <p className="text-xs text-muted-foreground">Quick visitor check-in</p>
+            </div>
+          </Button>
+          <Button 
+            onClick={() => onSectionChange?.('incidents')}
+            className="w-full h-auto flex flex-col items-center gap-2 p-6"
+            variant="outline"
+          >
+            <AlertTriangle className="h-6 w-6" />
+            <div className="text-center">
+              <p className="font-semibold">Report Incident</p>
+              <p className="text-xs text-muted-foreground">Log security issue</p>
+            </div>
+          </Button>
+          <Button 
+            onClick={() => onSectionChange?.('patrols')}
+            className="w-full h-auto flex flex-col items-center gap-2 p-6"
+            variant="outline"
+          >
+            <MapPin className="h-6 w-6" />
+            <div className="text-center">
+              <p className="font-semibold">Start Patrol</p>
+              <p className="text-xs text-muted-foreground">Begin security round</p>
+            </div>
+          </Button>
+        </div>
+      )}
+
+      {/* Empty State - No Assigned Properties */}
+      {assignedProperties.length === 0 && (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Building className="h-16 w-16 text-muted-foreground mb-4" />
+            <h3 className="text-xl font-semibold mb-2">No Properties Assigned</h3>
+            <p className="text-muted-foreground text-center mb-4 max-w-md">
+              You haven't been assigned to any properties yet. Please contact your administrator to configure your property assignments.
+            </p>
+            <Badge variant="outline" className="mb-2">
+              <Shield className="w-3 h-3 mr-1" />
+              Security Personnel
+            </Badge>
+            <p className="text-sm text-muted-foreground mt-4">
+              Once assigned, you'll be able to:
+            </p>
+            <ul className="text-sm text-muted-foreground mt-2 space-y-1">
+              <li>• Manage visitor access and registrations</li>
+              <li>• Report and track security incidents</li>
+              <li>• Conduct and log security patrols</li>
+              <li>• View security reports and analytics</li>
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {assignedProperties.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Assigned Properties</CardTitle>
@@ -308,7 +434,11 @@ export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ className,
           </CardContent>
         </Card>
       </div>
+      )}
 
+      {/* Main Content - Only show if properties are assigned */}
+      {assignedProperties.length > 0 && (
+      <>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Assigned Properties */}
         <Card>
@@ -459,6 +589,8 @@ export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ className,
           )}
         </CardContent>
       </Card>
+      </>
+      )}
     </div>
   );
 };

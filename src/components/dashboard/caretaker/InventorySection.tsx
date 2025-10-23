@@ -7,29 +7,39 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Package, Plus, Minus, AlertTriangle, Search, Edit, Trash2 } from 'lucide-react';
-import { useInventory } from '@/hooks/useInventory';
+import { usePropertyInventory } from '@/hooks/usePropertyInventory';
+import { useCaretakerProperties } from '@/hooks/useCaretakerProperties';
 
 interface InventoryItem {
   id: string;
-  name: string;
+  item_name: string;
   current_stock: number;
   minimum_stock: number;
   unit: string;
   category: string;
-  last_restocked: string | null;
+  location?: string | null;
+  supplier?: string | null;
+  cost_per_unit?: number | null;
+  last_restocked_at: string | null;
+  last_restocked_by?: string | null;
+  notes?: string | null;
+  property_id?: string;
+  stock_status?: string;
+  property_name?: string;
 }
 
 export const InventorySection = () => {
+  const { selectedPropertyId } = useCaretakerProperties();
   const { 
     inventory, 
     loading, 
-    addInventoryItem, 
-    updateInventoryItem, 
-    adjustStock, 
-    deleteInventoryItem, 
-    getStockStatus, 
-    getLowStockItems 
-  } = useInventory();
+    updateStock,
+    updateInventoryItem,
+    addInventoryItem,
+    deleteInventoryItem,
+    getLowStockItems,
+    getStats
+  } = usePropertyInventory(selectedPropertyId);
   
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
@@ -40,17 +50,25 @@ export const InventorySection = () => {
   
   // Form state for add/edit
   const [formData, setFormData] = useState({
-    name: '',
+    item_name: '',
     current_stock: 0,
     minimum_stock: 0,
-    unit: '',
-    category: ''
+    unit: 'pieces',
+    category: 'other'
   });
 
-  const filteredInventory = inventory.filter(item =>
-    item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.category.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredInventory = inventory.filter(item => {
+    if (!item || !item.item_name) return false;
+    const search = searchTerm.toLowerCase();
+    return item.item_name.toLowerCase().includes(search) ||
+      (item.category && item.category.toLowerCase().includes(search));
+  });
+
+  const getStockStatus = (current: number, minimum: number): 'low' | 'medium' | 'good' => {
+    if (current <= minimum) return 'low';
+    if (current <= minimum * 1.5) return 'medium';
+    return 'good';
+  };
 
   const getStockColor = (status: string) => {
     switch (status) {
@@ -68,7 +86,16 @@ export const InventorySection = () => {
     if (!selectedItem || adjustmentAmount <= 0) return;
 
     try {
-      await adjustStock(selectedItem.id, adjustmentAmount, type);
+      const newStock = type === 'add' 
+        ? selectedItem.current_stock + adjustmentAmount 
+        : selectedItem.current_stock - adjustmentAmount;
+      
+      if (newStock < 0) {
+        alert('Stock cannot be negative!');
+        return;
+      }
+      
+      await updateStock(selectedItem.id, newStock);
       setIsAdjustDialogOpen(false);
       setAdjustmentAmount(0);
       setSelectedItem(null);
@@ -78,8 +105,17 @@ export const InventorySection = () => {
   };
 
   const handleAddItem = async () => {
+    if (!selectedPropertyId) {
+      alert('No property selected!');
+      return;
+    }
+    
     try {
-      await addInventoryItem(formData);
+      // Add property_id to the form data
+      await addInventoryItem({
+        ...formData,
+        property_id: selectedPropertyId
+      });
       setIsAddDialogOpen(false);
       resetForm();
     } catch (error) {
@@ -101,7 +137,7 @@ export const InventorySection = () => {
   };
 
   const handleDeleteItem = async (item: InventoryItem) => {
-    if (confirm(`Are you sure you want to delete ${item.name}?`)) {
+    if (confirm(`Are you sure you want to delete ${item.item_name}?`)) {
       try {
         await deleteInventoryItem(item.id);
       } catch (error) {
@@ -118,7 +154,7 @@ export const InventorySection = () => {
   const openEditDialog = (item: InventoryItem) => {
     setSelectedItem(item);
     setFormData({
-      name: item.name,
+      item_name: item.item_name,
       current_stock: item.current_stock,
       minimum_stock: item.minimum_stock,
       unit: item.unit,
@@ -129,11 +165,11 @@ export const InventorySection = () => {
 
   const resetForm = () => {
     setFormData({
-      name: '',
+      item_name: '',
       current_stock: 0,
       minimum_stock: 0,
-      unit: '',
-      category: ''
+      unit: 'pieces',
+      category: 'other'
     });
   };
 
@@ -167,7 +203,7 @@ export const InventorySection = () => {
             <div className="space-y-2">
               {lowStockItems.map(item => (
                 <p key={item.id} className="text-sm">
-                  • {item.name}: {item.current_stock} {item.unit} remaining (min: {item.minimum_stock})
+                  • {item.item_name}: {item.current_stock} {item.unit} remaining (min: {item.minimum_stock})
                 </p>
               ))}
             </div>
@@ -183,7 +219,7 @@ export const InventorySection = () => {
             <Input
               placeholder="Search inventory items..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => setSearchTerm(e.target.value || '')}
               className="pl-10"
             />
           </div>
@@ -199,8 +235,8 @@ export const InventorySection = () => {
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div>
-                    <CardTitle className="text-lg">{item.name}</CardTitle>
-                    <CardDescription>{item.category}</CardDescription>
+                    <CardTitle className="text-lg">{item.item_name}</CardTitle>
+                    <CardDescription>{item.category || 'other'}</CardDescription>
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge className={getStockColor(status)}>
@@ -227,16 +263,16 @@ export const InventorySection = () => {
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Current Stock:</span>
-                    <span className="font-bold text-lg">{item.current_stock} {item.unit}</span>
+                    <span className="font-bold text-lg">{item.current_stock} {item.unit || 'items'}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Minimum Stock:</span>
-                    <span className="text-sm">{item.minimum_stock} {item.unit}</span>
+                    <span className="text-sm">{item.minimum_stock} {item.unit || 'items'}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Last Restocked:</span>
                     <span className="text-sm">
-                      {item.last_restocked ? new Date(item.last_restocked).toLocaleDateString() : 'Never'}
+                      {item.last_restocked_at ? new Date(item.last_restocked_at).toLocaleDateString() : 'Never'}
                     </span>
                   </div>
                   <Button 
@@ -258,9 +294,9 @@ export const InventorySection = () => {
       <Dialog open={isAdjustDialogOpen} onOpenChange={setIsAdjustDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Adjust Stock - {selectedItem?.name}</DialogTitle>
+            <DialogTitle>Adjust Stock - {selectedItem?.item_name}</DialogTitle>
             <DialogDescription>
-              Current stock: {selectedItem?.current_stock} {selectedItem?.unit}
+              Current stock: {selectedItem?.current_stock} {selectedItem?.unit || 'items'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -309,11 +345,11 @@ export const InventorySection = () => {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="name">Item Name</Label>
+              <Label htmlFor="item_name">Item Name</Label>
               <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                id="item_name"
+                value={formData.item_name}
+                onChange={(e) => setFormData(prev => ({ ...prev, item_name: e.target.value }))}
                 placeholder="Enter item name"
               />
             </div>
@@ -328,13 +364,14 @@ export const InventorySection = () => {
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Electrical">Electrical</SelectItem>
-                    <SelectItem value="Plumbing">Plumbing</SelectItem>
-                    <SelectItem value="Maintenance">Maintenance</SelectItem>
-                    <SelectItem value="Cleaning">Cleaning</SelectItem>
-                    <SelectItem value="HVAC">HVAC</SelectItem>
-                    <SelectItem value="Hardware">Hardware</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
+                    <SelectItem value="tools">Tools</SelectItem>
+                    <SelectItem value="cleaning">Cleaning</SelectItem>
+                    <SelectItem value="plumbing">Plumbing</SelectItem>
+                    <SelectItem value="electrical">Electrical</SelectItem>
+                    <SelectItem value="paint">Paint</SelectItem>
+                    <SelectItem value="hardware">Hardware</SelectItem>
+                    <SelectItem value="safety">Safety</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -374,7 +411,7 @@ export const InventorySection = () => {
               <Button 
                 onClick={handleAddItem}
                 className="flex-1"
-                disabled={!formData.name || !formData.category || !formData.unit}
+                disabled={!formData.item_name || !formData.category || !formData.unit}
               >
                 Add Item
               </Button>
@@ -404,11 +441,11 @@ export const InventorySection = () => {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="edit_name">Item Name</Label>
+              <Label htmlFor="edit_item_name">Item Name</Label>
               <Input
-                id="edit_name"
-                value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                id="edit_item_name"
+                value={formData.item_name}
+                onChange={(e) => setFormData(prev => ({ ...prev, item_name: e.target.value }))}
                 placeholder="Enter item name"
               />
             </div>
@@ -423,13 +460,14 @@ export const InventorySection = () => {
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Electrical">Electrical</SelectItem>
-                    <SelectItem value="Plumbing">Plumbing</SelectItem>
-                    <SelectItem value="Maintenance">Maintenance</SelectItem>
-                    <SelectItem value="Cleaning">Cleaning</SelectItem>
-                    <SelectItem value="HVAC">HVAC</SelectItem>
-                    <SelectItem value="Hardware">Hardware</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
+                    <SelectItem value="tools">Tools</SelectItem>
+                    <SelectItem value="cleaning">Cleaning</SelectItem>
+                    <SelectItem value="plumbing">Plumbing</SelectItem>
+                    <SelectItem value="electrical">Electrical</SelectItem>
+                    <SelectItem value="paint">Paint</SelectItem>
+                    <SelectItem value="hardware">Hardware</SelectItem>
+                    <SelectItem value="safety">Safety</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -469,7 +507,7 @@ export const InventorySection = () => {
               <Button 
                 onClick={handleEditItem}
                 className="flex-1"
-                disabled={!formData.name || !formData.category || !formData.unit}
+                disabled={!formData.item_name || !formData.category || !formData.unit}
               >
                 Update Item
               </Button>

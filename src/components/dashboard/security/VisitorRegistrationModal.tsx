@@ -61,13 +61,6 @@ export const VisitorRegistrationModal = ({
 
   const groupedUnits = getGroupedUnits();
 
-  // Debug logging
-  useEffect(() => {
-    console.log('VisitorRegistrationModal - occupiedUnits:', occupiedUnits.length);
-    console.log('VisitorRegistrationModal - groupedUnits:', Object.keys(groupedUnits).length, 'properties');
-    console.log('VisitorRegistrationModal - profile role:', profile?.role);
-  }, [occupiedUnits, groupedUnits, profile?.role]);
-
   // Generate QR code for visitor
   const generateQRCode = () => {
     const visitorData = {
@@ -355,29 +348,89 @@ export const VisitorRegistrationModal = ({
             </CardContent>
           </Card>
 
-          {/* QR Code Display */}
+          {/* Visitor Details & Access Code */}
           {qrCode && (
             <Card className="border-success bg-success/5">
               <CardHeader>
                 <CardTitle className="text-lg text-success flex items-center gap-2">
-                  <QrCode className="h-5 w-5" />
-                  Visitor Access Code Generated
+                  <CheckCircle className="h-5 w-5" />
+                  Visitor Successfully Registered!
                 </CardTitle>
                 <CardDescription>
-                  Visitor has been successfully registered and checked in
+                  Visitor has been checked in and access code generated
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="text-center space-y-2">
-                  <div className="p-4 bg-white rounded-lg border-2 border-dashed border-success">
-                    <QrCode className="h-16 w-16 mx-auto text-success" />
-                    <p className="text-sm text-muted-foreground mt-2">
-                      Access Code: {JSON.parse(qrCode).id}
-                    </p>
+              <CardContent className="space-y-4">
+                {/* Visitor Summary */}
+                <div className="grid grid-cols-2 gap-4 p-4 bg-white rounded-lg border">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Visitor Name</p>
+                    <p className="font-medium">{formData.visitor_name}</p>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Generated at {format(new Date(), 'MMM d, yyyy h:mm a')}
-                  </p>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Unit</p>
+                    <p className="font-medium">{selectedUnit?.unit_number || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Purpose</p>
+                    <p className="font-medium">{formData.purpose}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Check-in Time</p>
+                    <p className="font-medium">{format(new Date(), 'h:mm a')}</p>
+                  </div>
+                </div>
+
+                {/* Access Code Display */}
+                <div className="text-center space-y-3">
+                  <div className="p-6 bg-white rounded-lg border-2 border-dashed border-success">
+                    {/* QR Code Pattern (Visual representation) */}
+                    <div className="grid grid-cols-8 gap-1 w-32 h-32 mx-auto mb-4">
+                      {Array.from({ length: 64 }).map((_, i) => {
+                        const qrData = JSON.parse(qrCode);
+                        const accessId = qrData.id || '';
+                        return (
+                          <div
+                            key={i}
+                            className={`rounded-sm ${
+                              accessId && (accessId.charCodeAt(i % accessId.length) + i) % 2 === 0
+                                ? 'bg-black'
+                                : 'bg-white border border-gray-200'
+                            }`}
+                          />
+                        );
+                      })}
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <p className="text-2xl font-bold text-success">
+                        {JSON.parse(qrCode).id?.toUpperCase() || 'N/A'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Visitor Access Code
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <p>Generated: {format(new Date(), 'MMM d, yyyy h:mm a')}</p>
+                    <p className="text-success font-medium">✓ Valid for this visit</p>
+                  </div>
+
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      const data = JSON.parse(qrCode);
+                      navigator.clipboard.writeText(`Visitor: ${data.name}\nCode: ${data.id}\nUnit: ${data.unit}\nTime: ${format(new Date(data.timestamp), 'MMM d, h:mm a')}`);
+                      toast({
+                        title: "Copied",
+                        description: "Visitor details copied to clipboard"
+                      });
+                    }}
+                  >
+                    Copy Details
+                  </Button>
                 </div>
               </CardContent>
             </Card>

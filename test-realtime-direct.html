@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Direct Realtime Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #0f0; }
+        .log { margin: 5px 0; padding: 5px; background: #000; }
+        .success { color: #0f0; }
+        .error { color: #f00; }
+        .info { color: #0af; }
+        button { padding: 10px 20px; margin: 10px; font-size: 16px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>🧪 DIRECT REALTIME TEST</h1>
+    <div id="logs"></div>
+    
+    <button onclick="testRegister()">1. Register Test Visitor</button>
+    <button onclick="testCheckout()">2. Checkout Last Visitor</button>
+    <button onclick="testFetch()">3. Fetch All Visitors</button>
+
+    <script>
+        const SUPABASE_URL = 'https://kozhlejudselgtmohdfm.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjY2NjExMDksImV4cCI6MjA0MjIzNzEwOX0.0bC6M6NHhW5DqfJTgtqY-t-eGz_aOwnBLAC-9Vl9G0I';
+
+        const { createClient } = supabase;
+        const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let lastVisitorId = null;
+
+        function log(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `log ${type}`;
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            document.getElementById('logs').appendChild(div);
+            console.log(message);
+        }
+
+        // Set up realtime subscription
+        log('🔌 Setting up realtime subscription...', 'info');
+        
+        const channel = client
+            .channel('test_visitors_realtime')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'visitors'
+                },
+                (payload) => {
+                    log(`🔄 REALTIME EVENT: ${payload.eventType}`, 'success');
+                    log(`   Data: ${JSON.stringify(payload.new || payload.old).substring(0, 100)}...`, 'info');
+                }
+            )
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    log('✅ Realtime subscription ACTIVE!', 'success');
+                } else if (status === 'CLOSED') {
+                    log('❌ Realtime subscription CLOSED', 'error');
+                } else {
+                    log(`ℹ️  Subscription status: ${status}`, 'info');
+                }
+            });
+
+        async function testRegister() {
+            try {
+                log('📝 Registering test visitor...', 'info');
+                
+                const { data, error } = await client
+                    .from('visitors')
+                    .insert({
+                        security_id: '7cea8642-d2d5-404d-a880-8a9129e48259',
+                        visitor_name: `Direct Test ${Date.now()}`,
+                        visitor_phone: '0700999888',
+                        purpose: 'Direct browser test',
+                        status: 'active',
+                        time_in: new Date().toISOString()
+                    })
+                    .select()
+                    .single();
+
+                if (error) {
+                    log(`❌ Error: ${error.message}`, 'error');
+                } else {
+                    lastVisitorId = data.id;
+                    log(`✅ Registered: ${data.visitor_name} (ID: ${data.id})`, 'success');
+                    log('   👀 Watch above for realtime event!', 'info');
+                }
+            } catch (e) {
+                log(`❌ Exception: ${e.message}`, 'error');
+            }
+        }
+
+        async function testCheckout() {
+            if (!lastVisitorId) {
+                log('❌ No visitor to checkout! Register one first.', 'error');
+                return;
+            }
+
+            try {
+                log(`📤 Checking out visitor: ${lastVisitorId}...`, 'info');
+                
+                const { error } = await client
+                    .from('visitors')
+                    .update({
+                        status: 'checked_out',
+                        time_out: new Date().toISOString()
+                    })
+                    .eq('id', lastVisitorId);
+
+                if (error) {
+                    log(`❌ Error: ${error.message}`, 'error');
+                } else {
+                    log(`✅ Checked out!`, 'success');
+                    log('   👀 Watch above for realtime event!', 'info');
+                }
+            } catch (e) {
+                log(`❌ Exception: ${e.message}`, 'error');
+            }
+        }
+
+        async function testFetch() {
+            try {
+                log('📊 Fetching all visitors...', 'info');
+                
+                const { data, error } = await client
+                    .from('visitors')
+                    .select('id, visitor_name, status, time_in, time_out')
+                    .order('time_in', { ascending: false })
+                    .limit(10);
+
+                if (error) {
+                    log(`❌ Error: ${error.message}`, 'error');
+                } else {
+                    log(`✅ Found ${data.length} visitors:`, 'success');
+                    data.forEach(v => {
+                        log(`   • ${v.visitor_name} - ${v.status} - ${v.time_in.substring(11,16)}`, 'info');
+                    });
+                }
+            } catch (e) {
+                log(`❌ Exception: ${e.message}`, 'error');
+            }
+        }
+
+        log('✅ Page loaded - Ready to test!', 'success');
+        log('📌 Click buttons above to test', 'info');
+    </script>
+</body>
+</html>
+
+
+

@@ -192,22 +192,54 @@ export const usePhotoUpload = () => {
 
   const updateProfileAvatar = async (profileId: string, avatarUrl: string, userType: 'tenant' | 'landlord'): Promise<boolean> => {
     try {
-      const table = userType === 'tenant' ? 'tenant_info' : 'profiles';
-      const { error } = await supabaseAdmin
-        .from(table)
-        .update({ avatar_url: avatarUrl })
-        .eq('id', profileId);
+      console.log('[usePhotoUpload] Updating avatar for:', { profileId, avatarUrl, userType });
+      
+      if (userType === 'tenant') {
+        // For tenants, update BOTH tenant_info AND profiles tables
+        console.log('[usePhotoUpload] Updating tenant_info table...');
+        const { error: tenantError } = await supabaseAdmin
+          .from('tenant_info')
+          .update({ avatar_url: avatarUrl })
+          .eq('profile_id', profileId);
 
-      if (error) {
-        console.error('Update avatar error:', error);
-        toast.error('Failed to update profile photo');
-        return false;
+        if (tenantError) {
+          console.error('[usePhotoUpload] Error updating tenant_info:', tenantError);
+          toast.error('Failed to update profile photo in tenant_info');
+          return false;
+        }
+
+        console.log('[usePhotoUpload] Updating profiles table...');
+        const { error: profileError } = await supabaseAdmin
+          .from('profiles')
+          .update({ avatar_url: avatarUrl })
+          .eq('id', profileId);
+
+        if (profileError) {
+          console.error('[usePhotoUpload] Error updating profiles:', profileError);
+          toast.error('Failed to update profile photo in profiles');
+          return false;
+        }
+
+        console.log('[usePhotoUpload] Avatar updated in both tables!');
+      } else {
+        // For landlords, only update profiles table
+        console.log('[usePhotoUpload] Updating profiles table for landlord...');
+        const { error } = await supabaseAdmin
+          .from('profiles')
+          .update({ avatar_url: avatarUrl })
+          .eq('id', profileId);
+
+        if (error) {
+          console.error('[usePhotoUpload] Update avatar error:', error);
+          toast.error('Failed to update profile photo');
+          return false;
+        }
       }
 
       toast.success('Profile photo updated successfully!');
       return true;
     } catch (error) {
-      console.error('Update avatar error:', error);
+      console.error('[usePhotoUpload] Update avatar error:', error);
       toast.error('Failed to update profile photo');
       return false;
     }

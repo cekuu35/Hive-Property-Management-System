@@ -4,109 +4,68 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { MapPin, Plus, Clock, CheckCircle, Play } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { MapPin, Plus, Clock, CheckCircle, Play, Building } from 'lucide-react';
+import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
-
-interface Patrol {
-  id: string;
-  location: string;
-  scheduledTime: string;
-  duration: string;
-  status: 'scheduled' | 'in_progress' | 'completed';
-  startTime?: string;
-  endTime?: string;
-  notes?: string;
-  assignedTo?: string;
-}
+import { useSecurityPatrols } from '@/hooks/useSecurityPatrols';
+import { useCaretakerProperties } from '@/hooks/useCaretakerProperties';
+import { format } from 'date-fns';
 
 export const PatrolsSection = () => {
-  const [patrols, setPatrols] = useState<Patrol[]>([
-    {
-      id: '1',
-      location: 'Building A Perimeter',
-      scheduledTime: '06:00 AM',
-      duration: '15 min',
-      status: 'completed',
-      startTime: '06:00 AM',
-      endTime: '06:15 AM',
-      notes: 'All clear, no issues detected'
-    },
-    {
-      id: '2',
-      location: 'Parking Lot',
-      scheduledTime: '09:00 AM',
-      duration: '10 min',
-      status: 'completed',
-      startTime: '09:00 AM',
-      endTime: '09:10 AM'
-    },
-    {
-      id: '3',
-      location: 'Building B Entrance',
-      scheduledTime: '12:00 PM',
-      duration: '15 min',
-      status: 'in_progress',
-      startTime: '12:00 PM'
-    },
-    {
-      id: '4',
-      location: 'Common Areas',
-      scheduledTime: '03:00 PM',
-      duration: '20 min',
-      status: 'scheduled'
-    },
-    {
-      id: '5',
-      location: 'Rooftop Access',
-      scheduledTime: '06:00 PM',
-      duration: '10 min',
-      status: 'scheduled'
-    }
-  ]);
-
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newPatrol, setNewPatrol] = useState({
     location: '',
-    scheduledTime: '',
-    duration: ''
+    scheduled_time: '',
+    duration_minutes: '15',
+    property_id: ''
   });
   const { toast } = useToast();
+  
+  // Use the security patrols hook
+  const {
+    patrols,
+    loading,
+    stats,
+    createPatrol: createPatrolDb,
+    startPatrol: startPatrolDb,
+    completePatrol: completePatrolDb,
+    getTodaysPatrols
+  } = useSecurityPatrols();
 
-  const createPatrol = () => {
-    const patrol: Patrol = {
-      id: Date.now().toString(),
-      ...newPatrol,
-      status: 'scheduled'
-    };
-    
-    setPatrols(prev => [...prev, patrol]);
-    setIsCreateDialogOpen(false);
-    setNewPatrol({ location: '', scheduledTime: '', duration: '' });
-    toast({ title: "Patrol scheduled successfully" });
+  // Get assigned properties
+  const { properties } = useCaretakerProperties();
+
+  const createPatrol = async () => {
+    if (!newPatrol.location || !newPatrol.scheduled_time || !newPatrol.property_id) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all required fields",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const success = await createPatrolDb({
+      property_id: newPatrol.property_id,
+      location: newPatrol.location,
+      scheduled_time: newPatrol.scheduled_time,
+      duration_minutes: parseInt(newPatrol.duration_minutes) || 15
+    });
+
+    if (success) {
+      setIsCreateDialogOpen(false);
+      setNewPatrol({ location: '', scheduled_time: '', duration_minutes: '15', property_id: '' });
+    }
   };
 
-  const startPatrol = (id: string) => {
-    setPatrols(prev => prev.map(patrol => 
-      patrol.id === id 
-        ? { ...patrol, status: 'in_progress' as const, startTime: new Date().toLocaleTimeString() }
-        : patrol
-    ));
-    toast({ title: "Patrol started" });
+  const startPatrol = async (id: string) => {
+    await startPatrolDb(id);
   };
 
-  const completePatrol = (id: string, notes?: string) => {
-    setPatrols(prev => prev.map(patrol => 
-      patrol.id === id 
-        ? { 
-            ...patrol, 
-            status: 'completed' as const, 
-            endTime: new Date().toLocaleTimeString(),
-            notes 
-          }
-        : patrol
-    ));
-    toast({ title: "Patrol completed" });
+  const completePatrol = async (id: string, notes?: string) => {
+    await completePatrolDb(id, notes);
   };
 
   const getStatusColor = (status: string) => {
@@ -127,9 +86,18 @@ export const PatrolsSection = () => {
     }
   };
 
-  const completedPatrols = patrols.filter(p => p.status === 'completed').length;
-  const totalPatrols = patrols.length;
-  const inProgressPatrols = patrols.filter(p => p.status === 'in_progress').length;
+  const todaysPatrols = getTodaysPatrols();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-2 text-sm text-muted-foreground">Loading patrols...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -152,21 +120,59 @@ export const PatrolsSection = () => {
               <DialogDescription>Create a new patrol round</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
-              <Input
-                placeholder="Patrol location"
-                value={newPatrol.location}
-                onChange={(e) => setNewPatrol(prev => ({ ...prev, location: e.target.value }))}
-              />
-              <Input
-                type="time"
-                value={newPatrol.scheduledTime}
-                onChange={(e) => setNewPatrol(prev => ({ ...prev, scheduledTime: e.target.value }))}
-              />
-              <Input
-                placeholder="Expected duration (e.g., 15 min)"
-                value={newPatrol.duration}
-                onChange={(e) => setNewPatrol(prev => ({ ...prev, duration: e.target.value }))}
-              />
+              <div>
+                <Label htmlFor="property">Property</Label>
+                <Select 
+                  value={newPatrol.property_id} 
+                  onValueChange={(value) => setNewPatrol(prev => ({ ...prev, property_id: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select property" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {properties.map((property) => (
+                      <SelectItem key={property.id} value={property.id}>
+                        <div className="flex items-center gap-2">
+                          <Building className="w-4 h-4" />
+                          {property.name}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="location">Patrol Location</Label>
+                <Input
+                  id="location"
+                  placeholder="e.g., Building A Perimeter, Parking Lot"
+                  value={newPatrol.location}
+                  onChange={(e) => setNewPatrol(prev => ({ ...prev, location: e.target.value }))}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="scheduled_time">Scheduled Time</Label>
+                <Input
+                  id="scheduled_time"
+                  type="datetime-local"
+                  value={newPatrol.scheduled_time}
+                  onChange={(e) => setNewPatrol(prev => ({ ...prev, scheduled_time: e.target.value }))}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="duration">Expected Duration (minutes)</Label>
+                <Input
+                  id="duration"
+                  type="number"
+                  placeholder="15"
+                  value={newPatrol.duration_minutes}
+                  onChange={(e) => setNewPatrol(prev => ({ ...prev, duration_minutes: e.target.value }))}
+                />
+              </div>
+
               <Button onClick={createPatrol} className="w-full">
                 Schedule Patrol
               </Button>
@@ -183,8 +189,8 @@ export const PatrolsSection = () => {
             <MapPin className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalPatrols}</div>
-            <p className="text-xs text-muted-foreground">Scheduled today</p>
+            <div className="text-2xl font-bold">{stats.total_patrols}</div>
+            <p className="text-xs text-muted-foreground">All time</p>
           </CardContent>
         </Card>
 
@@ -194,7 +200,7 @@ export const PatrolsSection = () => {
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{completedPatrols}</div>
+            <div className="text-2xl font-bold">{stats.completed_patrols}</div>
             <p className="text-xs text-muted-foreground">Patrols finished</p>
           </CardContent>
         </Card>
@@ -205,7 +211,7 @@ export const PatrolsSection = () => {
             <Play className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{inProgressPatrols}</div>
+            <div className="text-2xl font-bold">{stats.in_progress_patrols}</div>
             <p className="text-xs text-muted-foreground">Currently active</p>
           </CardContent>
         </Card>
@@ -216,10 +222,8 @@ export const PatrolsSection = () => {
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {totalPatrols > 0 ? Math.round((completedPatrols / totalPatrols) * 100) : 0}%
-            </div>
-            <p className="text-xs text-muted-foreground">Today's progress</p>
+            <div className="text-2xl font-bold">{stats.completion_rate}%</div>
+            <p className="text-xs text-muted-foreground">Overall rate</p>
           </CardContent>
         </Card>
       </div>
@@ -227,7 +231,7 @@ export const PatrolsSection = () => {
       {/* Patrol List */}
       <Card>
         <CardHeader>
-          <CardTitle>Today's Patrol Schedule</CardTitle>
+          <CardTitle>All Patrols</CardTitle>
           <CardDescription>Security patrol rounds and status</CardDescription>
         </CardHeader>
         <CardContent>
@@ -241,15 +245,21 @@ export const PatrolsSection = () => {
                     <Badge className={getStatusColor(patrol.status)}>
                       {patrol.status.replace('_', ' ')}
                     </Badge>
+                    {patrol.property && (
+                      <Badge variant="outline">
+                        <Building className="w-3 h-3 mr-1" />
+                        {patrol.property.name}
+                      </Badge>
+                    )}
                   </div>
                   
                   <div className="text-sm text-muted-foreground space-y-1">
-                    <p>Scheduled: {patrol.scheduledTime} ({patrol.duration})</p>
-                    {patrol.startTime && (
-                      <p>Started: {patrol.startTime}</p>
+                    <p>Scheduled: {format(new Date(patrol.scheduled_time), 'MMM d, yyyy h:mm a')} ({patrol.duration_minutes} min)</p>
+                    {patrol.start_time && (
+                      <p>Started: {format(new Date(patrol.start_time), 'h:mm a')}</p>
                     )}
-                    {patrol.endTime && (
-                      <p>Completed: {patrol.endTime}</p>
+                    {patrol.end_time && (
+                      <p>Completed: {format(new Date(patrol.end_time), 'h:mm a')}</p>
                     )}
                     {patrol.notes && (
                       <p className="text-foreground">Notes: {patrol.notes}</p>
@@ -279,6 +289,9 @@ export const PatrolsSection = () => {
               <div className="text-center py-8">
                 <MapPin className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
                 <p className="text-muted-foreground">No patrols scheduled</p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Click "Schedule Patrol" to create your first patrol
+                </p>
               </div>
             )}
           </div>

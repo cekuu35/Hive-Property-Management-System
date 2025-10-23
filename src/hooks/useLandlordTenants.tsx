@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from './useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import { CompleteTenantCreationService, CreateTenantData } from '@/services/completeTenantCreationService';
+import { SimpleTenantCreationService, CreateTenantData } from '@/services/simpleTenantCreationService';
 import { toast } from '@/hooks/use-toast';
 
 export interface LandlordTenant {
@@ -187,7 +187,7 @@ export const useLandlordTenants = () => {
     }
 
     try {
-      const result = await CompleteTenantCreationService.createTenant(profile.id, tenantData);
+      const result = await SimpleTenantCreationService.createTenant(profile.id, tenantData);
       
       if (result.success) {
         // Refresh tenants list

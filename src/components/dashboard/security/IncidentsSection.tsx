@@ -3,12 +3,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertTriangle, Plus, Eye, Edit } from 'lucide-react';
+import { AlertTriangle, Plus, Eye, Edit, Building } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useCaretakerProperties } from '@/hooks/useCaretakerProperties';
 
 interface Incident {
   id: string;
@@ -17,8 +19,12 @@ interface Incident {
   severity: string;
   status: string;
   location?: string;
+  property_id?: string;
   created_at: string;
   resolved_date?: string;
+  property?: {
+    name: string;
+  };
 }
 
 export const IncidentsSection = () => {
@@ -28,9 +34,11 @@ export const IncidentsSection = () => {
     incident_type: '',
     description: '',
     severity: 'medium',
-    location: ''
+    location: '',
+    property_id: ''
   });
   const { toast } = useToast();
+  const { properties } = useCaretakerProperties();
 
   useEffect(() => {
     fetchIncidents();
@@ -54,19 +62,51 @@ export const IncidentsSection = () => {
 
   const fetchIncidents = async () => {
     try {
+      console.log('[IncidentsSection] Fetching incidents...');
       const { data, error } = await supabase
         .from('security_logs')
-        .select('*')
+        .select(`
+          *,
+          property:properties(name)
+        `)
         .order('created_at', { ascending: false });
       
-      if (error) throw error;
+      if (error) {
+        console.error('[IncidentsSection] Error fetching:', error);
+        throw error;
+      }
+      
+      console.log('[IncidentsSection] Fetched incidents:', data?.length || 0, data);
       setIncidents(data || []);
     } catch (error) {
-      console.error('Error fetching incidents:', error);
+      console.error('[IncidentsSection] Error fetching incidents:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load incidents",
+        variant: "destructive"
+      });
     }
   };
 
   const createIncident = async () => {
+    if (!newIncident.property_id) {
+      toast({ 
+        title: "Property Required", 
+        description: "Please select a property for this incident",
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    if (!newIncident.incident_type || !newIncident.description) {
+      toast({ 
+        title: "Missing Information", 
+        description: "Please fill in all required fields",
+        variant: "destructive" 
+      });
+      return;
+    }
+
     try {
       const { data: profile } = await supabase
         .from('profiles')
@@ -77,9 +117,12 @@ export const IncidentsSection = () => {
       const { error } = await supabase
         .from('security_logs')
         .insert({
-          ...newIncident,
+          incident_type: newIncident.incident_type,
+          description: newIncident.description,
+          severity: newIncident.severity,
+          location: newIncident.location,
+          property_id: newIncident.property_id,
           security_id: profile?.id,
-          property_id: '00000000-0000-0000-0000-000000000000', // Default property ID
           status: 'open'
         });
 
@@ -87,7 +130,7 @@ export const IncidentsSection = () => {
       
       toast({ title: "Incident reported successfully" });
       setIsCreateDialogOpen(false);
-      setNewIncident({ incident_type: '', description: '', severity: 'medium', location: '' });
+      setNewIncident({ incident_type: '', description: '', severity: 'medium', location: '', property_id: '' });
     } catch (error) {
       console.error('Error creating incident:', error);
       toast({ title: "Error reporting incident", variant: "destructive" });
@@ -152,6 +195,28 @@ export const IncidentsSection = () => {
             </DialogHeader>
             <div className="space-y-4">
               <div>
+                <Label htmlFor="property">Property *</Label>
+                <Select value={newIncident.property_id} onValueChange={(value) => 
+                  setNewIncident(prev => ({ ...prev, property_id: value }))
+                }>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select property" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {properties.map((property) => (
+                      <SelectItem key={property.id} value={property.id}>
+                        <div className="flex items-center gap-2">
+                          <Building className="w-4 h-4" />
+                          {property.name}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="incident_type">Incident Type *</Label>
                 <Select value={newIncident.incident_type} onValueChange={(value) => 
                   setNewIncident(prev => ({ ...prev, incident_type: value }))
                 }>
@@ -171,14 +236,17 @@ export const IncidentsSection = () => {
               </div>
 
               <div>
+                <Label htmlFor="location">Location</Label>
                 <Input
-                  placeholder="Location"
+                  id="location"
+                  placeholder="Specific location (e.g., Lobby, Parking Lot B)"
                   value={newIncident.location}
                   onChange={(e) => setNewIncident(prev => ({ ...prev, location: e.target.value }))}
                 />
               </div>
 
               <div>
+                <Label htmlFor="severity">Severity *</Label>
                 <Select value={newIncident.severity} onValueChange={(value) =>
                   setNewIncident(prev => ({ ...prev, severity: value }))
                 }>
@@ -194,8 +262,10 @@ export const IncidentsSection = () => {
               </div>
 
               <div>
+                <Label htmlFor="description">Description *</Label>
                 <Textarea
-                  placeholder="Incident description"
+                  id="description"
+                  placeholder="Detailed description of the incident"
                   value={newIncident.description}
                   onChange={(e) => setNewIncident(prev => ({ ...prev, description: e.target.value }))}
                 />
@@ -217,13 +287,19 @@ export const IncidentsSection = () => {
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
                     <AlertTriangle className="h-4 w-4 text-warning" />
-                    <h3 className="font-medium capitalize">{incident.incident_type.replace('_', ' ')}</h3>
+                    <h3 className="font-medium capitalize">{incident.incident_type.replace(/_/g, ' ')}</h3>
                     <Badge className={getSeverityColor(incident.severity)}>
                       {incident.severity}
                     </Badge>
                     <Badge className={getStatusColor(incident.status)}>
                       {incident.status}
                     </Badge>
+                    {incident.property && (
+                      <Badge variant="outline">
+                        <Building className="w-3 h-3 mr-1" />
+                        {incident.property.name}
+                      </Badge>
+                    )}
                   </div>
                   
                   <p className="text-sm text-muted-foreground mb-2">{incident.description}</p>

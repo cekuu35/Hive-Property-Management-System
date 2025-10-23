@@ -1,255 +1,133 @@
-// Service Worker for Lovly Property Management PWA
-const CACHE_NAME = 'lovly-prop-v1.0.0';
-const STATIC_CACHE = 'lovly-static-v1.0.0';
-const DYNAMIC_CACHE = 'lovly-dynamic-v1.0.0';
+// Service Worker for Push Notifications
+const CACHE_NAME = 'property-manager-v1';
 
-// Check if a request can be cached (exclude unsupported schemes)
-function isCacheableRequest(request) {
-  const url = new URL(request.url);
-  // Exclude chrome-extension, moz-extension, and other unsupported schemes
-  return !url.protocol.startsWith('chrome-extension:') && 
-         !url.protocol.startsWith('moz-extension:') &&
-         !url.protocol.startsWith('safari-extension:') &&
-         !url.protocol.startsWith('ms-browser-extension:') &&
-         (url.protocol === 'http:' || url.protocol === 'https:');
-}
-
-// Files to cache for offline functionality
-const STATIC_FILES = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png',
-  '/offline.html'
-];
-
-// API endpoints to cache
-const API_CACHE_PATTERNS = [
-  /\/api\/health/,
-  /\/api\/mpesa\/payment-status/
-];
-
-// Install event - cache static files
+// Install event
 self.addEventListener('install', (event) => {
-  console.log('🔧 Service Worker installing...');
-  
-  event.waitUntil(
-    caches.open(STATIC_CACHE)
-      .then((cache) => {
-        console.log('📦 Caching static files...');
-        return cache.addAll(STATIC_FILES);
-      })
-      .then(() => {
-        console.log('✅ Static files cached successfully');
-        return self.skipWaiting();
-      })
-      .catch((error) => {
-        console.error('❌ Failed to cache static files:', error);
-      })
-  );
+  console.log('[Service Worker] Installing...');
+  self.skipWaiting(); // Activate immediately
 });
 
-// Activate event - clean up old caches
+// Activate event
 self.addEventListener('activate', (event) => {
-  console.log('🚀 Service Worker activating...');
-  
+  console.log('[Service Worker] Activating...');
   event.waitUntil(
-    caches.keys()
-      .then((cacheNames) => {
-        return Promise.all(
-          cacheNames.map((cacheName) => {
-            if (cacheName !== STATIC_CACHE && cacheName !== DYNAMIC_CACHE) {
-              console.log('🗑️ Deleting old cache:', cacheName);
-              return caches.delete(cacheName);
-            }
-          })
-        );
-      })
-      .then(() => {
-        console.log('✅ Service Worker activated');
-        return self.clients.claim();
-      })
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME) {
+            console.log('[Service Worker] Deleting old cache:', cacheName);
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    })
   );
+  return self.clients.claim();
 });
 
-// Fetch event - serve from cache or network
-self.addEventListener('fetch', (event) => {
-  const { request } = event;
-  const url = new URL(request.url);
-
-  // Skip non-GET requests
-  if (request.method !== 'GET') {
-    return;
-  }
-
-  // Handle API requests
-  if (url.pathname.startsWith('/api/')) {
-    event.respondWith(handleApiRequest(request));
-    return;
-  }
-
-  // Handle static files
-  event.respondWith(handleStaticRequest(request));
-});
-
-// Handle API requests with network-first strategy
-async function handleApiRequest(request) {
-  try {
-    // Try network first for API requests
-    const networkResponse = await fetch(request);
-    
-    // Cache successful responses (only for supported schemes)
-    if (networkResponse.ok && isCacheableRequest(request)) {
-      try {
-        const cache = await caches.open(DYNAMIC_CACHE);
-        await cache.put(request, networkResponse.clone());
-      } catch (cacheError) {
-        console.log('🌐 Dynamic cache failed for:', request.url, cacheError.message);
-      }
-    }
-    
-    return networkResponse;
-  } catch (error) {
-    console.log('🌐 Network failed, trying cache for API:', request.url);
-    
-    // Fallback to cache
-    const cachedResponse = await caches.match(request);
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-    
-    // Return offline response for API
-    return new Response(
-      JSON.stringify({ 
-        error: 'Offline', 
-        message: 'You are offline. Please check your connection.' 
-      }),
-      { 
-        status: 503, 
-        headers: { 'Content-Type': 'application/json' } 
-      }
-    );
-  }
-}
-
-// Handle static files with cache-first strategy
-async function handleStaticRequest(request) {
-  try {
-    // Try cache first for static files
-    const cachedResponse = await caches.match(request);
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-    
-    // If not in cache, fetch from network
-    const networkResponse = await fetch(request);
-    
-    // Cache the response for future use (only for supported schemes)
-    if (networkResponse.ok && isCacheableRequest(request)) {
-      try {
-        const cache = await caches.open(STATIC_CACHE);
-        await cache.put(request, networkResponse.clone());
-      } catch (cacheError) {
-        console.log('🌐 Cache failed for:', request.url, cacheError.message);
-      }
-    }
-    
-    return networkResponse;
-  } catch (error) {
-    console.log('🌐 Network failed for static file:', request.url);
-    
-    // Return offline page for navigation requests
-    if (request.mode === 'navigate') {
-      return caches.match('/offline.html') || new Response('Offline');
-    }
-    
-    // Return a fallback for other requests
-    return new Response('Resource not available offline', { status: 404 });
-  }
-}
-
-// Handle background sync for payment requests
-self.addEventListener('sync', (event) => {
-  if (event.tag === 'payment-sync') {
-    console.log('🔄 Background sync for payments...');
-    event.waitUntil(syncPayments());
-  }
-});
-
-// Sync payment data when back online
-async function syncPayments() {
-  try {
-    // Get pending payments from IndexedDB
-    const pendingPayments = await getPendingPayments();
-    
-    for (const payment of pendingPayments) {
-      try {
-        await fetch('/api/mpesa/payment-status/' + payment.checkoutRequestID);
-        // Remove from pending if successful
-        await removePendingPayment(payment.id);
-      } catch (error) {
-        console.error('Failed to sync payment:', error);
-      }
-    }
-  } catch (error) {
-    console.error('Background sync failed:', error);
-  }
-}
-
-// Push notification handling
+// Push notification event
 self.addEventListener('push', (event) => {
-  console.log('📱 Push notification received');
+  console.log('[Service Worker] Push received:', event);
   
-  const options = {
-    body: event.data ? event.data.text() : 'You have a new notification',
-    icon: '/icons/icon-192x192.png',
-    badge: '/icons/icon-72x72.png',
-    vibrate: [200, 100, 200],
-    data: {
-      dateOfArrival: Date.now(),
-      primaryKey: 1
-    },
-    actions: [
-      {
-        action: 'explore',
-        title: 'View Details',
-        icon: '/icons/checkmark.png'
-      },
-      {
-        action: 'close',
-        title: 'Close',
-        icon: '/icons/xmark.png'
-      }
-    ]
+  let notificationData = {
+    title: 'Property Manager',
+    body: 'You have a new notification',
+    icon: '/logo.png',
+    badge: '/badge.png',
+    tag: 'default',
+    data: {},
   };
-  
+
+  if (event.data) {
+    try {
+      const data = event.data.json();
+      console.log('[Service Worker] Push data:', data);
+      
+      notificationData = {
+        title: data.title || notificationData.title,
+        body: data.body || data.message || notificationData.body,
+        icon: data.icon || notificationData.icon,
+        badge: data.badge || notificationData.badge,
+        tag: data.tag || data.type || notificationData.tag,
+        data: data,
+        requireInteraction: data.requireInteraction || false,
+        actions: data.actions || [],
+      };
+    } catch (error) {
+      console.error('[Service Worker] Error parsing push data:', error);
+    }
+  }
+
   event.waitUntil(
-    self.registration.showNotification('Lovly Property Management', options)
+    self.registration.showNotification(notificationData.title, {
+      body: notificationData.body,
+      icon: notificationData.icon,
+      badge: notificationData.badge,
+      tag: notificationData.tag,
+      data: notificationData.data,
+      requireInteraction: notificationData.requireInteraction,
+      actions: notificationData.actions,
+      vibrate: [200, 100, 200],
+      timestamp: Date.now(),
+    })
   );
 });
 
-// Handle notification clicks
+// Notification click event
 self.addEventListener('notificationclick', (event) => {
-  console.log('🔔 Notification clicked:', event.action);
+  console.log('[Service Worker] Notification clicked:', event);
   
   event.notification.close();
+
+  const urlToOpen = event.notification.data?.url || '/dashboard';
   
-  if (event.action === 'explore') {
-    event.waitUntil(
-      clients.openWindow('/dashboard')
-    );
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // Check if there's already a window open
+      for (const client of clientList) {
+        if (client.url === urlToOpen && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      // Open new window if none found
+      if (clients.openWindow) {
+        return clients.openWindow(urlToOpen);
+      }
+    })
+  );
+});
+
+// Background sync (for offline actions)
+self.addEventListener('sync', (event) => {
+  console.log('[Service Worker] Background sync:', event.tag);
+  
+  if (event.tag === 'sync-notifications') {
+    event.waitUntil(syncNotifications());
   }
 });
 
-// Helper functions for IndexedDB (simplified)
-async function getPendingPayments() {
-  // In a real implementation, you would use IndexedDB
-  return [];
+async function syncNotifications() {
+  try {
+    // Sync logic here if needed
+    console.log('[Service Worker] Syncing notifications...');
+  } catch (error) {
+    console.error('[Service Worker] Sync error:', error);
+  }
 }
 
-async function removePendingPayment(id) {
-  // In a real implementation, you would use IndexedDB
-  console.log('Removing pending payment:', id);
-}
-
+// Fetch event (optional - for caching static assets)
+self.addEventListener('fetch', (event) => {
+  // Only cache GET requests
+  if (event.request.method !== 'GET') return;
+  
+  // Don't cache API requests
+  if (event.request.url.includes('/api/') || event.request.url.includes('supabase.co')) {
+    return;
+  }
+  
+  event.respondWith(
+    caches.match(event.request).then((response) => {
+      return response || fetch(event.request);
+    })
+  );
+});

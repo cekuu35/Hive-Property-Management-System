@@ -63,5 +63,7 @@ export default defineConfig(({ mode }) => ({
     'import.meta.env.VITE_SUPABASE_URL': JSON.stringify("https://kozhlejudselgtmohdfm.supabase.co"),
     'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MDQyOTgsImV4cCI6MjA3Mjk4MDI5OH0.10h-c8_GLM3aQd_AbNVXNDt2Pvr4DbQm7VjgvmyiG-M"),
     'import.meta.env.VITE_PAYSTACK_PUBLIC_KEY': JSON.stringify("pk_test_9f2c94cce8c01d4403373ce6f4bf8f1a7d142668"),
+    'import.meta.env.VITE_VAPID_PUBLIC_KEY': JSON.stringify("BG3ScEmGVYZlkEPDVp4NIDMD2waF2307kzN3krxcoRxFwbVzXeUg9AqcAYtft2JWo97ERj6uOA0ozkdCvNZ4G-I"),
   },
+  publicDir: 'public',
 }));

@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { useMaintenanceRequests } from '@/hooks/useMaintenanceRequests';
 import { FileText, Download, Calendar, TrendingUp, Clock, CheckCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 
 interface DailyReport {
   id: string;
@@ -22,19 +24,52 @@ interface DailyReport {
 
 export const ReportsSection = () => {
   const { toast } = useToast();
+  const { profile } = useAuth();
   const { requests, getStats } = useMaintenanceRequests();
   const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
   const [reportType, setReportType] = useState('daily');
   const [reportNotes, setReportNotes] = useState('');
   const [hoursWorked, setHoursWorked] = useState('');
   const [issues, setIssues] = useState('');
-  const [dailyReports, setDailyReports] = useState<DailyReport[]>([
-    { id: '1', date: '2024-01-14', tasksCompleted: 3, hoursWorked: 8, notes: 'Completed AC maintenance and plumbing repairs. All tasks finished on schedule.' },
-    { id: '2', date: '2024-01-13', tasksCompleted: 2, hoursWorked: 6, notes: 'Fixed lighting issues in Building A. Minor delay due to parts availability.' },
-    { id: '3', date: '2024-01-12', tasksCompleted: 4, hoursWorked: 8, notes: 'Regular maintenance rounds completed. Identified potential issue with heating system in Unit 2B.' },
-  ]);
+  const [dailyReports, setDailyReports] = useState<DailyReport[]>([]);
 
   const stats = getStats();
+
+  // Generate daily reports from actual completed maintenance requests
+  useEffect(() => {
+    const generateDailyReports = () => {
+      const reportsByDate = new Map<string, DailyReport>();
+      
+      // Group completed requests by date
+      requests.filter(req => req.status === 'completed' && req.completedDate).forEach(req => {
+        const dateKey = new Date(req.completedDate!).toISOString().split('T')[0];
+        
+        if (!reportsByDate.has(dateKey)) {
+          reportsByDate.set(dateKey, {
+            id: dateKey,
+            date: dateKey,
+            tasksCompleted: 0,
+            hoursWorked: 0,
+            notes: ''
+          });
+        }
+        
+        const report = reportsByDate.get(dateKey)!;
+        report.tasksCompleted += 1;
+        // Estimate 2 hours per task (this could be improved with actual time tracking)
+        report.hoursWorked += 2;
+      });
+      
+      // Convert map to array and sort by date (newest first)
+      const reports = Array.from(reportsByDate.values())
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        .slice(0, 10); // Show last 10 days
+      
+      setDailyReports(reports);
+    };
+    
+    generateDailyReports();
+  }, [requests]);
 
   const todayCompleted = requests.filter(req => 
     req.status === 'completed' && 

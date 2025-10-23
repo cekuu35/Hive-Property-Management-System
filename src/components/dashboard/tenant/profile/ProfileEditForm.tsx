@@ -28,7 +28,7 @@ const profileSchema = z.object({
 type ProfileFormData = z.infer<typeof profileSchema>;
 
 export const ProfileEditForm = () => {
-  const { profile, user } = useAuth();
+  const { profile, user, refetchProfile } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { updateProfileAvatar } = usePhotoUpload();
@@ -64,6 +64,25 @@ export const ProfileEditForm = () => {
     
     setIsLoading(true);
     try {
+      // For tenants, update both tenant_info and profiles
+      if (profile.role === 'tenant') {
+        // Update tenant_info table
+        const { error: tenantError } = await supabase
+          .from('tenant_info')
+          .update({
+            first_name: data.first_name,
+            last_name: data.last_name,
+            phone: data.phone,
+            emergency_contact_name: data.emergency_contact_name,
+            emergency_contact_phone: data.emergency_contact_phone,
+            bio: data.bio,
+          })
+          .eq('profile_id', profile.id);
+
+        if (tenantError) throw tenantError;
+      }
+
+      // Also update profiles table for all users
       const { error } = await supabase
         .from('profiles')
         .update({
@@ -79,6 +98,9 @@ export const ProfileEditForm = () => {
 
       if (error) throw error;
 
+      // Refetch profile to update UI
+      await refetchProfile();
+      
       toast.success('Profile updated successfully');
       setIsEditing(false);
     } catch (error: any) {
@@ -91,14 +113,26 @@ export const ProfileEditForm = () => {
   const handleAvatarUpload = async (result: { url: string; path: string; size: number }) => {
     if (!profile) return;
 
+    console.log('[ProfileEditForm] Avatar upload result:', result);
+    console.log('[ProfileEditForm] Current profile ID:', profile.id);
+    
     setIsLoading(true);
     try {
+      console.log('[ProfileEditForm] Updating avatar in database...');
       const success = await updateProfileAvatar(profile.id, result.url, 'tenant');
+      
       if (success) {
-        // Refresh the profile data
-        window.location.reload();
+        console.log('[ProfileEditForm] Avatar updated successfully, refetching profile...');
+        // Refresh the profile data to show new avatar
+        await refetchProfile();
+        console.log('[ProfileEditForm] Profile refetched, new avatar_url should be:', result.url);
+        toast.success('Profile photo updated successfully!');
+      } else {
+        console.error('[ProfileEditForm] Avatar update failed');
+        toast.error('Failed to update avatar');
       }
     } catch (error: any) {
+      console.error('[ProfileEditForm] Avatar upload error:', error);
       toast.error('Failed to update avatar: ' + error.message);
     } finally {
       setIsLoading(false);
@@ -135,7 +169,10 @@ export const ProfileEditForm = () => {
             <div className="space-y-4">
               <div className="flex items-center gap-6">
                 <Avatar className="h-20 w-20">
-                  <AvatarImage src={profile?.avatar_url || undefined} />
+                  <AvatarImage 
+                    src={profile?.avatar_url ? `${profile.avatar_url}?t=${Date.now()}` : undefined} 
+                    key={profile?.avatar_url || 'no-avatar'}
+                  />
                   <AvatarFallback className="text-lg">
                     {profile?.first_name?.[0]}{profile?.last_name?.[0]}
                   </AvatarFallback>

@@ -25,7 +25,7 @@ class MpesaAPI {
       accessToken: null,
       tokenExpiry: 0,
       baseURL: 'https://accounts.buni.kcbgroup.com',
-      stkPushURL: 'https://uat.buni.kcbgroup.com/mm/api/request/1.0.0/stkpush',
+      stkPushURL: 'https://api.buni.kcbgroup.com/mm/api/request/1.0.0/stkpush',  // ✅ CHANGED TO PRODUCTION (removed 'uat.')
       apiKey: Deno.env.get('KCB_API_KEY') || '',
       clientId: Deno.env.get('KCB_CLIENT_ID') || '',
       clientSecret: Deno.env.get('KCB_CLIENT_SECRET') || ''

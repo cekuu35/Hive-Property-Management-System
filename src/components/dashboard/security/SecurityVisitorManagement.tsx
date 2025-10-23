@@ -86,8 +86,7 @@ export const SecurityVisitorManagement = () => {
           table: 'visitor_requests'
         },
         () => {
-          console.log('Visitor request changed, refetching...');
-          // This will trigger a refetch in the useVisitorRequests hook
+          // Trigger refetch in the useVisitorRequests hook
         }
       )
       .subscribe();
@@ -102,8 +101,7 @@ export const SecurityVisitorManagement = () => {
           table: 'visitors'
         },
         () => {
-          console.log('Visitor changed, refetching...');
-          // This will trigger a refetch in the useVisitors hook
+          // Trigger refetch in the useVisitors hook
         }
       )
       .subscribe();

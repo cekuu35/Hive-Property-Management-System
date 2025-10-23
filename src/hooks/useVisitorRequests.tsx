@@ -43,6 +43,7 @@ export interface CreateVisitorRequest {
   expected_duration?: number;
   special_instructions?: string;
   tenant_id?: string; // For security creating requests
+  unit_id?: string; // Unit being visited
 }
 
 export interface CreateSecurityVisitorRequest extends CreateVisitorRequest {
@@ -142,6 +143,20 @@ export const useVisitorRequests = () => {
         }
         insertData.security_id = profile.id;
         insertData.tenant_id = requestData.tenant_id;
+      }
+
+      // Auto-fetch unit_id from tenant's active lease if not provided
+      if (!insertData.unit_id && insertData.tenant_id) {
+        const { data: lease } = await supabase
+          .from('leases')
+          .select('unit_id')
+          .eq('tenant_id', insertData.tenant_id)
+          .eq('status', 'active')
+          .single();
+        
+        if (lease) {
+          insertData.unit_id = lease.unit_id;
+        }
       }
 
       const { data, error } = await supabase

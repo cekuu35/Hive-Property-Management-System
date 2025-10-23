@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '@/integrations/supabase/client'
+import { supabaseAdmin } from '@/integrations/supabase/admin'
 
 interface PaystackVerificationResponse {
   status: boolean

@@ -57,9 +57,53 @@ export const useMaintenanceRequests = () => {
 
       // Filter based on user role
       if (profile.role === 'caretaker' || profile.role === 'security') {
-        // Staff roles see all maintenance requests for now
-        // TODO: Implement proper staff assignment filtering when staff_assignments table is available
-        console.log(`Fetching maintenance requests for ${profile.role}...`);
+        // Filter by assigned properties
+        console.log(`🔍 [${profile.role}] Fetching assigned properties for staff...`);
+        
+        try {
+          // Get assigned properties for this staff member
+          const { data: assignments, error: assignmentError } = await supabase
+            .from('staff_assignments')
+            .select('property_id')
+            .eq('staff_id', profile.id)
+            .eq('role', profile.role)
+            .eq('is_active', true);
+          
+          if (assignmentError) {
+            console.error('Error fetching staff assignments:', assignmentError);
+            // Fallback: if staff_assignments doesn't exist, show all (soft landing)
+            console.warn('⚠️ staff_assignments table may not exist, showing all requests');
+          } else if (assignments && assignments.length > 0) {
+            const propertyIds = assignments.map(a => a.property_id);
+            console.log(`✅ [${profile.role}] Found ${propertyIds.length} assigned properties`);
+            
+            // Get units in assigned properties
+            const { data: units, error: unitsError } = await supabase
+              .from('units')
+              .select('id')
+              .in('property_id', propertyIds);
+            
+            if (unitsError) {
+              console.error('Error fetching units:', unitsError);
+            } else if (units && units.length > 0) {
+              const unitIds = units.map(u => u.id);
+              console.log(`✅ [${profile.role}] Filtering by ${unitIds.length} units`);
+              query = query.in('unit_id', unitIds);
+            } else {
+              // No units found in assigned properties, return empty
+              console.log(`ℹ️ [${profile.role}] No units in assigned properties`);
+              query = query.eq('unit_id', '00000000-0000-0000-0000-000000000000');
+            }
+          } else {
+            // No assignments found, return empty
+            console.log(`ℹ️ [${profile.role}] No property assignments found`);
+            query = query.eq('unit_id', '00000000-0000-0000-0000-000000000000');
+          }
+        } catch (error) {
+          console.error('Error in staff assignment filtering:', error);
+          // Fallback to showing all if error occurs
+          console.warn('⚠️ Using fallback - showing all requests due to error');
+        }
       } else if (profile.role === 'tenant') {
         // Tenants see only their own requests using profile ID
         console.log('🔍 [useMaintenanceRequests] Filtering by tenant_id (profile ID):', profile.id);
