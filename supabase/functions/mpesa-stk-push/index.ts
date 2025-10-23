@@ -138,11 +138,20 @@ serve(async (req) => {
     const path = url.pathname
 
     // Route handling
-    if (path.endsWith('/rent-payment') && req.method === 'POST') {
-      return await handleRentPayment(req, supabase)
-    } else if (path.endsWith('/utility-payment') && req.method === 'POST') {
-      return await handleUtilityPayment(req, supabase)
-    } else if (path.endsWith('/callback') && req.method === 'POST') {
+    if (req.method === 'POST' && !path.includes('/callback') && !path.includes('/payment-status/')) {
+      // Handle payment initiation
+      const body = await req.json()
+      const { type, leaseId, billId } = body
+      
+      if (type === 'utility' || billId) {
+        return await handleUtilityPayment(req, supabase, body)
+      } else if (type === 'rent' || leaseId) {
+        return await handleRentPayment(req, supabase, body)
+      } else {
+        // Default behavior for backwards compatibility
+        return await handleRentPayment(req, supabase, body)
+      }
+    } else if (path.includes('/callback') && req.method === 'POST') {
       return await handleCallback(req, supabase)
     } else if (path.includes('/payment-status/') && req.method === 'GET') {
       return await handlePaymentStatus(req, supabase, path)
@@ -168,9 +177,10 @@ serve(async (req) => {
   }
 })
 
-async function handleRentPayment(req: Request, supabase: any) {
+async function handleRentPayment(req: Request, supabase: any, bodyData?: any) {
   try {
-    const { leaseId, amount, phoneNumber } = await req.json()
+    const data = bodyData || await req.json()
+    const { leaseId, amount, phoneNumber } = data
     
     console.log('🏠 [M-Pesa] Processing rent payment:', { leaseId, amount, phoneNumber })
 
@@ -268,9 +278,10 @@ async function handleRentPayment(req: Request, supabase: any) {
   }
 }
 
-async function handleUtilityPayment(req: Request, supabase: any) {
+async function handleUtilityPayment(req: Request, supabase: any, bodyData?: any) {
   try {
-    const { billId, amount, phoneNumber } = await req.json()
+    const data = bodyData || await req.json()
+    const { billId, amount, phoneNumber } = data
     
     console.log('⚡ [M-Pesa] Processing utility payment:', { billId, amount, phoneNumber })
 
