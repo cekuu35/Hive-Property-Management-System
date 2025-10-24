@@ -32,6 +32,7 @@ import { LandlordInfoCard } from './LandlordInfoCard';
 import { NotificationSettings } from '../NotificationSettings';
 import { LeaseDetailsCard } from './LeaseDetailsCard';
 import { LeaseDocumentViewer } from './LeaseDocumentViewer';
+import { SecurityDepositTracker } from './SecurityDepositTracker';
 import { useMaintenanceRequests } from '@/hooks/useMaintenanceRequests';
 import { useApprovedLease } from '@/hooks/useApprovedLease';
 import { supabase } from '@/integrations/supabase/client';
@@ -387,7 +388,7 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
           <div className="space-y-6">
           {/* Quick Stats */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Card className={`${displayPaymentStatus === 'overdue' || isOverdue ? 'bg-gradient-to-r from-destructive to-destructive/80' : displayBalance > 0 ? 'bg-gradient-to-r from-warning to-warning/80' : 'bg-gradient-to-r from-success to-success/80'} text-primary-foreground`}>
+            <Card className={`${displayPaymentStatus === 'overdue' || isOverdue ? 'bg-gradient-to-r from-destructive to-destructive/80' : 'bg-gradient-to-r from-success to-success/80'} text-primary-foreground`}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Rent Balance</CardTitle>
                 <div className="flex items-center gap-2">
@@ -746,6 +747,11 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
         {/* Maintenance Tab */}
         {activeTab === "maintenance" && (
           <div className="space-y-6">
+          {/* Security Deposit Tracker */}
+          {hasApprovedLease && (
+            <SecurityDepositTracker />
+          )}
+
           <div className="flex justify-between items-center">
             <div>
               <h3 className="text-xl font-semibold">Maintenance Requests</h3>
@@ -1025,6 +1031,11 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
           {/* Lease Information - Only show if tenant has active lease */}
           {hasApprovedLease && (
             <LeaseDetailsCard onViewDocument={() => setShowLeaseDocument(true)} />
+          )}
+          
+          {/* Security Deposit Tracker - Only show if tenant has active lease */}
+          {hasApprovedLease && (
+            <SecurityDepositTracker />
           )}
           
           <CoTenantManagement />

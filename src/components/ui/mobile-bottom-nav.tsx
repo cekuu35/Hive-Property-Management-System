@@ -48,8 +48,8 @@ export function MobileBottomNav({
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-t safe-area-bottom">
-      <div className="flex items-center justify-around px-2 py-2">
+    <div className="fixed bottom-0 left-0 right-0 z-50 w-full bg-background/98 backdrop-blur-md border-t shadow-[0_-2px_10px_rgba(0,0,0,0.05)] safe-area-bottom overflow-hidden">
+      <div className="flex items-center justify-around px-1 py-1.5 max-w-full">
         {bottomNavItems.map((item) => {
           const Icon = item.icon;
           const badgeCount = getBadgeCount(item.id);
@@ -61,28 +61,34 @@ export function MobileBottomNav({
               variant="ghost"
               size="sm"
               className={cn(
-                "flex flex-col items-center gap-1 h-16 px-2 relative",
-                isActive && "text-primary",
-                !isActive && "text-muted-foreground hover:text-foreground"
+                "flex flex-col items-center gap-1 h-[64px] min-w-[56px] flex-1 max-w-[80px] px-1 relative rounded-2xl touch-manipulation transition-all duration-200",
+                isActive && "text-primary bg-primary/10",
+                !isActive && "text-muted-foreground hover:text-foreground active:bg-accent/50"
               )}
               onClick={() => onTabChange(item.id)}
             >
               <div className="relative">
-                <Icon className="h-5 w-5" />
+                <Icon className={cn(
+                  "transition-all duration-200",
+                  isActive ? "h-6 w-6" : "h-5 w-5"
+                )} />
                 {badgeCount > 0 && (
                   <Badge 
                     variant="destructive"
-                    className="absolute -top-2 -right-2 h-4 w-4 rounded-full p-0 flex items-center justify-center text-xs"
+                    className="absolute -top-2 -right-2 h-4 min-w-[16px] px-1 rounded-full flex items-center justify-center text-[10px] font-bold"
                   >
-                    {badgeCount > 99 ? '99+' : badgeCount}
+                    {badgeCount > 9 ? '9+' : badgeCount}
                   </Badge>
                 )}
               </div>
-              <span className="text-xs font-medium truncate max-w-[60px]">
+              <span className={cn(
+                "text-[11px] font-medium truncate max-w-full transition-all duration-200",
+                isActive && "font-semibold"
+              )}>
                 {item.label}
               </span>
               {isActive && (
-                <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-8 h-1 bg-primary rounded-full" />
+                <div className="absolute top-1 left-1/2 transform -translate-x-1/2 w-10 h-0.5 bg-primary rounded-full" />
               )}
             </Button>
           );

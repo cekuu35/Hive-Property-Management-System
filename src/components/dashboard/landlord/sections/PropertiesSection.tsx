@@ -5,11 +5,12 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Building, Plus, MapPin, Users, Search, Edit, Trash2, Home, Settings, Bell } from 'lucide-react';
+import { Building, Plus, MapPin, Users, Search, Edit, Trash2, Home, Settings, Bell, Calculator } from 'lucide-react';
 import { useProperties } from '@/hooks/useProperties';
 import { PropertyForm } from '../PropertyForm';
 import { UnitManagement } from '../UnitManagement';
 import { NoticesModal } from '../NoticesModal';
+import { BulkLateFeeModal } from '../BulkLateFeeModal';
 
 export const PropertiesSection = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -19,6 +20,7 @@ export const PropertiesSection = () => {
   const [propertyToDelete, setPropertyToDelete] = useState<string | null>(null);
   const [showUnitManagement, setShowUnitManagement] = useState<any>(null);
   const [showNoticesModal, setShowNoticesModal] = useState<string | null>(null);
+  const [showBulkLateFee, setShowBulkLateFee] = useState<any>(null);
 
   const {
     properties,
@@ -243,6 +245,16 @@ export const PropertiesSection = () => {
                     Manage Units ({propertyUnits.length})
                   </Button>
 
+                  {/* Bulk Late Fee Configuration */}
+                  <Button 
+                    variant="outline" 
+                    className="w-full gap-2"
+                    onClick={() => setShowBulkLateFee(property)}
+                  >
+                    <Calculator className="h-4 w-4" />
+                    Late Fee Policy
+                  </Button>
+
                   {/* Notices Button */}
                   <Button 
                     variant="outline" 
@@ -331,6 +343,21 @@ export const PropertiesSection = () => {
           propertyId={showNoticesModal}
           propertyName={properties.find(p => p.id === showNoticesModal)?.name || ''}
           units={getPropertyUnits(showNoticesModal)}
+        />
+      )}
+
+      {/* Bulk Late Fee Configuration Modal */}
+      {showBulkLateFee && (
+        <BulkLateFeeModal
+          open={!!showBulkLateFee}
+          onOpenChange={(open) => !open && setShowBulkLateFee(null)}
+          propertyId={showBulkLateFee.id}
+          propertyName={showBulkLateFee.name}
+          unitCount={getPropertyUnits(showBulkLateFee.id).length}
+          onComplete={() => {
+            // Optionally refresh data here if needed
+            setShowBulkLateFee(null);
+          }}
         />
       )}
 

@@ -11,6 +11,7 @@ export interface TenantPayment {
   status: 'paid' | 'overdue' | 'pending';
   method?: string | null;
   reference?: string | null;
+  late_fee?: number;
 }
 
 export const useTenantPayments = () => {
@@ -185,6 +186,7 @@ export const useTenantPayments = () => {
           status: p.status as 'paid' | 'overdue' | 'pending',
           method: p.payment_method,
           reference: p.transaction_reference,
+          late_fee: Number(p.late_fee || 0),
         };
         console.log(`📄 [useTenantPayments] Payment ${index + 1}:`, mappedPayment);
         return mappedPayment;

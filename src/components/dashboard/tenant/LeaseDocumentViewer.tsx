@@ -245,9 +245,17 @@ export const LeaseDocumentViewer = ({ open, onClose }: LeaseDocumentViewerProps)
                 </div>
               </div>
               <div className="p-3 bg-muted/50 border-l-4 border-primary rounded">
-                <div className="text-sm text-muted-foreground font-medium">Late Fee:</div>
+                <div className="text-sm text-muted-foreground font-medium">Late Fee Policy:</div>
                 <div className="mt-1 text-foreground">
-                  {lease.late_fee_amount ? `KES ${lease.late_fee_amount.toLocaleString()}` : 'As per agreement'}
+                  {lease.late_fee_type === 'percentage' 
+                    ? `${lease.late_fee_value}% per day (max ${lease.late_fee_max_percentage}%)`
+                    : lease.late_fee_type === 'flat'
+                    ? `KES ${lease.late_fee_value?.toLocaleString()} (one-time)`
+                    : lease.late_fee_type === 'none'
+                    ? 'No late fees'
+                    : lease.late_fee_amount 
+                    ? `KES ${lease.late_fee_amount.toLocaleString()}` 
+                    : 'As per agreement'}
                 </div>
               </div>
             </div>
@@ -264,13 +272,41 @@ export const LeaseDocumentViewer = ({ open, onClose }: LeaseDocumentViewerProps)
                 shall be held by the Landlord and returned to the Tenant at the end of the lease term, subject to deductions 
                 for damages beyond normal wear and tear.
               </p>
-              {lease.late_fee_amount && (
+              {(lease.late_fee_type || lease.late_fee_amount) && (
                 <>
                   <p className="text-foreground"><strong>4.3 Late Fees:</strong></p>
-                  <p className="text-foreground">
-                    A late fee of <strong>KES {lease.late_fee_amount.toLocaleString()}</strong> will be charged if rent 
-                    is not received within the grace period.
-                  </p>
+                  {lease.late_fee_type === 'percentage' ? (
+                    <p className="text-foreground">
+                      If rent payment is not received by the due date, a late fee will be charged at a rate of{' '}
+                      <strong>{lease.late_fee_value}% per day</strong>{' '}
+                      {lease.late_fee_grace_period_days > 0 && (
+                        <>
+                          after a grace period of <strong>{lease.late_fee_grace_period_days} day(s)</strong>
+                        </>
+                      )}
+                      , calculated on the outstanding rent amount, with a maximum cap of{' '}
+                      <strong>{lease.late_fee_max_percentage}% of the monthly rent</strong>.
+                    </p>
+                  ) : lease.late_fee_type === 'flat' ? (
+                    <p className="text-foreground">
+                      If rent payment is not received by the due date{' '}
+                      {lease.late_fee_grace_period_days > 0 && (
+                        <>
+                          (after a grace period of <strong>{lease.late_fee_grace_period_days} day(s)</strong>)
+                        </>
+                      )}
+                      , a one-time late fee of <strong>KES {lease.late_fee_value?.toLocaleString()}</strong> will be charged.
+                    </p>
+                  ) : lease.late_fee_type === 'none' ? (
+                    <p className="text-foreground">
+                      No late fees will be charged for this lease. However, timely payment is expected and appreciated.
+                    </p>
+                  ) : lease.late_fee_amount ? (
+                    <p className="text-foreground">
+                      A late fee of <strong>KES {lease.late_fee_amount.toLocaleString()}</strong> will be charged if rent 
+                      is not received within the grace period.
+                    </p>
+                  ) : null}
                 </>
               )}
             </div>

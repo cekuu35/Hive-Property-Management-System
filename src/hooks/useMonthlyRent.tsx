@@ -124,7 +124,7 @@ export const useMonthlyRent = () => {
       // Check if there's already a payment for this month
       const { data: existingPayment, error: paymentError } = await supabase
         .from('rent_payments')
-        .select('id, amount, due_date, status, paid_date')
+        .select('id, amount, due_date, status, paid_date, late_fee')
         .eq('lease_id', lease.id)
         .eq('due_date', dueDate)
         .maybeSingle();
@@ -164,7 +164,7 @@ export const useMonthlyRent = () => {
             // Next month's payment exists, check if it's paid
             const { data: nextPayment, error: nextError } = await supabase
               .from('rent_payments')
-              .select('status, due_date')
+              .select('status, due_date, late_fee')
               .eq('lease_id', lease.id)
               .eq('due_date', nextMonthDue)
               .single();
@@ -177,6 +177,8 @@ export const useMonthlyRent = () => {
               const nextDue = new Date(nextPayment.due_date);
               daysUntilDue = Math.ceil((nextDue.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
               isOverdue = daysUntilDue < 0;
+              // Use the actual late fee from the database
+              lateFee = nextPayment.late_fee || 0;
             }
           }
         } else {
@@ -186,6 +188,18 @@ export const useMonthlyRent = () => {
           const due = new Date(existingPayment.due_date);
           daysUntilDue = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
           isOverdue = daysUntilDue < 0;
+          // Use the actual late fee from the database
+          lateFee = existingPayment.late_fee || 0;
+          
+          console.log('💰 [useMonthlyRent] Payment details:', {
+            paymentId: existingPayment.id,
+            amount: existingPayment.amount,
+            dueDate: existingPayment.due_date,
+            status: existingPayment.status,
+            lateFee: lateFee,
+            isOverdue: isOverdue,
+            daysOverdue: Math.abs(daysUntilDue)
+          });
         }
       } else {
         // No payment exists for this month, create one
@@ -209,11 +223,8 @@ export const useMonthlyRent = () => {
         const due = new Date(dueDate);
         daysUntilDue = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
         isOverdue = daysUntilDue < 0;
-      }
-
-      // Calculate late fee (KES 2,500 after due date)
-      if (isOverdue) {
-        lateFee = 2500;
+        // Late fee will be 0 for newly created payments (calculated by cron job when overdue)
+        lateFee = 0;
       }
 
       setMonthlyRentData({

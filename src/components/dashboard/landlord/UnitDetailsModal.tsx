@@ -10,12 +10,13 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarDays, DollarSign, Wrench, User, Home, FileText, AlertTriangle, TrendingUp, Calendar as CalendarIcon, Clock, PlusCircle, Bell, Shield, BarChart3 } from 'lucide-react';
+import { CalendarDays, DollarSign, Wrench, User, Home, FileText, AlertTriangle, TrendingUp, Calendar as CalendarIcon, Clock, PlusCircle, Bell, Shield, BarChart3, Calculator } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { MaintenanceRequestModal } from '@/components/dashboard/maintenance/MaintenanceRequestModal';
 import { PaymentModal } from '@/components/dashboard/landlord/payments/PaymentModal';
 import { NoticeModal } from './NoticeModal';
+import { LateFeeConfigModal } from './LateFeeConfigModal';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
@@ -37,6 +38,7 @@ export const UnitDetailsModal = ({ unit, open, onOpenChange, onEdit }: UnitDetai
   const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showNoticeModal, setShowNoticeModal] = useState(false);
+  const [showLateFeeConfig, setShowLateFeeConfig] = useState(false);
   
   const { toast } = useToast();
 
@@ -875,15 +877,42 @@ Maintenance Summary:
           </TabsContent>
         </Tabs>
 
-        <div className="flex justify-end gap-2 pt-4 border-t">
-          <Button variant="outline" onClick={onEdit}>
-            Edit Unit
+        <div className="flex justify-between items-center gap-2 pt-4 border-t">
+          <Button variant="outline" onClick={() => setShowLateFeeConfig(true)} className="gap-2">
+            <Calculator className="h-4 w-4" />
+            Configure Late Fees
           </Button>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Close
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onEdit}>
+              Edit Unit
+            </Button>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Close
+            </Button>
+          </div>
         </div>
       </DialogContent>
+      
+      {/* Late Fee Configuration Modal */}
+      <LateFeeConfigModal
+        open={showLateFeeConfig}
+        onOpenChange={setShowLateFeeConfig}
+        unitId={unit?.id}
+        unitNumber={unit?.unit_number}
+        currentConfig={{
+          late_fee_type: unit?.late_fee_type,
+          late_fee_value: unit?.late_fee_value,
+          late_fee_max_percentage: unit?.late_fee_max_percentage,
+          late_fee_grace_period_days: unit?.late_fee_grace_period_days
+        }}
+        onSave={() => {
+          fetchUnitDetails();
+          toast({
+            title: 'Late Fee Policy Updated',
+            description: `Late fee settings for Unit ${unit?.unit_number} have been saved.`
+          });
+        }}
+      />
 
       {/* Quick Action Modals */}
       <MaintenanceRequestModal

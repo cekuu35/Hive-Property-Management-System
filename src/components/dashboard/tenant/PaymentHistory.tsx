@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Receipt, Download, RefreshCw, CreditCard, Calendar, DollarSign, TrendingUp, AlertCircle, Clock } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Receipt, Download, RefreshCw, CreditCard, Calendar, DollarSign, TrendingUp, AlertCircle, Clock, Filter } from 'lucide-react';
 import { useTenantPayments } from '@/hooks/useTenantPayments';
 import { fetchTenantPaymentHistory, getTenantPaymentStats, PaymentRecord } from '@/utils/paymentUtils';
 import { useAuth } from '@/hooks/useAuth';
+import { generatePaymentReceipt } from '@/utils/receiptGenerator';
 
 interface PaymentHistoryProps {
   onMakePayment?: () => void;
@@ -19,23 +21,6 @@ export const PaymentHistory = ({ onMakePayment }: PaymentHistoryProps) => {
     refetch 
   } = useTenantPayments();
   
-  // Debug logging
-  console.log('🔍 [PaymentHistory] Component render:', {
-    profileId: profile?.id,
-    recentPaymentsCount: recentPayments?.length || 0,
-    loading,
-    recentPayments: recentPayments?.slice(0, 3) // Show first 3 payments
-  });
-  
-  // Monitor recentPayments changes
-  useEffect(() => {
-    console.log('🔄 [PaymentHistory] recentPayments changed:', {
-      count: recentPayments?.length || 0,
-      hasPaidPayments: recentPayments?.some(p => p.status === 'paid'),
-      firstPayment: recentPayments?.[0]
-    });
-  }, [recentPayments]);
-  
   const [paymentStats, setPaymentStats] = useState({
     totalPaid: 0,
     totalPending: 0,
@@ -43,6 +28,7 @@ export const PaymentHistory = ({ onMakePayment }: PaymentHistoryProps) => {
     totalAmount: 0
   });
   const [statsLoading, setStatsLoading] = useState(false);
+  const [filterStatus, setFilterStatus] = useState<'all' | 'paid' | 'pending' | 'overdue'>('all');
 
   // Load payment statistics
   useEffect(() => {
@@ -87,15 +73,32 @@ export const PaymentHistory = ({ onMakePayment }: PaymentHistoryProps) => {
 
   const formatDate = (dateString: string) => {
     try {
-      return new Date(dateString).toLocaleDateString('en-KE', {
+      return new Date(dateString).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
+        day: 'numeric'
       });
     } catch {
       return dateString;
+    }
+  };
+
+  const formatDateTime = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return {
+        date: date.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric'
+        }),
+        time: date.toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+      };
+    } catch {
+      return { date: dateString, time: '' };
     }
   };
 
@@ -104,13 +107,37 @@ export const PaymentHistory = ({ onMakePayment }: PaymentHistoryProps) => {
   };
 
   const handleExport = () => {
-    // TODO: Implement export functionality
-    console.log('Exporting payment history...');
+    // Create CSV export
+    const csvContent = [
+      ['Date', 'Amount', 'Status', 'Method', 'Reference', 'Late Fee'],
+      ...recentPayments.map(p => [
+        formatDate(p.date),
+        p.amount,
+        p.status,
+        p.method || 'N/A',
+        p.reference || 'N/A',
+        p.late_fee || 0
+      ])
+    ].map(row => row.join(',')).join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `payment-history-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
   };
 
   const handleDownloadReceipt = (payment: any) => {
-    // TODO: Implement receipt download
-    console.log('Downloading receipt for payment:', payment.id);
+    generatePaymentReceipt({
+      payment,
+      tenant: {
+        name: profile?.full_name || 'Tenant',
+        email: profile?.email || '',
+        phone: profile?.phone || ''
+      }
+    });
   };
 
   if (loading) {
@@ -199,17 +226,27 @@ export const PaymentHistory = ({ onMakePayment }: PaymentHistoryProps) => {
             </div>
           </div>
         )}
-        {/* Debug section - remove in production */}
-        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs">
-          <strong>Debug Info:</strong> recentPayments.length = {recentPayments?.length || 0}, 
-          loading = {loading ? 'true' : 'false'}, 
-          profileId = {profile?.id || 'none'}
-          {recentPayments && recentPayments.length > 0 && (
-            <div className="mt-2">
-              <strong>First payment:</strong> {JSON.stringify(recentPayments[0], null, 2)}
-            </div>
-          )}
-        </div>
+        {/* Filter Tabs */}
+        {recentPayments.length > 0 && (
+          <div className="mb-4">
+            <Tabs value={filterStatus} onValueChange={(v) => setFilterStatus(v as any)}>
+              <TabsList className="grid w-full grid-cols-4">
+                <TabsTrigger value="all">
+                  All ({recentPayments.length})
+                </TabsTrigger>
+                <TabsTrigger value="paid">
+                  Paid ({recentPayments.filter(p => p.status === 'paid').length})
+                </TabsTrigger>
+                <TabsTrigger value="pending">
+                  Pending ({recentPayments.filter(p => p.status === 'pending').length})
+                </TabsTrigger>
+                <TabsTrigger value="overdue">
+                  Overdue ({recentPayments.filter(p => p.status === 'overdue').length})
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+        )}
         
         {recentPayments.length === 0 ? (
           <div className="text-center py-12">
@@ -229,7 +266,10 @@ export const PaymentHistory = ({ onMakePayment }: PaymentHistoryProps) => {
           </div>
         ) : (
           <div className="space-y-3">
-            {recentPayments.map((payment, index) => (
+            {recentPayments
+              .filter(p => filterStatus === 'all' || p.status === filterStatus)
+              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+              .map((payment, index) => (
               <div 
                 key={payment.id || index} 
                 className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors group"
@@ -249,15 +289,21 @@ export const PaymentHistory = ({ onMakePayment }: PaymentHistoryProps) => {
                       </Badge>
                     </div>
                     <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {formatDate(payment.date)}
+                      <div className="flex items-center gap-1 min-w-[140px]">
+                        <Calendar className="h-3 w-3 flex-shrink-0" />
+                        <span className="font-mono tabular-nums">{formatDate(payment.date)}</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <CreditCard className="h-3 w-3" />
-                        {payment.method || 'N/A'}
+                        <CreditCard className="h-3 w-3 flex-shrink-0" />
+                        <span>{payment.method || 'Pending'}</span>
                       </div>
                     </div>
+                    {payment.late_fee && payment.late_fee > 0 && (
+                      <div className="flex items-center gap-1 text-xs text-red-600 font-medium">
+                        <AlertCircle className="h-3 w-3" />
+                        Late fee: KES {payment.late_fee.toLocaleString()}
+                      </div>
+                    )}
                     {payment.reference && (
                       <p className="text-xs text-muted-foreground font-mono">
                         Ref: {payment.reference}
@@ -266,15 +312,16 @@ export const PaymentHistory = ({ onMakePayment }: PaymentHistoryProps) => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => handleDownloadReceipt(payment)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <Download className="h-4 w-4 mr-1" />
-                    Receipt
-                  </Button>
+                  {payment.status === 'paid' && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleDownloadReceipt(payment)}
+                    >
+                      <Download className="h-4 w-4 mr-1" />
+                      Receipt
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}

@@ -29,27 +29,27 @@ export function MobileHeader({
   className
 }: MobileHeaderProps) {
   return (
-    <div className={cn("sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b shadow-sm", className)}>
-      <div className="flex items-center justify-between p-4 safe-area-top">
+    <div className={cn("sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b shadow-sm w-full overflow-hidden", className)}>
+      <div className="flex items-center justify-between px-4 py-3 safe-area-top max-w-full">
         {/* Left side - Title */}
-        <div className="flex-1 min-w-0 ml-12">
-          <h1 className="text-lg font-semibold truncate">{title}</h1>
+        <div className="flex-1 min-w-0 ml-12 pr-2">
+          <h1 className="text-lg md:text-xl font-bold truncate leading-tight">{title}</h1>
           {subtitle && (
-            <p className="text-sm text-muted-foreground truncate">{subtitle}</p>
+            <p className="text-sm text-muted-foreground truncate leading-snug">{subtitle}</p>
           )}
         </div>
 
         {/* Right side - Actions */}
-        <div className="flex items-center gap-2 ml-4">
+        <div className="flex items-center gap-1 flex-shrink-0">
           {/* Refresh Button */}
           {onRefresh && (
             <Button
               variant="ghost"
               size="sm"
               onClick={onRefresh}
-              className="h-8 w-8 p-0"
+              className="h-10 w-10 p-0 rounded-full touch-manipulation"
             >
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw className="h-5 w-5" />
             </Button>
           )}
 
@@ -59,13 +59,13 @@ export function MobileHeader({
               variant="ghost"
               size="sm"
               onClick={onNotifications}
-              className="h-8 w-8 p-0 relative"
+              className="h-10 w-10 p-0 rounded-full relative touch-manipulation"
             >
-              <Bell className="h-4 w-4" />
+              <Bell className="h-5 w-5" />
               {notifications > 0 && (
                 <Badge 
                   variant="destructive"
-                  className="absolute -top-1 -right-1 h-4 w-4 rounded-full p-0 flex items-center justify-center text-xs"
+                  className="absolute -top-0.5 -right-0.5 h-5 w-5 rounded-full p-0 flex items-center justify-center text-[10px] font-bold"
                 >
                   {notifications > 99 ? '99+' : notifications}
                 </Badge>
@@ -79,17 +79,17 @@ export function MobileHeader({
               variant="ghost"
               size="sm"
               onClick={onSettings}
-              className="h-8 w-8 p-0"
+              className="h-10 w-10 p-0 rounded-full touch-manipulation"
             >
-              <Settings className="h-4 w-4" />
+              <Settings className="h-5 w-5" />
             </Button>
           )}
 
           {/* User Avatar */}
           {userAvatar && userName && (
-            <Avatar className="h-8 w-8">
+            <Avatar className="h-9 w-9 ml-1">
               <AvatarImage src={userAvatar} />
-              <AvatarFallback className="text-xs">
+              <AvatarFallback className="text-xs font-semibold">
                 {userName.split(' ').map(n => n[0]).join('').toUpperCase()}
               </AvatarFallback>
             </Avatar>

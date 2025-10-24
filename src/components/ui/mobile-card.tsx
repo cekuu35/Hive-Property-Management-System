@@ -40,27 +40,29 @@ export function MobileCard({
   children
 }: MobileCardProps) {
   return (
-    <Card className={cn("w-full", className)}>
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
+    <Card className={cn("w-full max-w-full overflow-hidden", className)}>
+      <CardHeader className="pb-3 px-4 pt-4">
+        <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <CardTitle className="text-base font-medium truncate">{title}</CardTitle>
+            <CardTitle className="text-base md:text-lg font-semibold truncate leading-tight">
+              {title}
+            </CardTitle>
             {description && (
-              <CardDescription className="text-sm mt-1 line-clamp-2">
+              <CardDescription className="text-sm mt-1.5 line-clamp-2 leading-snug">
                 {description}
               </CardDescription>
             )}
           </div>
-          <div className="flex items-center gap-2 ml-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             {icon && (
-              <div className="flex-shrink-0">
+              <div className="flex-shrink-0 w-5 h-5">
                 {icon}
               </div>
             )}
             {badge && (
               <Badge 
                 variant="outline" 
-                className={cn("text-xs", statusColors[status])}
+                className={cn("text-xs whitespace-nowrap", statusColors[status])}
               >
                 {badge}
               </Badge>
@@ -70,9 +72,9 @@ export function MobileCard({
       </CardHeader>
       
       {(value || children) && (
-        <CardContent className="pt-0">
+        <CardContent className="pt-0 px-4 pb-4">
           {value && (
-            <div className="text-2xl font-bold mb-3">
+            <div className="text-2xl md:text-3xl font-bold mb-3 truncate">
               {typeof value === 'number' ? value.toLocaleString() : value}
             </div>
           )}
@@ -81,7 +83,7 @@ export function MobileCard({
             <Button
               variant={action.variant || 'outline'}
               size="sm"
-              className="w-full mt-3"
+              className="w-full mt-3 min-h-[48px] text-base font-medium rounded-xl"
               onClick={action.onClick}
             >
               {action.label}
@@ -102,7 +104,7 @@ interface MobileGridProps {
 export function MobileGrid({ children, columns = 1, className }: MobileGridProps) {
   return (
     <div className={cn(
-      "grid gap-4",
+      "grid gap-3 w-full",
       columns === 1 ? "grid-cols-1" : "grid-cols-2",
       className
     )}>
@@ -146,33 +148,35 @@ export function MobileListItem({
   return (
     <div
       className={cn(
-        "flex items-center justify-between p-4 bg-card rounded-lg border",
-        onClick && "cursor-pointer hover:bg-accent transition-colors",
+        "flex items-center justify-between p-4 bg-card rounded-xl border min-h-[56px] w-full max-w-full overflow-hidden",
+        onClick && "cursor-pointer hover:bg-accent active:bg-accent/80 transition-colors touch-manipulation",
         className
       )}
       onClick={onClick}
     >
       <div className="flex items-center gap-3 flex-1 min-w-0">
         {icon && (
-          <div className="flex-shrink-0">
+          <div className="flex-shrink-0 w-6 h-6">
             {icon}
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <div className="font-medium truncate">{title}</div>
+          <div className="font-medium truncate text-base leading-tight">{title}</div>
           {subtitle && (
-            <div className="text-sm text-muted-foreground truncate">{subtitle}</div>
+            <div className="text-sm text-muted-foreground truncate mt-0.5 leading-snug">
+              {subtitle}
+            </div>
           )}
         </div>
       </div>
       {value && (
-        <div className="flex-shrink-0 ml-2">
+        <div className="flex-shrink-0 ml-3">
           <span className={cn(
-            "text-sm font-medium",
-            status === 'success' && "text-green-600",
-            status === 'warning' && "text-yellow-600",
-            status === 'error' && "text-red-600",
-            status === 'info' && "text-blue-600"
+            "text-sm font-semibold whitespace-nowrap",
+            status === 'success' && "text-green-600 dark:text-green-400",
+            status === 'warning' && "text-yellow-600 dark:text-yellow-400",
+            status === 'error' && "text-red-600 dark:text-red-400",
+            status === 'info' && "text-blue-600 dark:text-blue-400"
           )}>
             {typeof value === 'number' ? value.toLocaleString() : value}
           </span>
