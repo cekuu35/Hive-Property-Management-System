@@ -1,0 +1,45 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle for better visibility -->
+  <circle cx="256" cy="256" r="240" fill="#3B82F6"/>
+  
+  <!-- Roof - modern triangular design -->
+  <path d="M256 80 L420 180 L420 200 L380 200 L380 190 L256 110 L132 190 L132 200 L92 200 L92 180 Z" 
+        fill="#FCD34D" 
+        stroke="#F59E0B" 
+        stroke-width="4"/>
+  
+  <!-- Left pillar of H -->
+  <rect x="140" y="190" width="60" height="220" rx="8" fill="#FFFFFF" stroke="#E5E7EB" stroke-width="3"/>
+  
+  <!-- Right pillar of H -->
+  <rect x="312" y="190" width="60" height="220" rx="8" fill="#FFFFFF" stroke="#E5E7EB" stroke-width="3"/>
+  
+  <!-- Horizontal bar of H (connecting beam) -->
+  <rect x="200" y="280" width="112" height="40" rx="8" fill="#FFFFFF" stroke="#E5E7EB" stroke-width="3"/>
+  
+  <!-- Decorative elements - windows on pillars -->
+  <rect x="155" y="210" width="30" height="30" rx="4" fill="#3B82F6" opacity="0.8"/>
+  <rect x="155" y="260" width="30" height="30" rx="4" fill="#3B82F6" opacity="0.8"/>
+  <rect x="155" y="360" width="30" height="30" rx="4" fill="#3B82F6" opacity="0.8"/>
+  
+  <rect x="327" y="210" width="30" height="30" rx="4" fill="#3B82F6" opacity="0.8"/>
+  <rect x="327" y="260" width="30" height="30" rx="4" fill="#3B82F6" opacity="0.8"/>
+  <rect x="327" y="360" width="30" height="30" rx="4" fill="#3B82F6" opacity="0.8"/>
+  
+  <!-- Chimney detail on roof -->
+  <rect x="360" y="140" width="30" height="50" rx="4" fill="#DC2626" stroke="#991B1B" stroke-width="2"/>
+  <rect x="355" y="135" width="40" height="15" rx="3" fill="#EF4444"/>
+  
+  <!-- Door at bottom center -->
+  <path d="M235 380 L235 410 Q235 415 240 415 L272 415 Q277 415 277 410 L277 380 Z" 
+        fill="#1E40AF" 
+        stroke="#1E3A8A" 
+        stroke-width="2"/>
+  <circle cx="268" cy="395" r="3" fill="#FCD34D"/>
+  
+  <!-- Shadow/depth effect -->
+  <ellipse cx="256" cy="420" rx="120" ry="15" fill="#000000" opacity="0.1"/>
+</svg>
+
+
+

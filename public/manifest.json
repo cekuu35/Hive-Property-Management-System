@@ -16,28 +16,28 @@
   "categories": ["business", "productivity", "finance"],
   "icons": [
     {
-      "src": "/icons/property-management-icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/hive-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "maskable any"
     },
     {
-      "src": "/logo.png",
+      "src": "/hive-logo.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/logo.png",
-      "sizes": "512x512",
+      "src": "/hive-logo.png",
+      "sizes": "144x144",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/badge.png",
+      "src": "/hive-logo.png",
       "sizes": "96x96",
       "type": "image/png",
-      "purpose": "badge monochrome"
+      "purpose": "any"
     }
   ],
   "screenshots": [
