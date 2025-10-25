@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarDays, DollarSign, Wrench, User, Home, FileText, AlertTriangle, TrendingUp, Calendar as CalendarIcon, Clock, PlusCircle, Bell, Shield, BarChart3, Calculator } from 'lucide-react';
+import { CalendarDays, DollarSign, Wrench, User, Home, FileText, AlertTriangle, TrendingUp, Calendar as CalendarIcon, Clock, PlusCircle, Bell, Shield, BarChart3, Calculator, Eye } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { MaintenanceRequestModal } from '@/components/dashboard/maintenance/MaintenanceRequestModal';
@@ -34,6 +34,11 @@ export const UnitDetailsModal = ({ unit, open, onOpenChange, onEdit }: UnitDetai
   const [tenantProfile, setTenantProfile] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   
+  // Security deposit tracking
+  const [depositData, setDepositData] = useState<any>(null);
+  const [deductions, setDeductions] = useState<any[]>([]);
+  const [showDeductionsModal, setShowDeductionsModal] = useState(false);
+  
   // Modal states
   const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -47,6 +52,44 @@ export const UnitDetailsModal = ({ unit, open, onOpenChange, onEdit }: UnitDetai
       fetchUnitDetails();
     }
   }, [unit?.id, open]);
+
+  const fetchSecurityDepositData = async (tenantInfoId: string) => {
+    if (!tenantInfoId) return;
+
+    try {
+      console.log('🔍 [UnitDetailsModal] Fetching security deposit for tenant_info_id:', tenantInfoId);
+      
+      // Fetch deposit info from tenant_info
+      const { data: depositInfo, error: depositError } = await supabase
+        .from('tenant_info')
+        .select('security_deposit_amount, security_deposit_remaining, security_deposit_paid, security_deposit_paid_date')
+        .eq('id', tenantInfoId)
+        .maybeSingle();
+
+      if (depositError) {
+        console.error('❌ [UnitDetailsModal] Error fetching deposit info:', depositError);
+      } else if (depositInfo) {
+        console.log('✅ [UnitDetailsModal] Found deposit info:', depositInfo);
+        setDepositData(depositInfo);
+      }
+
+      // Fetch deduction history
+      const { data: deductionHistory, error: deductionsError } = await supabase
+        .from('security_deposit_deductions')
+        .select('*')
+        .eq('tenant_id', tenantInfoId)
+        .order('deducted_at', { ascending: false });
+
+      if (deductionsError) {
+        console.error('❌ [UnitDetailsModal] Error fetching deductions:', deductionsError);
+      } else {
+        console.log('✅ [UnitDetailsModal] Found deductions:', deductionHistory?.length || 0);
+        setDeductions(deductionHistory || []);
+      }
+    } catch (error) {
+      console.error('Error fetching security deposit data:', error);
+    }
+  };
 
   const fetchUnitDetails = async () => {
     if (!unit?.id) return;
@@ -180,6 +223,11 @@ export const UnitDetailsModal = ({ unit, open, onOpenChange, onEdit }: UnitDetai
           .limit(12);
 
         setRentPayments(payments || []);
+      }
+
+      // Fetch security deposit data after lease is loaded
+      if (lease?.tenant_info_id) {
+        await fetchSecurityDepositData(lease.tenant_info_id);
       }
     } catch (error) {
       console.error('Error fetching unit details:', error);
@@ -612,7 +660,7 @@ Maintenance Summary:
                           <p className="text-muted-foreground">Outstanding</p>
                           <p className="font-bold text-destructive">
                             KES {rentPayments
-                              .filter(p => p.status === 'pending' || p.status === 'late')
+                              .filter(p => p.status === 'pending' || p.status === 'late' || p.status === 'overdue')
                               .reduce((sum, p) => sum + (p.amount || 0), 0)
                               .toLocaleString()}
                           </p>
@@ -636,14 +684,14 @@ Maintenance Summary:
                       <p className="text-muted-foreground">Total Maintenance Cost</p>
                       <p className="text-lg font-bold">
                         KES {maintenanceRequests
-                          .reduce((sum, req) => sum + (req.actual_cost || req.estimated_cost || 0), 0)
+                          .reduce((sum, req) => sum + (req.maintenance_cost || req.actual_cost || req.estimated_cost || 0), 0)
                           .toLocaleString()}
                       </p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Pending Requests</p>
                       <p className="font-medium">
-                        {maintenanceRequests.filter(req => req.status === 'pending' || req.status === 'in_progress').length}
+                        {maintenanceRequests.filter(req => req.status === 'pending' || req.status === 'in_progress' || req.status === 'assigned').length}
                       </p>
                     </div>
                     <div>
@@ -651,6 +699,7 @@ Maintenance Summary:
                       <p className="font-medium">
                         {maintenanceRequests.filter(req => 
                           req.status === 'completed' && 
+                          req.created_at &&
                           new Date(req.created_at).getFullYear() === new Date().getFullYear()
                         ).length}
                       </p>
@@ -659,6 +708,177 @@ Maintenance Summary:
                 </CardContent>
               </Card>
             </div>
+
+            {/* Security Deposit Tracking */}
+            {leaseData && depositData && (
+              <Card className="border-blue-200 dark:border-blue-800">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Shield className="h-5 w-5 text-blue-600" />
+                    Security Deposit Tracker
+                  </CardTitle>
+                  <CardDescription>
+                    Track maintenance deductions and remaining balance for refund at lease end
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Deposit Summary */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-lg">
+                      <p className="text-sm text-muted-foreground mb-1">Initial Deposit</p>
+                      <p className="text-lg font-bold text-blue-600">
+                        KES {(depositData.security_deposit_amount || 0).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="bg-green-50 dark:bg-green-950 p-3 rounded-lg">
+                      <p className="text-sm text-muted-foreground mb-1">Remaining Balance</p>
+                      <p className="text-lg font-bold text-green-600">
+                        KES {(depositData.security_deposit_remaining || 0).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="bg-orange-50 dark:bg-orange-950 p-3 rounded-lg">
+                      <p className="text-sm text-muted-foreground mb-1">Total Deductions</p>
+                      <p className="text-lg font-bold text-orange-600">
+                        KES {((depositData.security_deposit_amount || 0) - (depositData.security_deposit_remaining || 0)).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="bg-purple-50 dark:bg-purple-950 p-3 rounded-lg">
+                      <p className="text-sm text-muted-foreground mb-1">Deposit Status</p>
+                      <Badge variant={depositData.security_deposit_paid ? "default" : "secondary"} className="mt-1">
+                        {depositData.security_deposit_paid ? "✓ Paid" : "Pending"}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-sm text-muted-foreground">Remaining Balance</span>
+                      <span className="text-sm font-medium">
+                        {depositData.security_deposit_amount > 0 
+                          ? Math.round((depositData.security_deposit_remaining / depositData.security_deposit_amount) * 100)
+                          : 0}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-muted rounded-full h-3">
+                      <div 
+                        className={cn(
+                          "h-3 rounded-full transition-all",
+                          depositData.security_deposit_amount > 0 && (depositData.security_deposit_remaining / depositData.security_deposit_amount) >= 0.8 ? "bg-green-600" :
+                          depositData.security_deposit_amount > 0 && (depositData.security_deposit_remaining / depositData.security_deposit_amount) >= 0.5 ? "bg-yellow-600" :
+                          "bg-red-600"
+                        )}
+                        style={{
+                          width: `${depositData.security_deposit_amount > 0 
+                            ? Math.max(0, (depositData.security_deposit_remaining / depositData.security_deposit_amount) * 100)
+                            : 0}%`
+                        }}
+                      ></div>
+                    </div>
+                  </div>
+
+                  {/* Deduction History */}
+                  {deductions.length > 0 && (
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-sm font-medium">Recent Deductions</h4>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => setShowDeductionsModal(true)}
+                          className="text-xs"
+                        >
+                          View All ({deductions.length})
+                        </Button>
+                      </div>
+                      <div className="space-y-2 max-h-40 overflow-y-auto">
+                        {deductions.slice(0, 3).map((deduction) => (
+                          <div key={deduction.id} className="flex items-center justify-between p-2 bg-muted rounded-lg text-sm">
+                            <div className="flex items-center gap-2">
+                              <Wrench className="h-4 w-4 text-muted-foreground" />
+                              <div>
+                                <p className="font-medium">{deduction.reason || 'Maintenance Cost'}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {format(new Date(deduction.deducted_at), 'MMM d, yyyy')}
+                                </p>
+                              </div>
+                            </div>
+                            <span className="font-semibold text-destructive">
+                              -KES {(deduction.amount || 0).toLocaleString()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Info Message */}
+                  <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5" />
+                      <div className="text-sm text-blue-800 dark:text-blue-200">
+                        <strong>Refund Process:</strong> At lease end, refund the remaining balance of KES {(depositData.security_deposit_remaining || 0).toLocaleString()} to the tenant after final inspection.
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-2 pt-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setShowDeductionsModal(true)}
+                      className="flex-1"
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      View History
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => {
+                        // Generate deposit report
+                        const reportContent = `
+Security Deposit Report - Unit ${unit.unit_number}
+==========================================
+Generated: ${format(new Date(), 'PPP')}
+
+Tenant: ${tenantProfile?.first_name || ''} ${tenantProfile?.last_name || ''}
+Lease Period: ${format(new Date(leaseData.start_date), 'PPP')} - ${format(new Date(leaseData.end_date), 'PPP')}
+
+Initial Deposit: KES ${(depositData.security_deposit_amount || 0).toLocaleString()}
+Total Deductions: KES ${((depositData.security_deposit_amount || 0) - (depositData.security_deposit_remaining || 0)).toLocaleString()}
+Remaining Balance: KES ${(depositData.security_deposit_remaining || 0).toLocaleString()}
+
+Deduction History:
+${deductions.map(d => `- ${format(new Date(d.deducted_at), 'MMM d, yyyy')}: ${d.reason || 'Maintenance'} - KES ${(d.amount || 0).toLocaleString()}`).join('\n')}
+
+Refund Amount Due: KES ${(depositData.security_deposit_remaining || 0).toLocaleString()}
+`;
+                        const blob = new Blob([reportContent], { type: 'text/plain' });
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = `Deposit-Report-Unit-${unit.unit_number}-${format(new Date(), 'yyyy-MM-dd')}.txt`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        URL.revokeObjectURL(url);
+                        
+                        toast({
+                          title: "Report Generated",
+                          description: "Security deposit report has been downloaded."
+                        });
+                      }}
+                    >
+                      <FileText className="h-4 w-4 mr-2" />
+                      Export Report
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             <Card>
               <CardHeader>
@@ -761,7 +981,9 @@ Maintenance Summary:
                     <div>
                       <p className="text-sm text-muted-foreground">Unit Age</p>
                       <p className="font-medium">
-                        {Math.ceil((new Date().getTime() - new Date(unit.created_at || new Date()).getTime()) / (1000 * 60 * 60 * 24))} days since creation
+                        {unit.created_at 
+                          ? `${Math.ceil((new Date().getTime() - new Date(unit.created_at).getTime()) / (1000 * 60 * 60 * 24))} days since creation`
+                          : 'N/A'}
                       </p>
                     </div>
                   </div>
@@ -817,10 +1039,10 @@ Maintenance Summary:
                       <p className="text-sm text-muted-foreground">Payment Status</p>
                       <div className="flex items-center justify-between">
                         <span className="font-medium">
-                          {rentPayments.filter(p => p.status === 'late').length} late payments
+                          {rentPayments.filter(p => p.status === 'late' || p.status === 'overdue').length} late payments
                         </span>
-                        <Badge variant={rentPayments.filter(p => p.status === 'late').length === 0 ? "default" : "destructive"}>
-                          {rentPayments.filter(p => p.status === 'late').length === 0 ? "Current" : "Overdue"}
+                        <Badge variant={rentPayments.filter(p => p.status === 'late' || p.status === 'overdue').length === 0 ? "default" : "destructive"}>
+                          {rentPayments.filter(p => p.status === 'late' || p.status === 'overdue').length === 0 ? "Current" : "Overdue"}
                         </Badge>
                       </div>
                     </div>
@@ -832,7 +1054,7 @@ Maintenance Summary:
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5" />
+                  <CalendarIcon className="h-5 w-5" />
                   Performance Metrics
                 </CardTitle>
               </CardHeader>
@@ -847,27 +1069,39 @@ Maintenance Summary:
                   </div>
                   <div className="text-center">
                     <div className="text-lg font-bold">
-                      {maintenanceRequests.length > 0 ?
-                        Math.round(maintenanceRequests.reduce((sum, req) => {
-                          if (req.completed_date && req.created_at) {
-                            return sum + (new Date(req.completed_date).getTime() - new Date(req.created_at).getTime()) / (1000 * 60 * 60 * 24);
-                          }
-                          return sum;
-                        }, 0) / maintenanceRequests.filter(req => req.completed_date).length) || 0 : 0}
+                      {(() => {
+                        const completedRequests = maintenanceRequests.filter(req => req.completed_date && req.created_at);
+                        if (completedRequests.length === 0) return 0;
+                        const totalDays = completedRequests.reduce((sum, req) => {
+                          return sum + (new Date(req.completed_date).getTime() - new Date(req.created_at).getTime()) / (1000 * 60 * 60 * 24);
+                        }, 0);
+                        return Math.round(totalDays / completedRequests.length);
+                      })()}
                     </div>
                     <div className="text-muted-foreground">Avg. Repair Days</div>
                   </div>
                   <div className="text-center">
                     <div className="text-lg font-bold">
-                      {unit.rent_amount && maintenanceRequests.length > 0 ?
-                        Math.round((maintenanceRequests.reduce((sum, req) => sum + (req.actual_cost || req.estimated_cost || 0), 0) / (unit.rent_amount * 12)) * 100) : 0}%
+                      {(() => {
+                        if (!unit.rent_amount || unit.rent_amount === 0) return '0';
+                        const totalMaintenanceCost = maintenanceRequests.reduce((sum, req) => {
+                          return sum + (req.maintenance_cost || req.actual_cost || req.estimated_cost || 0);
+                        }, 0);
+                        const annualRent = unit.rent_amount * 12;
+                        return Math.round((totalMaintenanceCost / annualRent) * 100);
+                      })()}%
                     </div>
                     <div className="text-muted-foreground">Maintenance/Rent Ratio</div>
                   </div>
                   <div className="text-center">
                     <div className="text-lg font-bold">
-                      {leaseData ? 
-                        Math.round(((new Date().getTime() - new Date(leaseData.start_date).getTime()) / (1000 * 60 * 60 * 24)) / 30) : 0}
+                      {(() => {
+                        if (!leaseData || !leaseData.start_date) return 0;
+                        const startDate = new Date(leaseData.start_date);
+                        const currentDate = new Date();
+                        const daysDiff = (currentDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
+                        return Math.max(0, Math.round(daysDiff / 30.44)); // Average days per month
+                      })()}
                     </div>
                     <div className="text-muted-foreground">Months Occupied</div>
                   </div>
@@ -934,6 +1168,78 @@ Maintenance Summary:
         tenantName={tenantProfile ? `${tenantProfile.first_name} ${tenantProfile.last_name}` : undefined}
         unitNumber={unit?.unit_number}
       />
+
+      {/* Deductions History Modal */}
+      <Dialog open={showDeductionsModal} onOpenChange={setShowDeductionsModal}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-blue-600" />
+              Security Deposit Deduction History
+            </DialogTitle>
+            <DialogDescription>
+              Complete history of all deductions from security deposit for Unit {unit?.unit_number}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-y-auto pr-2 space-y-3">
+            {deductions.length > 0 ? (
+              deductions.map((deduction) => (
+                <Card key={deduction.id}>
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Wrench className="h-5 w-5 text-muted-foreground" />
+                        <div>
+                          <h4 className="font-semibold">{deduction.reason || 'Maintenance Cost'}</h4>
+                          <p className="text-sm text-muted-foreground">
+                            {format(new Date(deduction.deducted_at), 'MMMM d, yyyy • h:mm a')}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-lg font-bold text-destructive">
+                          -KES {(deduction.amount || 0).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                    {deduction.maintenance_request_id && (
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        <span className="font-medium">Related Maintenance Request ID:</span> {deduction.maintenance_request_id}
+                      </div>
+                    )}
+                    {deduction.notes && (
+                      <div className="mt-2 p-2 bg-muted rounded text-sm">
+                        <p className="text-muted-foreground">{deduction.notes}</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              <div className="text-center py-8">
+                <Shield className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+                <h3 className="text-lg font-semibold mb-2">No Deductions Yet</h3>
+                <p className="text-muted-foreground">
+                  No maintenance costs have been deducted from the security deposit
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-between items-center pt-4 border-t">
+            <div className="text-sm">
+              <span className="text-muted-foreground">Total Deducted:</span>
+              <span className="font-bold text-destructive ml-2">
+                KES {deductions.reduce((sum, d) => sum + (d.amount || 0), 0).toLocaleString()}
+              </span>
+            </div>
+            <Button variant="outline" onClick={() => setShowDeductionsModal(false)}>
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 };

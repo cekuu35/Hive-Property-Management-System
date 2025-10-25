@@ -153,36 +153,60 @@ export const MaintenanceSection = () => {
   const handleSubmitCost = async () => {
     if (!selectedRequest) return;
 
+    if (!assignmentData.estimatedCost || parseFloat(assignmentData.estimatedCost) <= 0) {
+      toast({
+        title: "Error",
+        description: "Please enter a valid cost amount",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
+      console.log('💰 Starting cost update and completion...');
+      
+      // Update the cost first
       await updateCost(
         selectedRequest.id,
         parseFloat(assignmentData.estimatedCost),
         assignmentData.notes || undefined
       );
 
+      console.log('✅ Cost updated, now completing request...');
+
+      // Mark as completed - this will trigger the security deposit deduction
+      await updateRequestStatus(selectedRequest.id, 'completed');
+
+      console.log('✅ Request completed successfully');
+
+      toast({
+        title: "Success",
+        description: "Maintenance completed and cost recorded. Security deposit deducted successfully.",
+      });
+
       setIsCostModalOpen(false);
       setSelectedRequest(null);
       setAssignmentData({ contractorId: '', notes: '', estimatedCost: '', scheduledDate: '' });
-    } catch (error) {
-      console.error('Error updating cost:', error);
-    }
-  };
-
-  const handleCompleteRequest = async (requestId: string) => {
-    try {
-      await updateRequestStatus(requestId, 'completed');
-      toast({
-        title: "Success",
-        description: "Maintenance request completed successfully"
-      });
-    } catch (error) {
-      console.error('Error completing request:', error);
+    } catch (error: any) {
+      console.error('❌ Error completing request:', error);
       toast({
         title: "Error",
-        description: "Failed to complete request",
+        description: error?.message || "Failed to complete request. Check console for details.",
         variant: "destructive"
       });
     }
+  };
+
+  const handleCompleteRequest = async (request: any) => {
+    // Open cost modal first to get the final cost
+    setSelectedRequest(request);
+    setAssignmentData({
+      contractorId: request.assignedContractorId || '',
+      notes: '',
+      estimatedCost: request.actualCost?.toString() || request.estimatedCost?.toString() || '',
+      scheduledDate: request.scheduledDate || ''
+    });
+    setIsCostModalOpen(true);
   };
 
   const handleUpdatePriority = async (requestId: string, newPriority: string) => {
@@ -322,8 +346,11 @@ export const MaintenanceSection = () => {
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="assigned">Assigned</SelectItem>
                 <SelectItem value="in-progress">In Progress</SelectItem>
+                <SelectItem value="on-hold">On Hold</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
               </SelectContent>
             </Select>
             <Select value={priorityFilter} onValueChange={setPriorityFilter}>
@@ -416,7 +443,19 @@ export const MaintenanceSection = () => {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {request.assignedTo ? (
+                        {request.contractorName ? (
+                          <div className="flex items-center gap-2">
+                            <Avatar className="h-6 w-6">
+                              <AvatarFallback className="text-xs">{request.contractorName.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <div className="text-sm font-medium">{request.contractorName}</div>
+                              {request.contractorSpecialty && (
+                                <div className="text-xs text-muted-foreground">{request.contractorSpecialty}</div>
+                              )}
+                            </div>
+                          </div>
+                        ) : request.assignedTo ? (
                           <div className="flex items-center gap-2">
                             <Avatar className="h-6 w-6">
                               <AvatarFallback className="text-xs">{request.assignedTo.split(' ').map(n => n[0]).join('')}</AvatarFallback>
@@ -460,7 +499,7 @@ export const MaintenanceSection = () => {
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
-                          {request.status === 'pending' && (
+                          {(request.status === 'pending' || request.status === 'assigned') && (
                             <>
                               <Button 
                                 variant="ghost" 
@@ -474,19 +513,19 @@ export const MaintenanceSection = () => {
                                 variant="ghost" 
                                 size="sm"
                                 onClick={() => handleAssignContractor(request)}
-                                title="Assign Contractor"
+                                title={request.contractorName ? "Change Contractor" : "Assign Contractor"}
                               >
                                 <User className="h-4 w-4" />
                               </Button>
                             </>
                           )}
-                          {request.status === 'in-progress' && (
+                          {(request.status === 'in-progress' || request.status === 'assigned') && (
                             <>
                               <Button 
                                 variant="ghost" 
                                 size="sm"
-                                onClick={() => handleCompleteRequest(request.id)}
-                                title="Mark as Completed"
+                                onClick={() => handleCompleteRequest(request)}
+                                title="Complete & Set Final Cost"
                                 className="text-success hover:text-success"
                               >
                                 <CheckCircle className="h-4 w-4" />
@@ -838,37 +877,56 @@ export const MaintenanceSection = () => {
       <Dialog open={isCostModalOpen} onOpenChange={setIsCostModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Update Cost</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5" />
+              Complete Maintenance & Set Final Cost
+            </DialogTitle>
             <DialogDescription>
-              Update the actual cost for this maintenance request
+              Enter the final cost. This will mark the request as completed and automatically deduct from the tenant's security deposit if applicable.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5" />
+                <div className="text-sm text-blue-800 dark:text-blue-200">
+                  <strong>Note:</strong> The cost you enter will be recorded as the maintenance cost and may be deducted from the tenant's security deposit.
+                </div>
+              </div>
+            </div>
             <div>
-              <Label htmlFor="actualCost">Actual Cost (KES)</Label>
+              <Label htmlFor="actualCost">Final Cost (KES) *</Label>
               <Input
                 id="actualCost"
                 type="number"
+                min="0"
+                step="0.01"
                 value={assignmentData.estimatedCost}
                 onChange={(e) => setAssignmentData(prev => ({ ...prev, estimatedCost: e.target.value }))}
-                placeholder="Enter actual cost"
+                placeholder="Enter final cost (e.g., 5000)"
+                required
               />
+              <p className="text-xs text-muted-foreground mt-1">
+                This amount will be deducted from the security deposit
+              </p>
             </div>
             <div>
-              <Label htmlFor="costNotes">Notes</Label>
+              <Label htmlFor="costNotes">Notes (Optional)</Label>
               <Textarea
                 id="costNotes"
                 value={assignmentData.notes}
                 onChange={(e) => setAssignmentData(prev => ({ ...prev, notes: e.target.value }))}
-                placeholder="Cost breakdown or notes"
+                placeholder="Cost breakdown: materials, labor, etc."
+                rows={3}
               />
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setIsCostModalOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleSubmitCost}>
-                Update Cost
+              <Button onClick={handleSubmitCost} className="bg-green-600 hover:bg-green-700">
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Complete & Record Cost
               </Button>
             </div>
           </div>

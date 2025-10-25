@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { 
   User, MapPin, DollarSign, Calendar, Phone, Mail, 
-  Building2, CheckCircle, XCircle, Clock, Eye, Filter, Search
+  Building2, CheckCircle, XCircle, Clock, Eye, Filter, Search,
+  FileText, Download, ExternalLink
 } from 'lucide-react';
 import { useUnitApplications } from '@/hooks/useUnitApplications';
 import { useTenants } from '@/hooks/useTenants';
@@ -249,6 +250,16 @@ export const UnitApplicationsSection = () => {
                 </div>
               )}
 
+              {/* Documents Badge */}
+              {application.documents && application.documents.length > 0 && (
+                <div className="flex items-center gap-2 text-sm">
+                  <FileText className="h-4 w-4 text-blue-600" />
+                  <Badge variant="outline" className="border-blue-600 text-blue-600">
+                    {application.documents.length} {application.documents.length === 1 ? 'Document' : 'Documents'} Uploaded
+                  </Badge>
+                </div>
+              )}
+
               <Separator />
 
               {/* Actions */}
@@ -342,6 +353,72 @@ export const UnitApplicationsSection = () => {
                             <p className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
                               {selectedApplication.application_message}
                             </p>
+                          </div>
+                        )}
+
+                        {/* Uploaded Documents */}
+                        {selectedApplication.documents && selectedApplication.documents.length > 0 && (
+                          <div>
+                            <h4 className="font-medium mb-2 flex items-center gap-2">
+                              <FileText className="h-4 w-4" />
+                              Uploaded Documents ({selectedApplication.documents.length})
+                            </h4>
+                            <div className="space-y-2">
+                              {selectedApplication.documents.map((doc: any, idx: number) => (
+                                <div key={idx} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+                                  <div className="flex items-center gap-3 flex-1">
+                                    <FileText className="h-5 w-5 text-blue-600" />
+                                    <div>
+                                      <p className="font-medium text-sm">{doc.type}</p>
+                                      <p className="text-xs text-muted-foreground">{doc.name}</p>
+                                    </div>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      asChild
+                                    >
+                                      <a
+                                        href={doc.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-1"
+                                      >
+                                        <ExternalLink className="h-4 w-4" />
+                                        View
+                                      </a>
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      asChild
+                                    >
+                                      <a
+                                        href={doc.url}
+                                        download={doc.name}
+                                        className="flex items-center gap-1"
+                                      >
+                                        <Download className="h-4 w-4" />
+                                        Download
+                                      </a>
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* No Documents Message */}
+                        {(!selectedApplication.documents || selectedApplication.documents.length === 0) && (
+                          <div className="bg-yellow-50 dark:bg-yellow-950 p-3 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                            <div className="flex items-start gap-2">
+                              <FileText className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mt-0.5" />
+                              <div className="text-sm text-yellow-800 dark:text-yellow-200">
+                                <strong>Note:</strong> No identification documents were uploaded with this application.
+                              </div>
+                            </div>
                           </div>
                         )}
                       </div>

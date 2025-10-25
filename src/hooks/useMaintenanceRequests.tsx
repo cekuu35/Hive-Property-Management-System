@@ -12,10 +12,16 @@ export interface MaintenanceRequest {
   unit: string;
   category: string;
   priority: 'low' | 'medium' | 'high' | 'emergency';
-  status: 'pending' | 'in-progress' | 'completed';
+  status: 'pending' | 'assigned' | 'in-progress' | 'on-hold' | 'completed' | 'cancelled';
   assignedTo?: string;
+  assignedContractorId?: string;
+  contractorName?: string;
+  contractorSpecialty?: string;
+  contractorPhone?: string;
+  contractorEmail?: string;
   estimatedCost?: number;
   actualCost?: number;
+  maintenanceCost?: number;
   createdDate: string;
   scheduledDate?: string;
   completedDate?: string;
@@ -52,7 +58,8 @@ export const useMaintenanceRequests = () => {
           *,
           unit:units(unit_number, property:properties(name)),
           tenant:profiles!tenant_id(first_name, last_name),
-          assigned:profiles!assigned_to(first_name, last_name)
+          assigned:profiles!assigned_to(first_name, last_name),
+          contractor:contractors!assigned_contractor_id(id, name, specialty, phone, email)
         `);
 
       // Filter based on user role
@@ -156,8 +163,14 @@ export const useMaintenanceRequests = () => {
         priority: request.priority,
         status: request.status,
         assignedTo: request.assigned ? `${request.assigned.first_name} ${request.assigned.last_name}` : undefined,
+        assignedContractorId: request.assigned_contractor_id,
+        contractorName: request.contractor?.name,
+        contractorSpecialty: request.contractor?.specialty,
+        contractorPhone: request.contractor?.phone,
+        contractorEmail: request.contractor?.email,
         estimatedCost: request.estimated_cost,
         actualCost: request.actual_cost,
+        maintenanceCost: request.maintenance_cost,
         createdDate: new Date(request.created_at).toISOString().split('T')[0],
         scheduledDate: request.scheduled_date,
         completedDate: request.completed_date,
@@ -420,6 +433,8 @@ export const useMaintenanceRequests = () => {
 
   const updateRequestStatus = async (requestId: string, status: string, assignedTo?: string) => {
     try {
+      console.log('🔄 Updating request status:', { requestId, status, assignedTo });
+      
       // Update request status in database
       const updates: any = { status };
       if (assignedTo) updates.assigned_to = assignedTo;
@@ -433,7 +448,12 @@ export const useMaintenanceRequests = () => {
         .update(updates)
         .eq('id', requestId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error updating status:', error);
+        throw error;
+      }
+
+      console.log('✅ Status updated successfully');
 
       toast({
         title: "Success",
@@ -441,13 +461,15 @@ export const useMaintenanceRequests = () => {
       });
 
       await fetchMaintenanceRequests();
+      return true;
     } catch (error) {
       console.error('Error updating request:', error);
       toast({
         title: "Error",
-        description: "Failed to update request",
+        description: "Failed to update request status",
         variant: "destructive"
       });
+      throw error; // Re-throw so calling code knows it failed
     }
   };
 
@@ -479,14 +501,19 @@ export const useMaintenanceRequests = () => {
   const assignContractor = async (requestId: string, contractorId: string, notes?: string, estimatedCost?: number, scheduledDate?: string) => {
     try {
       const updates: any = {
-        status: 'in-progress',
-        assigned_to: contractorId,
+        status: 'assigned',
+        assigned_contractor_id: contractorId,
         notes: notes || null,
         estimated_cost: estimatedCost || null,
         scheduled_date: scheduledDate || null
       };
 
       await updateMaintenanceRequest(requestId, updates);
+      
+      toast({
+        title: "Success",
+        description: "Contractor assigned successfully",
+      });
     } catch (error) {
       console.error('Error assigning contractor:', error);
       toast({
@@ -501,10 +528,16 @@ export const useMaintenanceRequests = () => {
     try {
       const updates: any = {
         actual_cost: actualCost,
+        maintenance_cost: actualCost, // Set maintenance_cost for security deposit deduction
         notes: notes || null
       };
 
       await updateMaintenanceRequest(requestId, updates);
+      
+      toast({
+        title: "Success",
+        description: "Cost updated successfully",
+      });
     } catch (error) {
       console.error('Error updating cost:', error);
       toast({

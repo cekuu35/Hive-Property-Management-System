@@ -194,28 +194,63 @@ export const useTenants = () => {
 
       console.log('✅ [useTenants] Auth user created:', authData.user.id);
 
-      // Create profile record for the tenant
-      const { data: profile, error: profileError } = await supabase
+      // Check if profile already exists (might be auto-created by trigger)
+      const { data: existingProfile } = await supabase
         .from('profiles')
-        .insert({
-          id: authData.user.id, // Use auth user ID as profile ID
-          user_id: authData.user.id,
-          role: 'tenant',
-          first_name: tenantData.first_name,
-          last_name: tenantData.last_name,
-          phone: tenantData.phone
-        })
-        .select()
-        .single();
+        .select('*')
+        .eq('user_id', authData.user.id)
+        .maybeSingle();
 
-      if (profileError) {
-        console.error('❌ [useTenants] Error creating profile:', profileError);
-        // Clean up auth user if profile creation fails
-        await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
-        throw profileError;
+      let profile;
+      
+      if (existingProfile) {
+        console.log('✅ [useTenants] Profile already exists (auto-created):', existingProfile.id);
+        
+        // Try to update existing profile with tenant details using admin client
+        const { data: updatedProfile, error: updateError } = await supabaseAdmin
+          .from('profiles')
+          .update({
+            role: 'tenant',
+            first_name: tenantData.first_name,
+            last_name: tenantData.last_name,
+            phone: tenantData.phone
+          })
+          .eq('user_id', authData.user.id)
+          .select()
+          .maybeSingle(); // Changed to maybeSingle to handle 0 rows gracefully
+
+        if (updateError) {
+          console.warn('⚠️ [useTenants] Could not update profile, using existing:', updateError);
+          // Don't fail, just use the existing profile
+        }
+        
+        // Use updated profile if successful, otherwise use existing
+        profile = updatedProfile || existingProfile;
+      } else {
+        // Create profile record for the tenant
+        const { data: newProfile, error: profileError } = await supabase
+          .from('profiles')
+          .insert({
+            id: authData.user.id,
+            user_id: authData.user.id,
+            role: 'tenant',
+            first_name: tenantData.first_name,
+            last_name: tenantData.last_name,
+            phone: tenantData.phone
+          })
+          .select()
+          .single();
+
+        if (profileError) {
+          console.error('❌ [useTenants] Error creating profile:', profileError);
+          await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+          throw profileError;
+        }
+        
+        profile = newProfile;
       }
 
-      console.log('✅ [useTenants] Profile created:', profile.id);
+      console.log('✅ [useTenants] Profile ready:', profile.id);
 
       // Create tenant info record with landlord link
       const { data: tenantInfo, error: tenantError } = await supabase
@@ -248,11 +283,11 @@ export const useTenants = () => {
       console.log('✅ [useTenants] Tenant info created:', tenantInfo.id);
 
       // Create the lease with all required fields
-      const { data: lease, error: leaseError } = await supabase
+      const { data: lease, error: leaseError} = await supabase
         .from('leases')
         .insert({
-          tenant_id: tenantInfo.id, // Link to tenant_info
-          tenant_info_id: tenantInfo.id, // Also set tenant_info_id
+          tenant_id: profile.id, // Link to profiles table
+          tenant_info_id: tenantInfo.id, // Link to tenant_info table
           unit_id: tenantData.unit_id,
           start_date: tenantData.lease_start,
           end_date: tenantData.lease_end,
@@ -291,10 +326,58 @@ export const useTenants = () => {
         tenantName: `${tenantData.first_name} ${tenantData.last_name}`
       };
 
-      toast({
-        title: "Success",
-        description: "Tenant account created successfully!",
-      });
+      // Get unit and property information for the welcome email
+      const { data: unitData } = await supabase
+        .from('units')
+        .select('unit_number, property:properties(name, landlord:profiles!landlord_id(first_name, last_name))')
+        .eq('id', tenantData.unit_id)
+        .single();
+
+      // Send welcome email with login credentials
+      try {
+        console.log('📧 [useTenants] Sending welcome email...');
+        
+        const landlordName = unitData?.property?.landlord 
+          ? `${unitData.property.landlord.first_name} ${unitData.property.landlord.last_name}`
+          : 'Your Landlord';
+        
+        const propertyName = unitData?.property?.name || 'Your Property';
+        const unitNumber = unitData?.unit_number || '';
+
+        const { data, error } = await supabase.functions.invoke('send-welcome-email', {
+          body: {
+            email: tenantData.email,
+            password: tempPassword,
+            tenantName: credentials.tenantName,
+            landlordName: landlordName,
+            propertyName: propertyName,
+            unitNumber: unitNumber
+          }
+        });
+
+        if (error) {
+          console.error('⚠️ [useTenants] Failed to send welcome email:', error);
+          // Don't fail the tenant creation if email fails
+          toast({
+            title: "Tenant Created",
+            description: "Tenant account created but welcome email failed to send. Please share credentials manually.",
+            variant: "default",
+          });
+        } else {
+          console.log('✅ [useTenants] Welcome email sent:', data);
+          toast({
+            title: "Success",
+            description: "Tenant account created and welcome email sent!",
+          });
+        }
+      } catch (emailError) {
+        console.error('⚠️ [useTenants] Error sending welcome email:', emailError);
+        // Don't fail the tenant creation if email fails
+        toast({
+          title: "Tenant Created",
+          description: "Tenant account created. Save the credentials to share with the tenant.",
+        });
+      }
 
       fetchTenants(); // Refresh the list
       return { success: true, credentials };

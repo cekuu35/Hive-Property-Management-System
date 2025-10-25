@@ -193,6 +193,7 @@ export const useUnitApplications = () => {
     preferred_move_in_date?: string;
     employment_info?: any;
     personal_references?: any[];
+    documents?: any[];
     deposit_amount?: number;
   }) => {
     try {

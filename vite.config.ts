@@ -41,7 +41,8 @@ export default defineConfig(({ mode }) => ({
   optimizeDeps: {
     include: ['react', 'react-dom'],
     esbuildOptions: {
-      target: 'es2020'
+      target: 'es2020',
+      logLevel: 'error'
     }
   },
   build: {
