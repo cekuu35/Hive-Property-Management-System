@@ -23,3 +23,40 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Capacitor
+.capacitor
+capacitor.config.json
+
+# Android
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+android/.idea/
+android/*.iml
+android/gradle.properties.local
+android/key.properties
+*.keystore
+*.jks
+
+# iOS
+ios/App/build/
+ios/App/Pods/
+ios/App/.build/
+ios/App/xcuserdata/
+*.xcworkspace/
+!ios/App/App.xcworkspace/
+
+# Gradle
+.gradle/
+build/
+
+# Generated files
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+
+# Local environment
+.env.local
+.env.*.local
