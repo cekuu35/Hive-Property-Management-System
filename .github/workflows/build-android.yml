@@ -1,0 +1,66 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:  # Allows manual trigger
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Build web assets
+      run: npm run build
+      env:
+        CI: false
+        
+    - name: Setup Capacitor
+      run: |
+        npx cap sync android
+        
+    - name: Grant execute permission for gradlew
+      run: chmod +x android/gradlew
+      
+    - name: Build Android APK
+      run: |
+        cd android
+        ./gradlew assembleDebug --no-daemon --stacktrace
+        
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: hive-property-debug-apk
+        path: android/app/build/outputs/apk/debug/app-debug.apk
+        retention-days: 30
+        
+    - name: Create Release Info
+      run: |
+        echo "### 📱 APK Build Successful!" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**App:** Hive Property Management" >> $GITHUB_STEP_SUMMARY
+        echo "**Version:** 1.0" >> $GITHUB_STEP_SUMMARY
+        echo "**Package:** com.hive.propertymanagement" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Download the APK from the artifacts section above ⬆️" >> $GITHUB_STEP_SUMMARY
+
