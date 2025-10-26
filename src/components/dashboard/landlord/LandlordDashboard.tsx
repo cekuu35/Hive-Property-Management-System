@@ -14,6 +14,7 @@ import { UtilityBillsManagement } from './UtilityBillsManagement';
 import { UnitApplicationsSection } from './UnitApplicationsSection';
 import { PropertyForm } from './PropertyForm';
 import { StaffManagementSection } from './StaffManagementSection';
+import { SubscriptionStatusCard } from '@/components/subscription/SubscriptionStatusCard';
 // import { TenantInfoCard } from '../tenant/TenantInfoCard';
 import { useFinancials } from '@/hooks/useFinancials';
 import { useMaintenanceRequests } from '@/hooks/useMaintenanceRequests';
@@ -149,6 +150,9 @@ const DashboardOverview = ({ onSectionChange }: { onSectionChange?: (section: st
 
   return (
     <div className="space-y-6">
+      {/* Subscription Status */}
+      <SubscriptionStatusCard />
+
       {/* Welcome Header */}
       <div className="flex items-center justify-between">
         <div>

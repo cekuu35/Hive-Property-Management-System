@@ -8,9 +8,10 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { PhotoGallery } from '@/components/ui/PhotoGallery';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Calendar, User, Clock, MessageCircle, Send, Wrench, AlertTriangle, 
-  CheckCircle, Star, Camera, Phone, Mail 
+  CheckCircle, Star, Camera, Phone, Mail, FileText 
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
@@ -371,8 +372,9 @@ export const MaintenanceRequestView = ({ isOpen, onClose, request }: Maintenance
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
-        <div className="flex h-[80vh]">
+      <DialogContent className="max-w-4xl max-h-[90vh] sm:max-h-[85vh] p-0 overflow-hidden">
+        {/* Desktop Layout: Two-panel side-by-side */}
+        <div className="hidden md:flex h-[80vh]">
           {/* Left Panel - Request Details */}
           <div className="w-1/2 border-r">
             <DialogHeader className="p-6 border-b">
@@ -664,6 +666,302 @@ export const MaintenanceRequestView = ({ isOpen, onClose, request }: Maintenance
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Mobile Layout: Tabs for better UX */}
+        <div className="md:hidden flex flex-col h-[85vh]">
+          <DialogHeader className="p-4 border-b">
+            <DialogTitle className="flex items-center gap-2">
+              <Wrench className="h-5 w-5" />
+              {request.title}
+            </DialogTitle>
+            <div className="flex gap-2 mt-2">
+              <Badge className={getStatusColor(request.status)}>
+                {request.status.replace('_', ' ')}
+              </Badge>
+              <Badge className={getPriorityColor(request.priority)}>
+                {request.priority}
+              </Badge>
+            </div>
+          </DialogHeader>
+
+          <Tabs defaultValue="details" className="flex-1 flex flex-col">
+            <TabsList className="grid w-full grid-cols-2 rounded-none border-b">
+              <TabsTrigger value="details" className="gap-2">
+                <FileText className="h-4 w-4" />
+                Details
+              </TabsTrigger>
+              <TabsTrigger value="chat" className="gap-2">
+                <MessageCircle className="h-4 w-4" />
+                Chat
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="details" className="flex-1 m-0 overflow-hidden">
+              <ScrollArea className="h-full p-4">
+                <div className="space-y-4">
+                  {/* Description */}
+                  <div>
+                    <p className="text-sm text-muted-foreground">{request.description}</p>
+                  </div>
+
+                  {/* Request Info */}
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm">Request Information</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2 text-sm">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                        <span>Submitted: {new Date(request.date).toLocaleDateString()}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Wrench className="h-4 w-4 text-muted-foreground" />
+                        <span>Category: {request.category}</span>
+                      </div>
+                      {request.assignedTo && (
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <span>Assigned to: {request.assignedTo}</span>
+                        </div>
+                      )}
+                      {request.scheduledDate && (
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-muted-foreground" />
+                          <span>Scheduled: {new Date(request.scheduledDate).toLocaleDateString()}</span>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Landlord Information */}
+                  {landlordInfo && (
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <User className="h-4 w-4" />
+                          Your Landlord
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-10 w-10">
+                            <AvatarImage src={landlordInfo.avatar_url || undefined} />
+                            <AvatarFallback>
+                              {landlordInfo.first_name?.[0]}{landlordInfo.last_name?.[0]}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1">
+                            <h4 className="font-medium text-sm">
+                              {landlordInfo.first_name} {landlordInfo.last_name}
+                            </h4>
+                            {landlordInfo.company_name && (
+                              <p className="text-xs text-muted-foreground">
+                                {landlordInfo.company_name}
+                              </p>
+                            )}
+                          </div>
+                          <Button variant="ghost" size="sm">
+                            <MessageCircle className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Cost Information */}
+                  {(request.estimatedCost || request.actualCost) && (
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm">Cost Information</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2 text-sm">
+                        {request.estimatedCost && (
+                          <div className="flex justify-between">
+                            <span>Estimated Cost:</span>
+                            <span className="font-medium">KES {request.estimatedCost.toLocaleString()}</span>
+                          </div>
+                        )}
+                        {request.actualCost && (
+                          <div className="flex justify-between">
+                            <span>Actual Cost:</span>
+                            <span className="font-medium">KES {request.actualCost.toLocaleString()}</span>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Images */}
+                  {request.images && request.images.length > 0 && (
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <Camera className="h-4 w-4" />
+                          Photos ({request.images.length})
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <PhotoGallery
+                          photos={request.images}
+                          maxColumns={2}
+                          showActions={false}
+                          allowFullscreen={true}
+                          className="mt-2"
+                        />
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Rating for completed requests */}
+                  {request.status === 'completed' && (
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm">Rate this Service</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex items-center gap-2 mb-3 justify-center">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <Button
+                              key={star}
+                              variant="ghost"
+                              size="sm"
+                              className="p-1"
+                              onClick={() => setRating(star)}
+                            >
+                              <Star
+                                className={cn(
+                                  "h-6 w-6",
+                                  star <= rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
+                                )}
+                              />
+                            </Button>
+                          ))}
+                        </div>
+                        {rating > 0 && (
+                          <Button size="sm" onClick={handleRatingSubmit} className="w-full">
+                            Submit Rating
+                          </Button>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              </ScrollArea>
+            </TabsContent>
+
+            <TabsContent value="chat" className="flex-1 m-0 flex flex-col overflow-hidden">
+              {/* Chat Messages */}
+              <ScrollArea className="flex-1 p-3">
+                <div className="space-y-3">
+                  {chatMessages.map((message) => {
+                    const senderInfo = getSenderInfo(message.sender);
+                    const isUser = message.sender === 'tenant';
+                    
+                    return (
+                      <div
+                        key={message.id}
+                        className={cn(
+                          "flex gap-2",
+                          isUser ? "flex-row-reverse" : "flex-row"
+                        )}
+                      >
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className={cn("text-xs text-white", senderInfo.color)}>
+                            {senderInfo.avatar}
+                          </AvatarFallback>
+                        </Avatar>
+                        
+                        <div className={cn("flex-1 max-w-[75%]", isUser && "text-right")}>
+                          <div className={cn("flex items-center gap-1 mb-1", isUser && "justify-end")}>
+                            <span className="text-xs font-medium">{senderInfo.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(message.timestamp).toLocaleDateString()} {' '}
+                              {new Date(message.timestamp).toLocaleTimeString([], { 
+                                hour: '2-digit', 
+                                minute: '2-digit' 
+                              })}
+                            </span>
+                          </div>
+                          
+                          <div
+                            className={cn(
+                              "p-2.5 rounded-lg text-sm break-words",
+                              isUser 
+                                ? "bg-primary text-primary-foreground ml-auto" 
+                                : "bg-muted",
+                              message.type === 'status_update' && "border-l-4 border-primary",
+                              message.type === 'cost_estimate' && "border-l-4 border-warning"
+                            )}
+                          >
+                            {message.type === 'status_update' && (
+                              <div className="flex items-center gap-1 mb-1 text-xs font-medium">
+                                <AlertTriangle className="h-3 w-3" />
+                                Status Update
+                              </div>
+                            )}
+                            {message.type === 'cost_estimate' && (
+                              <div className="flex items-center gap-1 mb-1 text-xs font-medium">
+                                <AlertTriangle className="h-3 w-3" />
+                                Cost Estimate
+                              </div>
+                            )}
+                            {message.message}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  
+                  {loading && (
+                    <div className="flex gap-2">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="bg-orange-500 text-white text-xs">
+                          M
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="bg-muted p-2.5 rounded-lg">
+                        <div className="flex items-center gap-1">
+                          <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" />
+                          <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                          <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+
+              {/* Chat Input */}
+              <div className="p-3 border-t bg-background">
+                <div className="flex gap-2">
+                  <Input
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    placeholder="Type your message..."
+                    onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                    disabled={loading}
+                    className="text-sm"
+                  />
+                  <Button onClick={handleSendMessage} disabled={loading || !newMessage.trim()} size="sm">
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+                
+                {/* Quick Actions */}
+                <div className="flex gap-2 mt-2">
+                  <Button variant="outline" size="sm" className="text-xs flex-1">
+                    <Phone className="h-3 w-3 mr-1" />
+                    Call
+                  </Button>
+                  <Button variant="outline" size="sm" className="text-xs flex-1">
+                    <Mail className="h-3 w-3 mr-1" />
+                    Email
+                  </Button>
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
         </div>
       </DialogContent>
     </Dialog>

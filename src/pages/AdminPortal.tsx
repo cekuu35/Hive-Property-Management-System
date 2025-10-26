@@ -4,10 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Shield, Lock, Users, Settings, DollarSign, Sun, Moon, Eye, EyeOff, Workflow } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Shield, Lock, Users, Settings, DollarSign, Sun, Moon, Eye, EyeOff, Workflow, CreditCard, Package, TrendingUp, ArrowLeft } from 'lucide-react';
 import LandlordMpesaManager from '@/components/admin/LandlordMpesaManager';
 import AdminDashboard from '@/components/admin/AdminDashboard';
 import PasswordChangeModal from '@/components/admin/PasswordChangeModal';
+import SubscriptionDashboard from '@/components/admin/SubscriptionDashboard';
+import LandlordSubscriptionManager from '@/components/admin/LandlordSubscriptionManager';
+import PlanManager from '@/components/admin/PlanManager';
 import { N8nWorkflowManager } from '@/components/dashboard/landlord/N8nWorkflowManager';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { useTheme } from '@/components/ThemeProvider';
@@ -141,6 +145,15 @@ export default function AdminPortal() {
             </CardContent>
           </Card>
 
+          <Button 
+            variant="ghost" 
+            className="w-full"
+            onClick={() => navigate('/')}
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Main Login
+          </Button>
+
           <div className="text-center">
             <p className="text-xs text-muted-foreground">
               This portal is restricted to authorized administrators only.
@@ -196,78 +209,69 @@ export default function AdminPortal() {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          {/* Quick Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center">
-                  <Users className="h-8 w-8 text-blue-600" />
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Total Landlords</p>
-                    <p className="text-2xl font-bold text-gray-900">6</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+          <Tabs defaultValue="overview" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-5 lg:w-auto">
+              <TabsTrigger value="overview" className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4" />
+                <span className="hidden sm:inline">Overview</span>
+              </TabsTrigger>
+              <TabsTrigger value="subscriptions" className="flex items-center gap-2">
+                <CreditCard className="h-4 w-4" />
+                <span className="hidden sm:inline">Subscriptions</span>
+              </TabsTrigger>
+              <TabsTrigger value="plans" className="flex items-center gap-2">
+                <Package className="h-4 w-4" />
+                <span className="hidden sm:inline">Plans</span>
+              </TabsTrigger>
+              <TabsTrigger value="payments" className="flex items-center gap-2">
+                <DollarSign className="h-4 w-4" />
+                <span className="hidden sm:inline">M-Pesa</span>
+              </TabsTrigger>
+              <TabsTrigger value="workflows" className="flex items-center gap-2">
+                <Workflow className="h-4 w-4" />
+                <span className="hidden sm:inline">Workflows</span>
+              </TabsTrigger>
+            </TabsList>
 
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center">
-                  <Settings className="h-8 w-8 text-green-600" />
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">System Status</p>
-                    <p className="text-2xl font-bold text-green-600">Active</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            {/* Overview Tab */}
+            <TabsContent value="overview" className="space-y-6">
+              <SubscriptionDashboard />
+              <AdminDashboard />
+            </TabsContent>
 
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center">
-                  <DollarSign className="h-8 w-8 text-purple-600" />
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Payments</p>
-                    <p className="text-2xl font-bold text-gray-900">Multi-Landlord</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            {/* Subscriptions Tab */}
+            <TabsContent value="subscriptions" className="space-y-6">
+              <LandlordSubscriptionManager />
+            </TabsContent>
 
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center">
-                  <Shield className="h-8 w-8 text-red-600" />
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Security</p>
-                    <p className="text-2xl font-bold text-red-600">Protected</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+            {/* Plans Tab */}
+            <TabsContent value="plans" className="space-y-6">
+              <PlanManager />
+            </TabsContent>
 
-          {/* Main Admin Content */}
-          <div className="space-y-8">
-            <AdminDashboard />
-            <LandlordMpesaManager />
-            
-            {/* n8n Workflow Management */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <Workflow className="h-5 w-5 text-primary" />
-                  <CardTitle>n8n Workflow Management</CardTitle>
-                </div>
-                <CardDescription>
-                  Manage automation workflows and integrations
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <N8nWorkflowManager />
-              </CardContent>
-            </Card>
-          </div>
+            {/* M-Pesa Payments Tab */}
+            <TabsContent value="payments" className="space-y-6">
+              <LandlordMpesaManager />
+            </TabsContent>
+
+            {/* Workflows Tab */}
+            <TabsContent value="workflows" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <Workflow className="h-5 w-5 text-primary" />
+                    <CardTitle>n8n Workflow Management</CardTitle>
+                  </div>
+                  <CardDescription>
+                    Manage automation workflows and integrations
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <N8nWorkflowManager />
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
 

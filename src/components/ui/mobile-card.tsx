@@ -74,7 +74,7 @@ export function MobileCard({
       {(value || children) && (
         <CardContent className="pt-0 px-4 pb-4">
           {value && (
-            <div className="text-2xl md:text-3xl font-bold mb-3 truncate">
+            <div className="text-xl sm:text-2xl font-bold mb-3 break-words leading-tight">
               {typeof value === 'number' ? value.toLocaleString() : value}
             </div>
           )}

@@ -33,6 +33,8 @@ import { supabaseAdmin } from '@/integrations/supabase/admin';
 import { format } from 'date-fns';
 import { validateAndCorrectProfileId, safeUpdateTenantProfileId } from '@/utils/profileValidation';
 import { toast } from 'sonner';
+import { useCanAddResource } from '@/components/subscription/SubscriptionGuard';
+import { useNavigate } from 'react-router-dom';
 
 export const TenantManagementSection = () => {
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -60,6 +62,9 @@ export const TenantManagementSection = () => {
     deleteTenant,
     refetch
   } = useLandlordTenants();
+
+  const canAddTenant = useCanAddResource('max_tenants');
+  const navigate = useNavigate();
 
   const {
     applications,
@@ -284,13 +289,31 @@ export const TenantManagementSection = () => {
           <p className="text-muted-foreground">Manage your tenants and their information</p>
         </div>
         <div className="flex gap-2">
+          <Button 
+            variant="outline"
+            onClick={() => {
+              // Check subscription before opening form
+              const check = canAddTenant();
+              if (!check.allowed) {
+                toast.error(
+                  check.reason === 'no_subscription' 
+                    ? "Subscription Required" 
+                    : "Tenant Limit Reached",
+                  {
+                    description: check.message
+                  }
+                );
+                navigate('/landlord/plans-billing');
+                return;
+              }
+              setShowCreateForm(true);
+            }}
+          >
+            <UserPlus className="w-4 h-4 mr-2" />
+            Add Tenant
+          </Button>
+          
           <Dialog open={showCreateForm} onOpenChange={setShowCreateForm}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <UserPlus className="w-4 h-4 mr-2" />
-                Add Tenant
-              </Button>
-            </DialogTrigger>
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Create New Tenant</DialogTitle>
@@ -435,7 +458,23 @@ export const TenantManagementSection = () => {
               <p className="text-muted-foreground mb-4">
                 Get started by adding your first tenant
               </p>
-              <Button onClick={() => setShowCreateForm(true)}>
+              <Button onClick={() => {
+                // Check subscription before opening form
+                const check = canAddTenant();
+                if (!check.allowed) {
+                  toast.error(
+                    check.reason === 'no_subscription' 
+                      ? "Subscription Required" 
+                      : "Tenant Limit Reached",
+                    {
+                      description: check.message
+                    }
+                  );
+                  navigate('/landlord/plans-billing');
+                  return;
+                }
+                setShowCreateForm(true);
+              }}>
                 <UserPlus className="w-4 h-4 mr-2" />
                 Add First Tenant
               </Button>

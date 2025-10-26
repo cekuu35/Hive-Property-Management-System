@@ -11,6 +11,9 @@ import { PropertyForm } from '../PropertyForm';
 import { UnitManagement } from '../UnitManagement';
 import { NoticesModal } from '../NoticesModal';
 import { BulkLateFeeModal } from '../BulkLateFeeModal';
+import { SubscriptionGuard, useCanAddResource } from '@/components/subscription/SubscriptionGuard';
+import { useNavigate } from 'react-router-dom';
+import { useToast } from '@/hooks/use-toast';
 
 export const PropertiesSection = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -35,6 +38,10 @@ export const PropertiesSection = () => {
     getPropertyUnits,
     getOccupancyRate
   } = useProperties();
+
+  const canAddProperty = useCanAddResource('max_properties');
+  const navigate = useNavigate();
+  const { toast } = useToast();
 
   const filteredProperties = properties.filter(property =>
     property.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -61,8 +68,20 @@ export const PropertiesSection = () => {
 
   const handleFormSubmit = async (propertyData: any) => {
     if (selectedProperty) {
+      // Editing existing property - no limit check needed
       await updateProperty(selectedProperty.id, propertyData);
     } else {
+      // Creating new property - check subscription limit
+      const check = canAddProperty();
+      if (!check.allowed) {
+        toast({
+          title: check.reason === 'no_subscription' ? "Subscription Required" : "Property Limit Reached",
+          description: check.message,
+          variant: "destructive"
+        });
+        navigate('/landlord/plans-billing');
+        return;
+      }
       await createProperty(propertyData);
     }
   };
@@ -117,6 +136,17 @@ export const PropertiesSection = () => {
         </div>
         <Button 
           onClick={() => {
+            // Check subscription before opening form
+            const check = canAddProperty();
+            if (!check.allowed) {
+              toast({
+                title: check.reason === 'no_subscription' ? "Subscription Required" : "Property Limit Reached",
+                description: check.message,
+                variant: "destructive"
+              });
+              navigate('/landlord/plans-billing');
+              return;
+            }
             setSelectedProperty(null);
             setShowPropertyForm(true);
           }}

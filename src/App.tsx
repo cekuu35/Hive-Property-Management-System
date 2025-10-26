@@ -17,6 +17,8 @@ import NotFound from "./pages/NotFound";
 import SupabaseConnectionTest from "./components/SupabaseConnectionTest";
 import { PaymentCallback } from "./pages/PaymentCallback";
 import AdminPortal from "./pages/AdminPortal";
+import ResetPassword from "./pages/ResetPassword";
+import PlansBilling from "./pages/landlord/PlansBilling";
 
 const queryClient = new QueryClient();
 
@@ -72,6 +74,20 @@ const App = () => (
               <Route 
                 path="/admin" 
                 element={<AdminPortal />} 
+              />
+              <Route 
+                path="/reset-password" 
+                element={<ResetPassword />} 
+              />
+              <Route 
+                path="/landlord/plans-billing" 
+                element={
+                  <ProtectedRoute>
+                    <ErrorBoundary>
+                      <PlansBilling />
+                    </ErrorBoundary>
+                  </ProtectedRoute>
+                } 
               />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />

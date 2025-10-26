@@ -180,9 +180,15 @@ serve(async (req) => {
 async function handleRentPayment(req: Request, supabase: any, bodyData?: any) {
   try {
     const data = bodyData || await req.json()
-    const { leaseId, amount, phoneNumber } = data
+    const { leaseId, amount, phoneNumber, fullRentAmount, remainingBalance } = data
     
-    console.log('🏠 [M-Pesa] Processing rent payment:', { leaseId, amount, phoneNumber })
+    console.log('🏠 [M-Pesa] Processing rent payment:', { 
+      leaseId, 
+      paymentAmount: amount, 
+      fullRentAmount, 
+      remainingBalance,
+      phoneNumber 
+    })
 
     // Get lease details with unit relationship
     const { data: lease, error: leaseError } = await supabase

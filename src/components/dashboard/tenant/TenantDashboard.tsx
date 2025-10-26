@@ -390,7 +390,14 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <Card className={`${displayPaymentStatus === 'overdue' || isOverdue ? 'bg-gradient-to-r from-destructive to-destructive/80' : 'bg-gradient-to-r from-success to-success/80'} text-primary-foreground`}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Rent Balance</CardTitle>
+                <CardTitle className="text-sm font-medium">
+                  Rent Balance
+                  {nextPaymentDue && (
+                    <span className="block text-xs font-normal opacity-90 mt-0.5">
+                      {new Date(nextPaymentDue).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                    </span>
+                  )}
+                </CardTitle>
                 <div className="flex items-center gap-2">
                   <Button
                     size="sm"

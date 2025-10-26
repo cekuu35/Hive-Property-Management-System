@@ -7,6 +7,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Plus, Edit, Trash2, Home, Users, DollarSign, Square, Eye, Wrench, FileText } from 'lucide-react';
 import { UnitForm } from './UnitForm';
 import { UnitDetailsModal } from './UnitDetailsModal';
+import { useCanAddResource } from '@/components/subscription/SubscriptionGuard';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 interface Unit {
   id: string;
@@ -40,6 +43,9 @@ export const UnitManagement = ({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showUnitDetails, setShowUnitDetails] = useState(false);
   const [unitToDelete, setUnitToDelete] = useState<string | null>(null);
+
+  const canAddUnit = useCanAddResource('max_units');
+  const navigate = useNavigate();
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -84,8 +90,21 @@ export const UnitManagement = ({
 
   const handleFormSubmit = async (unitData: any) => {
     if (selectedUnit) {
+      // Editing existing unit - no limit check needed
       await onUpdateUnit(selectedUnit.id, unitData);
     } else {
+      // Creating new unit - check subscription limit
+      const check = canAddUnit();
+      if (!check.allowed) {
+        toast.error(
+          check.reason === 'no_subscription' ? "Subscription Required" : "Unit Limit Reached",
+          {
+            description: check.message
+          }
+        );
+        navigate('/landlord/plans-billing');
+        return;
+      }
       await onCreateUnit(unitData);
     }
   };
@@ -155,6 +174,18 @@ export const UnitManagement = ({
         </div>
         <Button 
           onClick={() => {
+            // Check subscription before opening form
+            const check = canAddUnit();
+            if (!check.allowed) {
+              toast.error(
+                check.reason === 'no_subscription' ? "Subscription Required" : "Unit Limit Reached",
+                {
+                  description: check.message
+                }
+              );
+              navigate('/landlord/plans-billing');
+              return;
+            }
             setSelectedUnit(null);
             setShowUnitForm(true);
           }}
@@ -274,6 +305,18 @@ export const UnitManagement = ({
               </p>
               <Button 
                 onClick={() => {
+                  // Check subscription before opening form
+                  const check = canAddUnit();
+                  if (!check.allowed) {
+                    toast.error(
+                      check.reason === 'no_subscription' ? "Subscription Required" : "Unit Limit Reached",
+                      {
+                        description: check.message
+                      }
+                    );
+                    navigate('/landlord/plans-billing');
+                    return;
+                  }
                   setSelectedUnit(null);
                   setShowUnitForm(true);
                 }}

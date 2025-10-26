@@ -4,7 +4,7 @@ import {
   Clipboard, Calendar, Package, Shield, AlertTriangle, UserCheck, MapPin,
   Receipt, Bell, Activity, UserPlus, Clock
 } from "lucide-react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Sidebar,
   SidebarContent,
@@ -43,17 +43,18 @@ const navigationConfig: Record<UserRole, NavigationItem[]> = {
   ],
   landlord: [
     { id: "dashboard", label: "Dashboard", icon: BarChart3, path: "/dashboard" },
-    { id: "properties", label: "Properties", icon: Building, path: "/properties" },
-    { id: "tenants", label: "Tenants", icon: Users, path: "/tenants" },
-    { id: "applications", label: "Applications", icon: FileText, path: "/applications" },
-    { id: "staff", label: "Staff Management", icon: UserPlus, path: "/staff" },
-    { id: "financials", label: "Financials", icon: DollarSign, path: "/financials" },
-    { id: "utility-bills", label: "Utility Bills", icon: Receipt, path: "/utility-bills" },
-    { id: "maintenance", label: "Maintenance", icon: Wrench, path: "/maintenance" },
-    { id: "incidents", label: "Security Incidents", icon: AlertTriangle, path: "/incidents" },
-    { id: "messages", label: "Messages", icon: MessageCircle, path: "/messages" },
-    { id: "reports", label: "Reports", icon: TrendingUp, path: "/reports" },
-    { id: "settings", label: "Settings", icon: Settings, path: "/settings" },
+    { id: "properties", label: "Properties", icon: Building, path: "/dashboard?section=properties" },
+    { id: "tenants", label: "Tenants", icon: Users, path: "/dashboard?section=tenants" },
+    { id: "applications", label: "Applications", icon: FileText, path: "/dashboard?section=applications" },
+    { id: "staff", label: "Staff Management", icon: UserPlus, path: "/dashboard?section=staff" },
+    { id: "financials", label: "Financials", icon: DollarSign, path: "/dashboard?section=financials" },
+    { id: "utility-bills", label: "Utility Bills", icon: Receipt, path: "/dashboard?section=utility-bills" },
+    { id: "maintenance", label: "Maintenance", icon: Wrench, path: "/dashboard?section=maintenance" },
+    { id: "incidents", label: "Security Incidents", icon: AlertTriangle, path: "/dashboard?section=incidents" },
+    { id: "plans-billing", label: "Plans & Billing", icon: CreditCard, path: "/landlord/plans-billing" },
+    { id: "messages", label: "Messages", icon: MessageCircle, path: "/dashboard?section=messages" },
+    { id: "reports", label: "Reports", icon: TrendingUp, path: "/dashboard?section=reports" },
+    { id: "settings", label: "Settings", icon: Settings, path: "/dashboard?section=settings" },
   ],
   caretaker: [
     { id: "dashboard", label: "Dashboard", icon: BarChart3, path: "/dashboard" },
@@ -82,6 +83,7 @@ interface AppSidebarProps {
 
 export const AppSidebar = ({ userRole, activeItemId, onSelect }: AppSidebarProps) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const currentPath = location.pathname;
   const searchParams = new URLSearchParams(location.search);
   const currentTab = searchParams.get('tab');
@@ -99,6 +101,14 @@ export const AppSidebar = ({ userRole, activeItemId, onSelect }: AppSidebarProps
     
     return currentPath === path;
   };
+  
+  const handleNavigate = (item: NavigationItem) => {
+    // Navigate to the path
+    navigate(item.path);
+    // Call the onSelect callback if provided
+    onSelect?.(item.id);
+  };
+  
   const getNavClassName = (active: boolean) => 
     active ? "bg-sidebar-accent text-sidebar-primary font-medium" : "hover:bg-sidebar-accent/50";
 
@@ -127,7 +137,7 @@ export const AppSidebar = ({ userRole, activeItemId, onSelect }: AppSidebarProps
               {navigationItems.map((item) => (
                 <SidebarMenuItem key={item.id}>
                   <SidebarMenuButton
-                    onClick={() => onSelect?.(item.id)}
+                    onClick={() => handleNavigate(item)}
                     className={getNavClassName(isItemActive(item.id, item.path))}
                     tooltip={item.label}
                   >

@@ -51,6 +51,7 @@ const landlordNavigationItems = [
   { id: 'tenants', label: 'Tenants', icon: User, description: 'Tenant management' },
   { id: 'payments', label: 'Payments', icon: Receipt, description: 'Payment tracking' },
   { id: 'maintenance', label: 'Maintenance', icon: Wrench, description: 'Repair requests' },
+  { id: 'plans-billing', label: 'Plans & Billing', icon: CreditCard, description: 'Subscription management' },
   { id: 'messages', label: 'Messages', icon: MessageCircle, description: 'Tenant communication' },
   { id: 'reports', label: 'Reports', icon: FileText, description: 'Analytics & reports' },
   { id: 'settings', label: 'Settings', icon: Settings, description: 'Account settings' },
@@ -104,7 +105,7 @@ export function MobileNavigation({
           <div className="flex flex-col h-full bg-background">
             {/* Header */}
             <div className="p-6 border-b bg-background">
-              <h2 className="text-lg font-semibold text-foreground">LovlyProp</h2>
+              <h2 className="text-lg font-semibold text-foreground">Hive</h2>
               <p className="text-sm text-muted-foreground">
                 {userRole === 'landlord' ? 'Property Management' : 'Tenant Portal'}
               </p>

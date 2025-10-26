@@ -161,7 +161,7 @@ export function MobileTenantDashboard({ onTabChange }: MobileTenantDashboardProp
       {/* Quick Stats */}
       <MobileGrid columns={2}>
         <MobileCard
-          title="Rent Balance"
+          title={`Rent Balance${nextPaymentDue ? ` - ${new Date(nextPaymentDue).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}` : ''}`}
           value={`KES ${(rentBalance || 0).toLocaleString()}`}
           description={
             isOverdue 
@@ -194,7 +194,7 @@ export function MobileTenantDashboard({ onTabChange }: MobileTenantDashboardProp
       {/* Payment Info */}
       {hasApprovedLease && (
         <MobileCard
-          title="Next Payment Due"
+          title={`Next Payment Due${nextPaymentDue ? ` - ${new Date(nextPaymentDue).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}` : ''}`}
           description={
             nextPaymentDue 
               ? `Due ${formatDate(nextPaymentDue)}${isOverdue ? ` (${Math.abs(daysUntilDue)} days overdue)` : ''}${lateFee > 0 ? ` • Late fee: KES ${lateFee.toLocaleString()}` : ''}` 
@@ -379,6 +379,18 @@ export function MobileTenantDashboard({ onTabChange }: MobileTenantDashboardProp
     </div>
   );
 
+  const formatMonthYear = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long'
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
   const renderPayments = () => (
     <div className="space-y-3 px-3 py-4 w-full max-w-full overflow-x-hidden">
       <MobileCard
@@ -392,8 +404,8 @@ export function MobileTenantDashboard({ onTabChange }: MobileTenantDashboardProp
           .map((payment, index) => (
           <MobileListItem
             key={index}
-            title={`KES ${payment.amount?.toLocaleString() || '0'}`}
-            subtitle={`Due ${formatDate(payment.date)} • ${payment.method || 'Pending'}${payment.late_fee && payment.late_fee > 0 ? ` • Late fee: KES ${payment.late_fee.toLocaleString()}` : ''}`}
+            title={`Rent for ${formatMonthYear(payment.date)}`}
+            subtitle={`KES ${payment.amount?.toLocaleString() || '0'} • ${payment.status === 'paid' ? 'Paid' : 'Due'} ${formatDate(payment.date)}${payment.method ? ` • ${payment.method}` : ''}${payment.late_fee && payment.late_fee > 0 ? ` • Late fee: KES ${payment.late_fee.toLocaleString()}` : ''}`}
             value={payment.status?.toUpperCase()}
             status={getStatusColor(payment.status || 'pending')}
             icon={<Receipt className="h-4 w-4" />}
@@ -443,25 +455,25 @@ export function MobileTenantDashboard({ onTabChange }: MobileTenantDashboardProp
           >
             <MobileList>
               {unpaidBills.map((bill) => (
-                <div key={bill.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg mb-2">
-                  <div className="flex items-center gap-3 flex-1">
-                    {bill.utilities?.name === 'Electricity' && <Wrench className="h-4 w-4" />}
-                    {bill.utilities?.name === 'Water' && <Wrench className="h-4 w-4" />}
-                    {!bill.utilities?.name && <Receipt className="h-4 w-4" />}
-                    <div className="flex-1">
-                      <div className="font-medium text-sm">{bill.utilities?.name || 'Utility'}</div>
-                      <div className="text-xs text-muted-foreground">{bill.month}</div>
+                <div key={bill.id} className="flex items-start justify-between p-3 bg-muted/50 rounded-lg mb-2 gap-3">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    {bill.utilities?.name === 'Electricity' && <Wrench className="h-4 w-4 flex-shrink-0 mt-0.5" />}
+                    {bill.utilities?.name === 'Water' && <Wrench className="h-4 w-4 flex-shrink-0 mt-0.5" />}
+                    {!bill.utilities?.name && <Receipt className="h-4 w-4 flex-shrink-0 mt-0.5" />}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm truncate">{bill.utilities?.name || 'Utility'}</div>
+                      <div className="text-xs text-muted-foreground truncate">{bill.month}</div>
                       <div className="text-xs text-muted-foreground">
                         Due: {formatDate(bill.due_date)}
                       </div>
                     </div>
                   </div>
-                  <div className="text-right flex flex-col items-end gap-2">
-                    <div className="font-semibold text-sm">KES {bill.amount.toLocaleString()}</div>
+                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                    <div className="font-semibold text-sm whitespace-nowrap">KES {bill.amount.toLocaleString()}</div>
                     <Button
                       size="sm"
                       onClick={() => handlePayUtilityBill(bill.id)}
-                      className="h-8 text-xs"
+                      className="h-8 text-xs whitespace-nowrap"
                     >
                       Pay Now
                     </Button>

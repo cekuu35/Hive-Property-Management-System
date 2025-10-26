@@ -178,36 +178,108 @@ export const useTenantPayments = () => {
       console.log('📋 [useTenantPayments] Step 4: Processing payments data...');
       console.log('🔍 [useTenantPayments] Raw payments data:', payments);
       
-      const mapped = (payments || []).map((p: any, index: number) => {
-        const mappedPayment = {
-          id: p.id,
-          amount: Number(p.amount || 0),
-          date: (p.paid_date || p.due_date) as string,
-          status: p.status as 'paid' | 'overdue' | 'pending',
-          method: p.payment_method,
-          reference: p.transaction_reference,
-          late_fee: Number(p.late_fee || 0),
-        };
-        console.log(`📄 [useTenantPayments] Payment ${index + 1}:`, mappedPayment);
-        return mappedPayment;
-      }) as TenantPayment[];
+      // Get lease start date to generate all months
+      const { data: leaseDetails, error: leaseDetailsError } = await supabaseAdmin
+        .from('leases')
+        .select('start_date')
+        .eq('id', leaseId)
+        .single();
 
-      console.log('✅ [useTenantPayments] Final mapped payments:', {
-        count: mapped.length,
-        payments: mapped
+      const leaseStartDate = leaseDetails?.start_date ? new Date(leaseDetails.start_date) : new Date();
+      console.log('📅 [useTenantPayments] Lease start date:', leaseStartDate);
+
+      // Generate all months from lease start to now
+      const now = new Date();
+      const allMonths: { month: string; year: number; monthIndex: number }[] = [];
+      const startDate = new Date(leaseStartDate.getFullYear(), leaseStartDate.getMonth(), 1);
+      const currentDate = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      let iterDate = new Date(startDate);
+      while (iterDate <= currentDate) {
+        allMonths.push({
+          month: iterDate.toISOString().slice(0, 7), // YYYY-MM format
+          year: iterDate.getFullYear(),
+          monthIndex: iterDate.getMonth()
+        });
+        iterDate.setMonth(iterDate.getMonth() + 1);
+      }
+
+      console.log('📅 [useTenantPayments] Generated months:', allMonths.length, allMonths.map(m => m.month));
+
+      // Group payments by month (YYYY-MM)
+      const paymentsByMonth = new Map<string, any[]>();
+      
+      (payments || []).forEach((p: any) => {
+        const paymentDate = new Date(p.due_date || p.created_at);
+        const monthKey = paymentDate.toISOString().slice(0, 7); // YYYY-MM format
+        
+        if (!paymentsByMonth.has(monthKey)) {
+          paymentsByMonth.set(monthKey, []);
+        }
+        paymentsByMonth.get(monthKey)!.push(p);
+      });
+
+      console.log('📊 [useTenantPayments] Payments grouped by month:', {
+        monthCount: paymentsByMonth.size,
+        months: Array.from(paymentsByMonth.keys())
+      });
+
+      // Create one payment entry per month
+      const monthlyPayments: TenantPayment[] = allMonths.map(({ month, year, monthIndex }) => {
+        const monthPayments = paymentsByMonth.get(month) || [];
+        
+        // Aggregate data for this month
+        const totalAmount = monthPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+        const totalLateFee = monthPayments.reduce((sum, p) => sum + Number(p.late_fee || 0), 0);
+        
+        // Determine status: paid if any payment is paid, overdue if any is overdue, otherwise pending
+        let status: 'paid' | 'overdue' | 'pending' = 'pending';
+        const hasPaid = monthPayments.some((p: any) => p.status === 'paid');
+        const hasOverdue = monthPayments.some((p: any) => p.status === 'overdue');
+        
+        if (hasPaid) {
+          status = 'paid';
+        } else if (hasOverdue) {
+          status = 'overdue';
+        } else if (monthPayments.length === 0) {
+          // No payment record for this month - check if it's overdue
+          const monthDate = new Date(year, monthIndex, 1);
+          const isCurrentOrFutureMonth = monthDate >= new Date(now.getFullYear(), now.getMonth(), 1);
+          status = isCurrentOrFutureMonth ? 'pending' : 'overdue';
+        }
+        
+        // Get payment method and reference from the most recent payment
+        const sortedPayments = monthPayments.sort((a: any, b: any) => 
+          new Date(b.paid_date || b.created_at).getTime() - new Date(a.paid_date || a.created_at).getTime()
+        );
+        const latestPayment = sortedPayments[0];
+        
+        // Use paid amount if paid, otherwise use lease rent amount
+        const displayAmount = status === 'paid' && totalAmount > 0 ? totalAmount : leaseRentAmount;
+        
+        // Create a unique ID for this month
+        const monthId = latestPayment?.id || `${month}-${status}`;
+        
+        // Use paid_date if paid, otherwise use the first of the month as due date
+        const displayDate = latestPayment?.paid_date || `${month}-01`;
+
+        return {
+          id: monthId,
+          amount: displayAmount,
+          date: displayDate,
+          status: status,
+          method: latestPayment?.payment_method || null,
+          reference: latestPayment?.transaction_reference || null,
+          late_fee: totalLateFee,
+        };
+      }).reverse(); // Most recent first
+
+      console.log('✅ [useTenantPayments] Final monthly payments:', {
+        count: monthlyPayments.length,
+        payments: monthlyPayments
       });
       
-      // Prioritize paid payments and recent payments
-      const paidPayments = mapped.filter(p => p.status === 'paid');
-      const pendingPayments = mapped.filter(p => p.status === 'pending');
-      
-      // Show paid payments first, then recent pending payments
-      const prioritizedPayments = [
-        ...paidPayments,
-        ...pendingPayments.slice(0, 10 - paidPayments.length)
-      ];
-      
-      setRecentPayments(prioritizedPayments);
+      setRecentPayments(monthlyPayments);
 
       // Get the actual current_balance from tenant_info table
       console.log('📋 [useTenantPayments] Step 5: Fetching current balance from tenant_info...');

@@ -83,6 +83,18 @@ export const PaymentHistory = ({ onMakePayment }: PaymentHistoryProps) => {
     }
   };
 
+  const formatMonthYear = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long'
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
   const formatDateTime = (dateString: string) => {
     try {
       const date = new Date(dateString);
@@ -280,7 +292,7 @@ export const PaymentHistory = ({ onMakePayment }: PaymentHistoryProps) => {
                   </div>
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <p className="font-semibold text-lg">{formatAmount(payment.amount)}</p>
+                      <p className="font-semibold text-base">Rent for {formatMonthYear(payment.date)}</p>
                       <Badge 
                         className={`${getStatusColor(payment.status)} text-white text-xs`}
                         variant="secondary"
@@ -288,15 +300,20 @@ export const PaymentHistory = ({ onMakePayment }: PaymentHistoryProps) => {
                         {payment.status?.charAt(0).toUpperCase() + payment.status?.slice(1)}
                       </Badge>
                     </div>
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-lg">{formatAmount(payment.amount)}</p>
+                    </div>
                     <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-1 min-w-[140px]">
-                        <Calendar className="h-3 w-3 flex-shrink-0" />
-                        <span className="font-mono tabular-nums">{formatDate(payment.date)}</span>
-                      </div>
                       <div className="flex items-center gap-1">
-                        <CreditCard className="h-3 w-3 flex-shrink-0" />
-                        <span>{payment.method || 'Pending'}</span>
+                        <Calendar className="h-3 w-3 flex-shrink-0" />
+                        <span>{payment.status === 'paid' ? 'Paid' : 'Due'}: {formatDate(payment.date)}</span>
                       </div>
+                      {payment.method && (
+                        <div className="flex items-center gap-1">
+                          <CreditCard className="h-3 w-3 flex-shrink-0" />
+                          <span>{payment.method}</span>
+                        </div>
+                      )}
                     </div>
                     {payment.late_fee && payment.late_fee > 0 && (
                       <div className="flex items-center gap-1 text-xs text-red-600 font-medium">

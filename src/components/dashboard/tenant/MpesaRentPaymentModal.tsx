@@ -38,6 +38,7 @@ export const MpesaRentPaymentModal = ({
 }: MpesaRentPaymentModalProps) => {
   const { profile, user } = useAuth();
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [customAmount, setCustomAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'processing' | 'success' | 'failed'>('idle');
@@ -80,6 +81,19 @@ export const MpesaRentPaymentModal = ({
       return;
     }
 
+    // Get the payment amount (custom or full amount)
+    const paymentAmount = customAmount ? parseFloat(customAmount) : rentAmount;
+
+    if (!paymentAmount || paymentAmount <= 0) {
+      toast.error('Please enter a valid payment amount');
+      return;
+    }
+
+    if (paymentAmount > rentAmount) {
+      toast.error(`Payment amount cannot exceed outstanding balance (KES ${rentAmount.toLocaleString()})`);
+      return;
+    }
+
     const formattedPhone = formatPhoneNumber(phoneNumber);
     
     // Basic validation for Kenyan phone numbers
@@ -93,9 +107,13 @@ export const MpesaRentPaymentModal = ({
     setPaymentStatus('processing');
 
     try {
+      const remainingBalance = rentAmount - paymentAmount;
+
       console.log('🚀 [KCB Buni M-Pesa] Initiating rent payment...', {
         leaseId: leaseData.id,
-        amount: rentAmount,
+        paymentAmount,
+        fullRentAmount: rentAmount,
+        remainingBalance,
         phoneNumber: formattedPhone
       });
 
@@ -107,7 +125,9 @@ export const MpesaRentPaymentModal = ({
         },
         body: JSON.stringify({
           leaseId: leaseData.id,
-          amount: rentAmount,
+          amount: paymentAmount,
+          fullRentAmount: rentAmount,
+          remainingBalance,
           phoneNumber: formattedPhone
         }),
       });
@@ -237,20 +257,49 @@ export const MpesaRentPaymentModal = ({
             KCB M-Pesa Rent Payment
           </DialogTitle>
           <DialogDescription>
-            Pay your rent securely via KCB Buni M-Pesa Express STK Push
+            <div className="flex flex-col gap-1">
+              <span>Pay your rent securely via KCB Buni M-Pesa Express STK Push</span>
+              {dueDate && (
+                <span className="text-sm font-medium text-foreground">
+                  Payment for: {new Date(dueDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                </span>
+              )}
+            </div>
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="bg-muted p-4 rounded-lg">
+          <div className="bg-muted p-4 rounded-lg space-y-2">
             <div className="flex justify-between items-center">
-              <span className="text-sm font-medium">Amount Due:</span>
-              <span className="text-lg font-bold">KES {rentAmount.toLocaleString()}</span>
+              <div className="flex flex-col">
+                <span className="text-sm font-medium">Outstanding Balance</span>
+                {dueDate && (
+                  <span className="text-xs text-muted-foreground">
+                    ({new Date(dueDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })})
+                  </span>
+                )}
+              </div>
+              <span className="text-lg font-bold text-red-600">KES {rentAmount.toLocaleString()}</span>
             </div>
-            <div className="flex justify-between items-center mt-2">
+            <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground">Due Date:</span>
               <span className="text-sm">{new Date(dueDate).toLocaleDateString()}</span>
             </div>
+            {customAmount && parseFloat(customAmount) > 0 && parseFloat(customAmount) <= rentAmount && (
+              <>
+                <div className="border-t border-border my-2"></div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Paying Now:</span>
+                  <span className="text-lg font-bold text-blue-600">KES {parseFloat(customAmount).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Remaining Balance:</span>
+                  <span className="text-lg font-bold text-orange-600">
+                    KES {(rentAmount - parseFloat(customAmount)).toLocaleString()}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
 
           {error && (
@@ -277,6 +326,24 @@ export const MpesaRentPaymentModal = ({
               <p className="text-sm text-green-800">Payment successful!</p>
             </div>
           )}
+
+          <div className="space-y-2">
+            <Label htmlFor="amount">Payment Amount (Optional)</Label>
+            <Input
+              id="amount"
+              type="number"
+              placeholder={`Enter amount (Max: KES ${rentAmount.toLocaleString()})`}
+              value={customAmount}
+              onChange={(e) => setCustomAmount(e.target.value)}
+              disabled={loading || paymentStatus === 'processing'}
+              min="1"
+              max={rentAmount}
+              step="1"
+            />
+            <p className="text-xs text-muted-foreground">
+              Leave empty to pay full amount of KES {rentAmount.toLocaleString()}
+            </p>
+          </div>
 
           <div className="space-y-2">
             <Label htmlFor="phone">Phone Number</Label>
@@ -312,7 +379,7 @@ export const MpesaRentPaymentModal = ({
               ) : (
                 <>
                   <Smartphone className="mr-2 h-4 w-4" />
-                  Pay KES {rentAmount.toLocaleString()} via KCB M-Pesa
+                  Pay KES {(customAmount ? parseFloat(customAmount) : rentAmount).toLocaleString()} via KCB M-Pesa
                 </>
               )}
             </Button>

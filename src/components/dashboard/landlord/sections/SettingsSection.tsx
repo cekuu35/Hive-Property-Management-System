@@ -17,6 +17,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { DataIntegrityCheck } from '../DataIntegrityCheck';
 import { LandlordPasswordChangeModal } from '../LandlordPasswordChangeModal';
 import { NotificationSettings } from '../../NotificationSettings';
+import { ProfileSettings } from '../ProfileSettings';
 
 export const SettingsSection = () => {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -98,96 +99,7 @@ export const SettingsSection = () => {
         </TabsList>
 
         <TabsContent value="profile" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Landlord Profile</CardTitle>
-              <CardDescription>Update your personal and business information</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Profile Picture Section */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-6">
-                  <Avatar className="h-20 w-20">
-                    <AvatarImage src={profile?.avatar_url || undefined} />
-                    <AvatarFallback className="text-lg">{profileSettings.firstName[0]}{profileSettings.lastName[0]}</AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <h4 className="text-sm font-medium mb-2">Profile Photo</h4>
-                    <p className="text-xs text-muted-foreground">
-                      Upload a professional photo for your landlord profile
-                    </p>
-                  </div>
-                </div>
-                
-                <PhotoUpload
-                  onUpload={handleAvatarUpload}
-                  currentPhoto={profile?.avatar_url || undefined}
-                  bucket="avatars"
-                  path={user?.id || ''}
-                  maxSize={5}
-                  compress={true}
-                  quality={0.8}
-                  placeholder="Click to upload profile photo"
-                  className="max-w-md"
-                />
-              </div>
-
-              <Separator />
-
-              {/* Personal Information */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="firstName">First Name</Label>
-                  <Input
-                    id="firstName"
-                    value={profileSettings.firstName}
-                    onChange={(e) => handleProfileChange('firstName', e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="lastName">Last Name</Label>
-                  <Input
-                    id="lastName"
-                    value={profileSettings.lastName}
-                    onChange={(e) => handleProfileChange('lastName', e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={profileSettings.email}
-                    onChange={(e) => handleProfileChange('email', e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone Number</Label>
-                  <Input
-                    id="phone"
-                    value={profileSettings.phone}
-                    onChange={(e) => handleProfileChange('phone', e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="company">Company Name</Label>
-                  <Input
-                    id="company"
-                    value={profileSettings.company}
-                    onChange={(e) => handleProfileChange('company', e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="address">Business Address</Label>
-                  <Input
-                    id="address"
-                    value={profileSettings.address}
-                    onChange={(e) => handleProfileChange('address', e.target.value)}
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <ProfileSettings />
         </TabsContent>
 
         <TabsContent value="team" className="space-y-6">
