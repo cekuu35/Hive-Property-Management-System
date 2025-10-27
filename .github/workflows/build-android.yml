@@ -34,28 +34,6 @@ jobs:
       run: npm run build
       env:
         CI: false
-    
-    - name: Generate Upload Keystore (BEFORE Capacitor sync)
-      run: |
-        mkdir -p android/app
-        cd android/app
-        # Generate keystore
-        keytool -genkeypair -v \
-          -storetype PKCS12 \
-          -keystore upload-keystore.jks \
-          -alias hive-property-upload \
-          -keyalg RSA \
-          -keysize 2048 \
-          -validity 10000 \
-          -storepass hive_property_2024_secure \
-          -keypass hive_property_2024_secure \
-          -dname "CN=Hive Property Management, OU=Mobile, O=Hive, L=Nairobi, ST=Nairobi, C=KE"
-        # Create properties file
-        echo "storePassword=hive_property_2024_secure" > upload-keystore.properties
-        echo "keyPassword=hive_property_2024_secure" >> upload-keystore.properties
-        echo "keyAlias=hive-property-upload" >> upload-keystore.properties
-        echo "storeFile=upload-keystore.jks" >> upload-keystore.properties
-        ls -la
         
     - name: Setup Capacitor
       run: |
@@ -64,16 +42,16 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x android/gradlew
       
-    - name: Build Android APK (Release - Signed)
+    - name: Build Android APK (Debug - Simple & Reliable)
       run: |
         cd android
-        ./gradlew assembleRelease --no-daemon --stacktrace
+        ./gradlew assembleDebug --no-daemon --stacktrace
         
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: hive-property-release-apk
-        path: android/app/build/outputs/apk/release/app-release.apk
+        name: hive-property-debug-apk
+        path: android/app/build/outputs/apk/debug/app-debug.apk
         retention-days: 30
         
     - name: Create Release Info
