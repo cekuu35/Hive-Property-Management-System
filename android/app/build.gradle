@@ -20,13 +20,20 @@ android {
     signingConfigs {
         release {
             def keystorePropertiesFile = file("upload-keystore.properties")
-            def keystoreProperties = new Properties()
             if (keystorePropertiesFile.exists()) {
+                def keystoreProperties = new Properties()
                 keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
                 keyAlias keystoreProperties['keyAlias']
                 keyPassword keystoreProperties['keyPassword']
                 storeFile file(keystoreProperties['storeFile'])
                 storePassword keystoreProperties['storePassword']
+            } else {
+                // Fallback to debug signing if properties don't exist
+                logger.warn("Keystore properties not found, using debug signing")
+                keyAlias 'androiddebugkey'
+                keyPassword 'android'
+                storeFile file(System.getProperty('user.home') + '/.android/debug.keystore')
+                storePassword 'android'
             }
         }
     }

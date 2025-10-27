@@ -34,13 +34,10 @@ jobs:
       run: npm run build
       env:
         CI: false
-        
-    - name: Setup Capacitor
+    
+    - name: Generate Upload Keystore (BEFORE Capacitor sync)
       run: |
-        npx cap sync android
-        
-    - name: Generate Upload Keystore
-      run: |
+        mkdir -p android/app
         cd android/app
         # Generate keystore
         keytool -genkeypair -v \
@@ -58,6 +55,11 @@ jobs:
         echo "keyPassword=hive_property_2024_secure" >> upload-keystore.properties
         echo "keyAlias=hive-property-upload" >> upload-keystore.properties
         echo "storeFile=upload-keystore.jks" >> upload-keystore.properties
+        ls -la
+        
+    - name: Setup Capacitor
+      run: |
+        npx cap sync android
       
     - name: Grant execute permission for gradlew
       run: chmod +x android/gradlew
