@@ -39,10 +39,24 @@ jobs:
       run: |
         npx cap sync android
         
+    - name: Generate Upload Keystore
+      run: |
+        cd android/app
+        keytool -genkeypair -v \
+          -storetype PKCS12 \
+          -keystore upload-keystore.jks \
+          -alias hive-property-upload \
+          -keyalg RSA \
+          -keysize 2048 \
+          -validity 10000 \
+          -storepass hive_property_2024_secure \
+          -keypass hive_property_2024_secure \
+          -dname "CN=Hive Property Management, OU=Mobile, O=Hive, L=Nairobi, ST=Nairobi, C=KE"
+      
     - name: Grant execute permission for gradlew
       run: chmod +x android/gradlew
       
-    - name: Build Android APK (Release)
+    - name: Build Android APK (Release - Signed)
       run: |
         cd android
         ./gradlew assembleRelease --no-daemon --stacktrace

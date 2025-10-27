@@ -39,6 +39,8 @@ android/gradle.properties.local
 android/key.properties
 *.keystore
 *.jks
+android/app/upload-keystore.properties
+android/app/*.jks
 
 # iOS
 ios/App/build/
