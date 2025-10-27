@@ -42,16 +42,16 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x android/gradlew
       
-    - name: Build Android APK
+    - name: Build Android APK (Release)
       run: |
         cd android
-        ./gradlew assembleDebug --no-daemon --stacktrace
+        ./gradlew assembleRelease --no-daemon --stacktrace
         
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: hive-property-debug-apk
-        path: android/app/build/outputs/apk/debug/app-debug.apk
+        name: hive-property-release-apk
+        path: android/app/build/outputs/apk/release/app-release.apk
         retention-days: 30
         
     - name: Create Release Info

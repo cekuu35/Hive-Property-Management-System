@@ -20,6 +20,8 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // Sign with debug key for now (no keystore needed)
+            signingConfig signingConfigs.debug
         }
     }
 }
