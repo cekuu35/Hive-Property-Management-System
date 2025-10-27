@@ -23,6 +23,16 @@ android {
             // Sign with debug key for now (no keystore needed)
             signingConfig signingConfigs.debug
         }
+        debug {
+            // Ensure debug builds are also properly configured
+            minifyEnabled false
+        }
+    }
+    
+    // Add compatibility for older devices
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 }
 
