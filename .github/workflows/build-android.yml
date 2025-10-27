@@ -42,6 +42,7 @@ jobs:
     - name: Generate Upload Keystore
       run: |
         cd android/app
+        # Generate keystore
         keytool -genkeypair -v \
           -storetype PKCS12 \
           -keystore upload-keystore.jks \
@@ -52,6 +53,11 @@ jobs:
           -storepass hive_property_2024_secure \
           -keypass hive_property_2024_secure \
           -dname "CN=Hive Property Management, OU=Mobile, O=Hive, L=Nairobi, ST=Nairobi, C=KE"
+        # Create properties file
+        echo "storePassword=hive_property_2024_secure" > upload-keystore.properties
+        echo "keyPassword=hive_property_2024_secure" >> upload-keystore.properties
+        echo "keyAlias=hive-property-upload" >> upload-keystore.properties
+        echo "storeFile=upload-keystore.jks" >> upload-keystore.properties
       
     - name: Grant execute permission for gradlew
       run: chmod +x android/gradlew
