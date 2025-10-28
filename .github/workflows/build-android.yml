@@ -27,8 +27,10 @@ jobs:
         distribution: 'temurin'
         java-version: '21'
         
-        - name: Install dependencies
-          run: npm install
+        - name: Install dependencies (ci with fallback)
+          run: |
+            # Prefer clean install; fall back to install if lockfile not in sync
+            npm ci || npm install --no-audit --prefer-offline --no-fund
       
     - name: Build web assets
       run: npm run build
