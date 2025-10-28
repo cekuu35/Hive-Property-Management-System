@@ -10,7 +10,7 @@ const reactDomPath = path.resolve(__dirname, 'node_modules/react-dom');
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
-    port: 5173,
+    port: 8080,
     strictPort: true,
     headers: {
       'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
