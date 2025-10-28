@@ -129,6 +129,23 @@ jobs:
         cd android
         ./gradlew assembleRelease --no-daemon --stacktrace
         
+    - name: Verify APK signature and metadata
+      run: |
+        VERSION="${{ steps.version.outputs.VERSION }}"
+        APK_PATH=android/app/build/outputs/apk/release/app-release.apk
+        echo "Verifying APK signature..."
+        jarsigner -verify -verbose -certs "$APK_PATH" || true
+        echo "apksigner verify (if available)..."
+        if command -v apksigner >/dev/null 2>&1; then
+          apksigner verify --print-certs "$APK_PATH" || true
+        fi
+        echo "Listing ABIs in APK (if any native libs present)..."
+        unzip -l "$APK_PATH" | grep -E "^\s+.*lib/(arm|armeabi|arm64|x86)" || true
+        echo "SDK versions (manifest dump if aapt exists)..."
+        if command -v aapt >/dev/null 2>&1; then
+          aapt dump badging "$APK_PATH" | grep -E "sdkVersion|targetSdkVersion" || true
+        fi
+
     - name: Rename APK (universal, signed)
       run: |
         VERSION="${{ steps.version.outputs.VERSION }}"

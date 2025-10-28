@@ -45,6 +45,9 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             // Sign with production keystore
             signingConfig signingConfigs.release
+            // Ensure compatibility with older installers
+            v1SigningEnabled true
+            v2SigningEnabled true
         }
         debug {
             // Ensure debug builds are also properly configured
