@@ -36,6 +36,15 @@ jobs:
       with:
         distribution: 'temurin'
         java-version: '21'
+
+    - name: Restore cached debug keystore (stable signature)
+      id: keystore-cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          android/app/upload-keystore.jks
+          android/app/upload-keystore.properties
+        key: debug-keystore-v1
     
     - name: Generate version number
       id: version
@@ -89,35 +98,38 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x android/gradlew
     
-    - name: Generate release keystore
+    - name: Ensure stable debug keystore exists
       run: |
+        set -e
         cd android/app
-        # Generate a release keystore (you can replace this with your own keystore later)
-        keytool -genkeypair -v \
-          -storetype PKCS12 \
-          -keystore upload-keystore.jks \
-          -alias upload \
-          -keyalg RSA \
-          -keysize 2048 \
-          -validity 10000 \
-          -storepass hive2025 \
-          -keypass hive2025 \
-          -dname "CN=Hive Property, OU=Development, O=Hive, L=Nairobi, ST=Nairobi, C=KE"
-        
-        # Create properties file
-        echo "storeFile=upload-keystore.jks" > upload-keystore.properties
-        echo "storePassword=hive2025" >> upload-keystore.properties
-        echo "keyAlias=upload" >> upload-keystore.properties
-        echo "keyPassword=hive2025" >> upload-keystore.properties
-        
-        echo "✅ Release keystore generated"
+        if [ -f upload-keystore.jks ] && [ -f upload-keystore.properties ]; then
+          echo "Keystore already present (restored from cache)."
+        else
+          echo "Generating stable debug keystore..."
+          keytool -genkeypair -v \
+            -storetype PKCS12 \
+            -keystore upload-keystore.jks \
+            -alias upload \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass hive2025 \
+            -keypass hive2025 \
+            -dname "CN=Hive Property (Debug), OU=Dev, O=Hive, L=Nairobi, ST=Nairobi, C=KE"
+
+          echo "storeFile=upload-keystore.jks" > upload-keystore.properties
+          echo "storePassword=hive2025" >> upload-keystore.properties
+          echo "keyAlias=upload" >> upload-keystore.properties
+          echo "keyPassword=hive2025" >> upload-keystore.properties
+          echo "✅ Stable debug keystore generated"
+        fi
       
-    - name: Build signed release APK
+    - name: Build signed universal APK (Release, debug keystore)
       run: |
         cd android
         ./gradlew assembleRelease --no-daemon --stacktrace
         
-    - name: Rename APK
+    - name: Rename APK (universal, signed)
       run: |
         VERSION="${{ steps.version.outputs.VERSION }}"
         mkdir -p release
