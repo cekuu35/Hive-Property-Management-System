@@ -61,4 +61,6 @@ android/app/src/main/assets/capacitor.plugins.json
 
 # Local environment
 .env.local
-.env.*.local
+.env.*.local 
+# Web app only - Android removed 
+android/ 
