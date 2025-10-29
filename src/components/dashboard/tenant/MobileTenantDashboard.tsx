@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { MobileHeader } from '@/components/ui/mobile-header';
 import { MobileCard, MobileGrid, MobileList, MobileListItem } from '@/components/ui/mobile-card';
 import { MobileNavigation } from '@/components/ui/mobile-navigation';
@@ -126,6 +126,39 @@ export function MobileTenantDashboard({ onTabChange }: MobileTenantDashboardProp
   const [showLeaseDocument, setShowLeaseDocument] = useState(false);
   const [showMaintenanceView, setShowMaintenanceView] = useState(false);
   const [selectedMaintenanceRequest, setSelectedMaintenanceRequest] = useState<any>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    if (selectedConversation) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [selectedConversation, getConversationMessages(selectedConversation || '')?.length]);
+
+  // Listen for conversation selection from notifications
+  useEffect(() => {
+    // Check localStorage for pending conversation
+    const pendingConversation = localStorage.getItem('openConversation');
+    if (pendingConversation) {
+      setSelectedConversation(pendingConversation);
+      setActiveTab('messages');
+      localStorage.removeItem('openConversation');
+    }
+
+    // Listen for navigation events
+    const handleNavigateToMessages = (event: CustomEvent) => {
+      const { participantId } = event.detail;
+      if (participantId) {
+        setSelectedConversation(participantId);
+        setActiveTab('messages');
+      }
+    };
+
+    window.addEventListener('navigateToMessages' as any, handleNavigateToMessages);
+    return () => {
+      window.removeEventListener('navigateToMessages' as any, handleNavigateToMessages);
+    };
+  }, []);
 
   // Optimized event handlers with useCallback
   const handleTabChange = useCallback((tab: string) => {
@@ -391,29 +424,147 @@ export function MobileTenantDashboard({ onTabChange }: MobileTenantDashboardProp
     }
   };
 
-  const renderPayments = () => (
-    <div className="space-y-3 px-3 py-4 w-full max-w-full overflow-x-hidden">
-      <MobileCard
-        title="Payment History"
-        description="View all your payments"
-      />
+  const renderPayments = () => {
+    // Calculate display balance - prioritize tenant_info balance as it's most up-to-date
+    const displayBalance = tenantInfo?.current_balance !== undefined && tenantInfo.current_balance !== null 
+      ? tenantInfo.current_balance 
+      : rentBalance;
 
-      <MobileList>
-        {recentPayments
-          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-          .map((payment, index) => (
-          <MobileListItem
-            key={index}
-            title={`Rent for ${formatMonthYear(payment.date)}`}
-            subtitle={`KES ${payment.amount?.toLocaleString() || '0'} • ${payment.status === 'paid' ? 'Paid' : 'Due'} ${formatDate(payment.date)}${payment.method ? ` • ${payment.method}` : ''}${payment.late_fee && payment.late_fee > 0 ? ` • Late fee: KES ${payment.late_fee.toLocaleString()}` : ''}`}
-            value={payment.status?.toUpperCase()}
-            status={getStatusColor(payment.status || 'pending')}
-            icon={<Receipt className="h-4 w-4" />}
-          />
-        ))}
-      </MobileList>
-    </div>
-  );
+    return (
+      <div className="space-y-3 px-3 py-4 w-full max-w-full overflow-x-hidden">
+        {/* Header */}
+        <MobileCard
+          title="Rent & Payments"
+          description="Manage your rent payments"
+        >
+          <Button 
+            onClick={() => setShowPaymentModal(true)}
+            disabled={displayBalance === 0 || !hasApprovedLease}
+            className="w-full mt-3"
+          >
+            <CreditCard className="h-4 w-4 mr-2" />
+            Pay Rent {displayBalance > 0 && `(KES ${displayBalance.toLocaleString()})`}
+          </Button>
+        </MobileCard>
+
+        {/* Current Balance Card */}
+        <div className={`p-4 rounded-lg ${isOverdue ? 'bg-gradient-to-r from-red-500 to-red-600' : 'bg-gradient-to-r from-primary to-primary/80'} text-white`}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5" />
+              <span className="font-medium">{isOverdue ? 'Overdue Balance' : 'Current Balance'}</span>
+            </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-white hover:bg-white/20 h-8 w-8 p-0"
+              onClick={() => window.location.reload()}
+            >
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          </div>
+          
+          <div className="text-3xl font-bold mb-3">KES {(displayBalance ?? 0).toLocaleString()}</div>
+
+          <div className="space-y-1 mb-3 text-sm">
+            <p className="opacity-90">
+              Due: {nextPaymentDue ? new Date(nextPaymentDue).toLocaleDateString() : '-'}
+            </p>
+            {currentRentDue > 0 && (
+              <p className="text-xs opacity-75">
+                Monthly Rent: KES {currentRentDue.toLocaleString()}
+              </p>
+            )}
+            {lateFee > 0 && (
+              <p className="text-xs opacity-75 text-red-200">
+                Late Fee: KES {lateFee.toLocaleString()}
+              </p>
+            )}
+            {daysUntilDue !== 0 && (
+              <p className="text-xs opacity-75">
+                {isOverdue 
+                  ? `${Math.abs(daysUntilDue)} days overdue` 
+                  : `${daysUntilDue} days until due`
+                }
+              </p>
+            )}
+          </div>
+
+          <Button 
+            variant="secondary" 
+            onClick={() => setShowPaymentModal(true)}
+            className="w-full"
+            disabled={!hasApprovedLease}
+          >
+            {!hasApprovedLease ? 'No Active Lease' :
+             isOverdue ? 'Pay Overdue Amount' : 'Pay Now'}
+          </Button>
+        </div>
+
+        {/* Payment Plans */}
+        <MobileCard title="Payment Plans" description="Available options">
+          <div className="space-y-2">
+            <div className="p-3 bg-primary/10 rounded-lg border border-primary/20">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-sm">Full Payment</p>
+                  <p className="text-xs text-muted-foreground">Pay entire amount</p>
+                </div>
+                <Badge variant="secondary" className="text-xs">Recommended</Badge>
+              </div>
+            </div>
+            <div className="p-3 bg-muted/50 rounded-lg border">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-sm">Split Payment</p>
+                  <p className="text-xs text-muted-foreground">2 installments available</p>
+                </div>
+                <Button variant="outline" size="sm" className="text-xs h-7">Setup</Button>
+              </div>
+            </div>
+          </div>
+        </MobileCard>
+
+        {/* Payment History */}
+        <MobileCard title="Payment History" description="View all your payments">
+          <MobileList>
+            {recentPayments
+              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+              .map((payment, index) => (
+              <MobileListItem
+                key={index}
+                title={`Rent for ${formatMonthYear(payment.date)}`}
+                subtitle={`KES ${payment.amount?.toLocaleString() || '0'} • ${payment.status === 'paid' ? 'Paid' : 'Due'} ${formatDate(payment.date)}${payment.method ? ` • ${payment.method}` : ''}${payment.late_fee && payment.late_fee > 0 ? ` • Late fee: KES ${payment.late_fee.toLocaleString()}` : ''}`}
+                value={payment.status?.toUpperCase()}
+                status={getStatusColor(payment.status || 'pending')}
+                icon={<Receipt className="h-4 w-4" />}
+              />
+            ))}
+          </MobileList>
+        </MobileCard>
+
+        {/* Payment Methods */}
+        <MobileCard title="Payment Methods" description="Your payment options">
+          <div className="space-y-2">
+            <div className="p-3 bg-primary/10 rounded-lg border-2 border-primary/30">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-6 bg-primary rounded flex items-center justify-center">
+                    <span className="text-xs text-primary-foreground font-bold">M</span>
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm">M-Pesa</p>
+                    <p className="text-xs text-muted-foreground">Mobile Money</p>
+                  </div>
+                </div>
+                <CheckCircle className="h-4 w-4 text-primary" />
+              </div>
+            </div>
+          </div>
+        </MobileCard>
+      </div>
+    );
+  };
 
   const handlePayUtilityBill = useCallback(async (billId: string) => {
     try {
@@ -627,25 +778,28 @@ export function MobileTenantDashboard({ onTabChange }: MobileTenantDashboardProp
                 <p className="text-muted-foreground">No messages yet. Start the conversation!</p>
               </div>
             ) : (
-              conversationMessages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`flex ${msg.sender_id === profile?.id ? 'justify-end' : 'justify-start'}`}
-                >
+              <>
+                {conversationMessages.map((msg) => (
                   <div
-                    className={`max-w-[80%] rounded-lg p-3 ${
-                      msg.sender_id === profile?.id
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted'
-                    }`}
+                    key={msg.id}
+                    className={`flex ${msg.sender_id === profile?.id ? 'justify-end' : 'justify-start'}`}
                   >
-                    <p className="text-sm">{msg.message}</p>
-                    <p className="text-xs opacity-70 mt-1">
-                      {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </p>
+                    <div
+                      className={`max-w-[80%] rounded-lg p-3 ${
+                        msg.sender_id === profile?.id
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted'
+                      }`}
+                    >
+                      <p className="text-sm">{msg.message}</p>
+                      <p className="text-xs opacity-70 mt-1">
+                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))
+                ))}
+                <div ref={messagesEndRef} />
+              </>
             )}
           </div>
 
@@ -980,8 +1134,8 @@ export function MobileTenantDashboard({ onTabChange }: MobileTenantDashboardProp
         subtitle="Welcome back"
         notifications={pendingRequestsCount + unreadCount}
         onRefresh={handleRefresh}
-        userAvatar={tenantInfo?.avatar_url}
-        userName={tenantInfo ? `${tenantInfo.first_name} ${tenantInfo.last_name}` : 'Tenant'}
+        userAvatar={profile?.avatar_url ? `${profile.avatar_url}?t=${Date.now()}` : tenantInfo?.avatar_url}
+        userName={profile ? `${profile.first_name} ${profile.last_name}` : tenantInfo ? `${tenantInfo.first_name} ${tenantInfo.last_name}` : 'Tenant'}
       />
 
       {/* Content */}

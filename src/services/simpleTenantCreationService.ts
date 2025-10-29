@@ -123,8 +123,8 @@ export class SimpleTenantCreationService {
         authUser = { user: emailCheck.existingUser };
         password = 'Use existing account - password reset required';
       } else {
-        // Generate a random password
-        password = this.generateRandomPassword();
+        // Generate a memorable password based on tenant's name
+        password = this.generateRandomPassword(tenantData.first_name, tenantData.last_name);
 
         // Create auth user first
         const { data: newAuthUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
@@ -244,9 +244,15 @@ export class SimpleTenantCreationService {
   }
 
   /**
-   * Generate a random password
+   * Generate a memorable password based on tenant's name
    */
-  private static generateRandomPassword(): string {
+  private static generateRandomPassword(firstName?: string, lastName?: string): string {
+    // Use the new memorable password generator
+    const { generateMemorablePassword } = require('@/utils/passwordGenerator');
+    if (firstName) {
+      return generateMemorablePassword(firstName, lastName);
+    }
+    // Fallback to random if no name provided
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
     let password = '';
     for (let i = 0; i < 12; i++) {

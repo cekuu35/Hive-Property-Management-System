@@ -37,6 +37,22 @@ export const AuthWrapper = ({ children }: AuthWrapperProps) => {
     }
   }, [userRole?.role]);
 
+  // Listen for navigate to messages event from notifications
+  useEffect(() => {
+    const handleNavigateToMessages = () => {
+      setActiveTab("messages");
+      // For landlords, set to messages section
+      if (userRole?.role === 'landlord') {
+        setActiveSection("messages");
+      }
+    };
+
+    window.addEventListener('navigateToMessages' as any, handleNavigateToMessages);
+    return () => {
+      window.removeEventListener('navigateToMessages' as any, handleNavigateToMessages);
+    };
+  }, [userRole?.role]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-primary/5 flex items-center justify-center">

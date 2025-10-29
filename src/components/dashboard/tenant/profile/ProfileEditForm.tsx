@@ -66,7 +66,7 @@ export const ProfileEditForm = () => {
     try {
       // For tenants, update both tenant_info and profiles
       if (profile.role === 'tenant') {
-        // Update tenant_info table
+        // Update tenant_info table (without bio - it doesn't exist in this table)
         const { error: tenantError } = await supabase
           .from('tenant_info')
           .update({
@@ -75,7 +75,6 @@ export const ProfileEditForm = () => {
             phone: data.phone,
             emergency_contact_name: data.emergency_contact_name,
             emergency_contact_phone: data.emergency_contact_phone,
-            bio: data.bio,
           })
           .eq('profile_id', profile.id);
 

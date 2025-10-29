@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -26,6 +26,7 @@ export const MessageCenter = () => {
   const [newMessageText, setNewMessageText] = useState('');
   const [availableContacts, setAvailableContacts] = useState<any[]>([]);
   const [showStartChat, setShowStartChat] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { conversations, loading, sendMessage, markAsRead, getConversationMessages, getLandlordForTenant, getTenantsForLandlord } = useMessages();
   const { profile } = useAuth();
@@ -57,6 +58,29 @@ export const MessageCenter = () => {
     loadContacts();
   }, [profile, selectedConversation, conversations.length]);
 
+  // Listen for conversation selection from notifications
+  useEffect(() => {
+    // Check localStorage for pending conversation
+    const pendingConversation = localStorage.getItem('openConversation');
+    if (pendingConversation) {
+      setSelectedConversation(pendingConversation);
+      localStorage.removeItem('openConversation');
+    }
+
+    // Listen for navigation events
+    const handleNavigateToMessages = (event: CustomEvent) => {
+      const { participantId } = event.detail;
+      if (participantId) {
+        setSelectedConversation(participantId);
+      }
+    };
+
+    window.addEventListener('navigateToMessages' as any, handleNavigateToMessages);
+    return () => {
+      window.removeEventListener('navigateToMessages' as any, handleNavigateToMessages);
+    };
+  }, []);
+
   const filteredConversations = conversations.filter(conv =>
     conv.participant_name.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -64,6 +88,11 @@ export const MessageCenter = () => {
   const selectedMessages = selectedConversation 
     ? getConversationMessages(selectedConversation)
     : [];
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [selectedMessages.length, selectedConversation]);
 
   const handleStartChat = (landlordId: string) => {
     setSelectedConversation(landlordId);
@@ -370,6 +399,7 @@ export const MessageCenter = () => {
                         </div>
                       </div>
                     ))}
+                    <div ref={messagesEndRef} />
                   </div>
                 </ScrollArea>
                 <Separator />

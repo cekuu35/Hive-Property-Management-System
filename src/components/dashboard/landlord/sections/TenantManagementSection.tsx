@@ -569,7 +569,7 @@ export const TenantManagementSection = () => {
           {selectedTenant && (
             <div className="space-y-6">
               {/* Quick Actions */}
-              <div className="flex gap-2 p-4 bg-gray-50 rounded-lg">
+              <div className="flex gap-2 p-4 bg-muted/50 rounded-lg">
                 <Button
                   onClick={() => {
                     setShowTenantDetails(false);
@@ -633,7 +633,7 @@ export const TenantManagementSection = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label className="text-sm font-medium text-muted-foreground">Login Email</Label>
-                      <p className="text-base font-mono bg-gray-100 p-2 rounded">{selectedTenant.tenant_info.email}</p>
+                      <p className="text-base font-mono bg-muted text-foreground p-2 rounded">{selectedTenant.tenant_info.email}</p>
                     </div>
                     <div>
                       <Label className="text-sm font-medium text-muted-foreground">Account Status</Label>
@@ -857,8 +857,8 @@ export const TenantManagementSection = () => {
                 
                 <div>
                   <Label className="text-sm font-medium text-muted-foreground">Login Email</Label>
-                  <div className="p-3 bg-gray-100 rounded-lg">
-                    <p className="font-mono text-base">
+                  <div className="p-3 bg-muted rounded-lg">
+                    <p className="font-mono text-base text-foreground">
                       {tenantCredentials?.email || selectedTenant?.tenant_info?.email}
                     </p>
                   </div>

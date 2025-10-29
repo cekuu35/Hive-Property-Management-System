@@ -24,9 +24,15 @@ export interface StaffCreationResult {
 
 export class StaffCreationService {
   /**
-   * Generate a random password for staff accounts (same as tenant system)
+   * Generate a memorable password for staff accounts
    */
-  static generateRandomPassword(): string {
+  static generateRandomPassword(firstName?: string, lastName?: string): string {
+    // Use the new memorable password generator
+    const { generateMemorablePassword } = require('@/utils/passwordGenerator');
+    if (firstName) {
+      return generateMemorablePassword(firstName, lastName);
+    }
+    // Fallback to random if no name provided
     return Math.random().toString(36).slice(-8) + 'A1!'; // 8 chars + special chars
   }
 
@@ -161,8 +167,8 @@ export class StaffCreationService {
         }
       }
 
-      // Generate random password
-      const password = this.generateRandomPassword();
+      // Generate memorable password based on staff member's name
+      const password = this.generateRandomPassword(staffData.first_name, staffData.last_name);
 
       // Create auth user
       console.log('1. Creating auth user...');

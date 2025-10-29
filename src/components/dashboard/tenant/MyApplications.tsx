@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { 
   Calendar, MapPin, DollarSign, FileText, Clock, 
-  CheckCircle, XCircle, AlertCircle, Home, Eye, CreditCard, Building2
+  CheckCircle, XCircle, AlertCircle, Home, Eye, CreditCard, Building2, Trash2
 } from 'lucide-react';
 import { useUnitApplications } from '@/hooks/useUnitApplications';
 import { format } from 'date-fns';
@@ -17,7 +17,7 @@ interface MyApplicationsProps {
 }
 
 export const MyApplications = ({ onTabChange }: MyApplicationsProps) => {
-  const { applications, loading, withdrawApplication, paySecurityDeposit } = useUnitApplications();
+  const { applications, loading, withdrawApplication, deleteApplication, paySecurityDeposit } = useUnitApplications();
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [selectedApplication, setSelectedApplication] = useState<any>(null);
@@ -272,6 +272,21 @@ export const MyApplications = ({ onTabChange }: MyApplicationsProps) => {
                     onClick={() => withdrawApplication(application.id)}
                   >
                     Withdraw Application
+                  </Button>
+                )}
+
+                {application.status === 'rejected' && (
+                  <Button 
+                    variant="destructive" 
+                    size="sm"
+                    onClick={() => {
+                      if (confirm('Are you sure you want to delete this application? This action cannot be undone.')) {
+                        deleteApplication(application.id);
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Application
                   </Button>
                 )}
               </div>

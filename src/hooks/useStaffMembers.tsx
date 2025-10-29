@@ -125,8 +125,11 @@ export const useStaffMembers = () => {
         return { success: false, error: 'Staff member not found' };
       }
 
-      // Generate new password
-      const newPassword = StaffCreationService.generateRandomPassword();
+      // Generate new memorable password based on staff member's name
+      const newPassword = StaffCreationService.generateRandomPassword(
+        staffMember.first_name, 
+        staffMember.last_name
+      );
       
       // Reset password
       const result = await StaffCreationService.resetPassword(staffMember.user_id, newPassword);

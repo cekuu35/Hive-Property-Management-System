@@ -61,7 +61,7 @@ export const useMessages = () => {
         .from('messages')
         .select('*')
         .or(`sender_id.eq.${profile.id},receiver_id.eq.${profile.id}`)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: true });
 
       if (error) throw error;
 
@@ -101,7 +101,7 @@ export const useMessages = () => {
         .from('messages')
         .select('*')
         .or(`sender_id.eq.${profile.id},receiver_id.eq.${profile.id}`)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: true });
 
       if (error) throw error;
 

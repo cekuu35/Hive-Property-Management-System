@@ -188,7 +188,7 @@ export const StaffManagementSection: React.FC = () => {
               {staffMembers.map((staff) => (
                 <div
                   key={staff.id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
+                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent transition-colors"
                 >
                   <div className="flex items-center space-x-4">
                     <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">

@@ -32,65 +32,50 @@ export const useLandlordInfo = () => {
       setLoading(true);
       setError(null);
 
-      // Get tenant's landlord through their lease or tenant_info
-      let landlordId: string | null = null;
+      console.log('🔍 [useLandlordInfo] Starting fetch for profile:', profile?.id);
 
-      if (profile?.role === 'tenant') {
-        // First try to get landlord from tenant_info
-        const { data: tenantInfo, error: tenantError } = await supabase
-          .from('tenant_info')
-          .select('landlord_id')
-          .eq('profile_id', profile.id)
-          .single();
-
-        if (tenantError) {
-          console.error('Error fetching tenant info:', tenantError);
-        } else if (tenantInfo?.landlord_id) {
-          landlordId = tenantInfo.landlord_id;
-        } else {
-          // Try to get landlord through lease
-          const { data: leaseData, error: leaseError } = await supabase
-            .from('leases')
-            .select(`
-              units!inner(
-                properties!inner(
-                  landlord_id
-                )
-              )
-            `)
-            .eq('tenant_id', profile.id)
-            .eq('status', 'active')
-            .single();
-
-          if (leaseError) {
-            console.error('Error fetching lease:', leaseError);
-          } else if (leaseData?.units?.properties?.landlord_id) {
-            landlordId = leaseData.units.properties.landlord_id;
-          }
-        }
-      }
-
-      if (!landlordId) {
-        setError('No landlord found for this tenant');
+      if (profile?.role !== 'tenant') {
+        console.log('⚠️ [useLandlordInfo] User is not a tenant');
         setLoading(false);
         return;
       }
 
-      // Fetch landlord profile information
+      // Use the database function that bypasses RLS
+      console.log('🔍 [useLandlordInfo] Calling get_tenant_landlord_v2 RPC...');
       const { data: landlordData, error: landlordError } = await supabase
-        .from('profiles')
-        .select('id, first_name, last_name, avatar_url, email, phone, company_name')
-        .eq('id', landlordId)
-        .single();
+        .rpc('get_tenant_landlord_v2', { tenant_profile_id: profile.id });
+
+      console.log('📊 [useLandlordInfo] RPC result:', { landlordData, landlordError });
 
       if (landlordError) {
-        console.error('Error fetching landlord info:', landlordError);
-        setError('Failed to fetch landlord information');
-      } else if (landlordData) {
-        setLandlordInfo(landlordData);
+        console.error('❌ [useLandlordInfo] RPC error:', landlordError);
+        setError(`Unable to load landlord information: ${landlordError.message}`);
+        setLoading(false);
+        return;
       }
+
+      if (!landlordData || landlordData.length === 0) {
+        console.warn('⚠️ [useLandlordInfo] No landlord found');
+        setError('No landlord assigned yet. Please contact your property administrator.');
+        setLoading(false);
+        return;
+      }
+
+      // Extract landlord data from the first result
+      const landlord = landlordData[0];
+      console.log('✅ [useLandlordInfo] Successfully fetched landlord:', landlord);
+
+      setLandlordInfo({
+        id: landlord.landlord_id,
+        first_name: landlord.landlord_first_name,
+        last_name: landlord.landlord_last_name,
+        avatar_url: landlord.landlord_avatar_url,
+        email: landlord.landlord_email || null,
+        phone: landlord.landlord_phone || null,
+        company_name: landlord.landlord_company_name || null
+      });
     } catch (err) {
-      console.error('Error in fetchLandlordInfo:', err);
+      console.error('❌ [useLandlordInfo] Unexpected error:', err);
       setError('An error occurred while fetching landlord information');
     } finally {
       setLoading(false);

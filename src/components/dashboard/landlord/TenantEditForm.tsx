@@ -293,8 +293,12 @@ export const TenantEditForm = ({ tenant, onSuccess, onCancel, onResetPassword }:
 
       console.log('🔍 [TenantEditForm] Found user_id:', profileData.user_id);
 
-      // Generate a new random password
-      const newPassword = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      // Generate a new memorable password based on tenant's first name
+      const { generateMemorablePassword } = await import('@/utils/passwordGenerator');
+      const newPassword = generateMemorablePassword(
+        tenant.tenant_info.first_name,
+        tenant.tenant_info.last_name
+      );
       
       console.log('🔍 [TenantEditForm] Generated new password, updating user...');
       

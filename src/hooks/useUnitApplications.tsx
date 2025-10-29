@@ -829,6 +829,24 @@ export const useUnitApplications = () => {
     }
   };
 
+  const deleteApplication = async (applicationId: string) => {
+    try {
+      const { error } = await supabase
+        .from('unit_applications')
+        .delete()
+        .eq('id', applicationId);
+
+      if (error) throw error;
+      
+      setApplications(prev => prev.filter(app => app.id !== applicationId));
+      toast.success('Application deleted successfully!');
+    } catch (error) {
+      console.error('Error deleting application:', error);
+      toast.error('Failed to delete application');
+      throw error;
+    }
+  };
+
   const getUnitsForProperty = (propertyId: string) => {
     const propertyUnits = vacantUnits.filter(unit => unit.property_id === propertyId);
     
@@ -889,6 +907,7 @@ export const useUnitApplications = () => {
     submitApplication,
     updateApplicationStatus,
     withdrawApplication,
+    deleteApplication,
     paySecurityDeposit,
     getUnitsForProperty,
     hasAppliedToUnit,

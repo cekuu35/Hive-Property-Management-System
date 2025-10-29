@@ -9,6 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useTheme } from "@/components/ThemeProvider";
 import { useAuth } from "@/hooks/useAuth";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -61,9 +62,15 @@ export const Header = () => {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-gradient-logo-blue rounded-full flex items-center justify-center">
-                <User className="h-4 w-4 text-white" />
-              </div>
+              <Avatar className="h-8 w-8">
+                <AvatarImage 
+                  src={profile?.avatar_url ? `${profile.avatar_url}?t=${Date.now()}` : undefined}
+                  alt={profile?.first_name || 'User'}
+                />
+                <AvatarFallback className="bg-gradient-logo-blue text-white text-xs">
+                  {profile?.first_name?.[0]}{profile?.last_name?.[0] || <User className="h-4 w-4" />}
+                </AvatarFallback>
+              </Avatar>
               <div className="text-left hidden md:block">
                 <div className="text-sm font-medium">
                   {profile?.first_name && profile?.last_name 
