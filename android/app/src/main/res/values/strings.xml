@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">Hive Property</string>
-    <string name="title_activity_main">Hive Property</string>
-    <string name="package_name">com.hive.propertymanagement</string>
-    <string name="custom_url_scheme">com.hive.propertymanagement</string>
-</resources>
