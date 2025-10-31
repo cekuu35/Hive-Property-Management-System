@@ -669,8 +669,8 @@ export const MaintenanceRequestView = ({ isOpen, onClose, request }: Maintenance
         </div>
 
         {/* Mobile Layout: Tabs for better UX */}
-        <div className="md:hidden flex flex-col h-[85vh]">
-          <DialogHeader className="p-4 border-b">
+        <div className="md:hidden flex flex-col" style={{ height: '85vh', maxHeight: '85vh' }}>
+          <DialogHeader className="p-4 border-b flex-shrink-0">
             <DialogTitle className="flex items-center gap-2">
               <Wrench className="h-5 w-5" />
               {request.title}
@@ -685,8 +685,8 @@ export const MaintenanceRequestView = ({ isOpen, onClose, request }: Maintenance
             </div>
           </DialogHeader>
 
-          <Tabs defaultValue="details" className="flex-1 flex flex-col">
-            <TabsList className="grid w-full grid-cols-2 rounded-none border-b">
+          <Tabs defaultValue="details" className="flex-1 flex flex-col min-h-0">
+            <TabsList className="grid w-full grid-cols-2 rounded-none border-b flex-shrink-0">
               <TabsTrigger value="details" className="gap-2">
                 <FileText className="h-4 w-4" />
                 Details
@@ -697,7 +697,7 @@ export const MaintenanceRequestView = ({ isOpen, onClose, request }: Maintenance
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="details" className="flex-1 m-0 overflow-hidden">
+            <TabsContent value="details" className="flex-1 m-0 overflow-hidden min-h-0">
               <ScrollArea className="h-full p-4">
                 <div className="space-y-4">
                   {/* Description */}
@@ -850,9 +850,9 @@ export const MaintenanceRequestView = ({ isOpen, onClose, request }: Maintenance
               </ScrollArea>
             </TabsContent>
 
-            <TabsContent value="chat" className="flex-1 m-0 flex flex-col overflow-hidden">
+            <TabsContent value="chat" className="flex-1 m-0 flex flex-col overflow-hidden min-h-0">
               {/* Chat Messages */}
-              <ScrollArea className="flex-1 p-3">
+              <div className="flex-1 overflow-y-auto p-3 min-h-0">
                 <div className="space-y-3">
                   {chatMessages.map((message) => {
                     const senderInfo = getSenderInfo(message.sender);
@@ -930,10 +930,10 @@ export const MaintenanceRequestView = ({ isOpen, onClose, request }: Maintenance
                     </div>
                   )}
                 </div>
-              </ScrollArea>
+              </div>
 
               {/* Chat Input */}
-              <div className="p-3 border-t bg-background">
+              <div className="p-3 border-t bg-background flex-shrink-0">
                 <div className="flex gap-2">
                   <Input
                     value={newMessage}

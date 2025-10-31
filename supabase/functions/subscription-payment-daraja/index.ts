@@ -23,6 +23,16 @@ class DarajaAPI {
 
   constructor() {
     const env = Deno.env.get('DARAJA_ENV') || 'production';
+    const consumerKey = Deno.env.get('DARAJA_CONSUMER_KEY') || '';
+    const consumerSecret = Deno.env.get('DARAJA_CONSUMER_SECRET') || '';
+    const businessShortCode = Deno.env.get('DARAJA_BUSINESS_SHORTCODE') || '';
+    const passkey = Deno.env.get('DARAJA_PASSKEY') || '';
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+    
+    // Validate required environment variables
+    if (!consumerKey || !consumerSecret || !businessShortCode || !passkey || !supabaseUrl) {
+      throw new Error('Missing required Daraja API configuration. Please check environment variables: DARAJA_CONSUMER_KEY, DARAJA_CONSUMER_SECRET, DARAJA_BUSINESS_SHORTCODE, DARAJA_PASSKEY, and SUPABASE_URL.');
+    }
     
     this.config = {
       accessToken: null,
@@ -30,17 +40,18 @@ class DarajaAPI {
       baseURL: env === 'sandbox' 
         ? 'https://sandbox.safaricom.co.ke' 
         : 'https://api.safaricom.co.ke',
-      consumerKey: Deno.env.get('DARAJA_CONSUMER_KEY') || '',
-      consumerSecret: Deno.env.get('DARAJA_CONSUMER_SECRET') || '',
-      businessShortCode: Deno.env.get('DARAJA_BUSINESS_SHORTCODE') || '',
-      passkey: Deno.env.get('DARAJA_PASSKEY') || '',
-      callbackURL: `${Deno.env.get('SUPABASE_URL')}/functions/v1/subscription-payment-daraja/callback`
+      consumerKey,
+      consumerSecret,
+      businessShortCode,
+      passkey,
+      callbackURL: `${supabaseUrl}/functions/v1/subscription-payment-daraja/callback`
     };
 
     console.log('🚀 [Daraja] Initialized with:', {
       baseURL: this.config.baseURL,
       businessShortCode: this.config.businessShortCode,
-      callbackURL: this.config.callbackURL
+      callbackURL: this.config.callbackURL,
+      env
     });
   }
 
@@ -250,7 +261,14 @@ serve(async (req) => {
     }
 
     // Handle STK Push initiation
-    const { planId, phoneNumber, landlordId } = await req.json();
+    let requestBody;
+    try {
+      requestBody = await req.json();
+    } catch (parseError) {
+      throw new Error('Invalid request body. Please ensure all required fields are provided.');
+    }
+
+    const { planId, phoneNumber, landlordId } = requestBody;
 
     console.log('📝 [Daraja] Processing subscription payment request:', {
       planId,
@@ -317,14 +335,32 @@ serve(async (req) => {
     console.log('✅ [Daraja] Payment record created:', paymentRecord.id);
 
     // Initiate STK Push
-    const mpesa = new DarajaAPI();
+    let mpesa;
+    try {
+      mpesa = new DarajaAPI();
+    } catch (configError: any) {
+      console.error('❌ [Daraja] Configuration error:', configError);
+      throw new Error(configError.message || 'Payment service configuration error. Please contact support.');
+    }
+    
     const accountReference = `SUB-${paymentRecord.id}`;
     
-    const stkResult = await mpesa.initiateSTKPush(
-      formattedPhone,
-      plan.price,
-      accountReference
-    );
+    let stkResult;
+    try {
+      stkResult = await mpesa.initiateSTKPush(
+        formattedPhone,
+        plan.price,
+        accountReference
+      );
+    } catch (stkError: any) {
+      console.error('❌ [Daraja] STK Push error:', stkError);
+      // Update payment record status to failed
+      await supabaseClient
+        .from('subscription_payments')
+        .update({ status: 'failed' })
+        .eq('id', paymentRecord.id);
+      throw new Error(stkError.message || 'Failed to initiate payment. Please try again.');
+    }
 
     // Update payment record with CheckoutRequestID
     await supabaseClient
@@ -353,10 +389,27 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error('❌ [Daraja] Error:', error);
+    console.error('❌ [Daraja] Error Stack:', error.stack);
+    console.error('❌ [Daraja] Error Details:', {
+      message: error.message,
+      name: error.name,
+      cause: error.cause
+    });
+    
+    // Extract meaningful error message
+    let errorMessage = 'An error occurred processing your payment';
+    
+    if (error.message) {
+      errorMessage = error.message;
+    } else if (typeof error === 'string') {
+      errorMessage = error;
+    }
+    
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error.message || 'An error occurred processing your payment' 
+        error: errorMessage,
+        details: process.env.DENO_ENV === 'development' ? error.stack : undefined
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

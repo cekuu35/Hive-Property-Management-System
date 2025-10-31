@@ -57,7 +57,7 @@ export const useMaintenanceRequests = () => {
         .select(`
           *,
           unit:units(unit_number, property:properties(name)),
-          tenant:profiles!tenant_id(first_name, last_name),
+          tenant_profile:profiles!tenant_id(id),
           assigned:profiles!assigned_to(first_name, last_name),
           contractor:contractors!assigned_contractor_id(id, name, specialty, phone, email)
         `);
@@ -151,31 +151,111 @@ export const useMaintenanceRequests = () => {
 
       console.log('Raw maintenance data for role:', profile.role, maintenanceData);
 
+      // Extract all tenant profile IDs and unit IDs from maintenance requests
+      const tenantProfileIds = [...new Set((maintenanceData || [])
+          .filter(item => item.tenant_profile?.id || item.tenant_id)
+          .map(item => item.tenant_profile?.id || item.tenant_id))];
+      
+      const unitIds = [...new Set((maintenanceData || [])
+          .filter(item => item.unit_id)
+          .map(item => item.unit_id))];
+
+      console.log('🔍 [Maintenance] Tenant profile IDs found:', tenantProfileIds);
+      console.log('🔍 [Maintenance] Unit IDs found:', unitIds);
+
+      let tenantInfoMap = new Map();
+      
+      // Method 1: Try to get tenant_info by profile_id
+      if (tenantProfileIds.length > 0) {
+        const { data: tenantInfosByProfile, error: tenantInfoError } = await supabase
+          .from('tenant_info')
+          .select('profile_id, first_name, last_name')
+          .in('profile_id', tenantProfileIds);
+
+        console.log('🔍 [Maintenance] Tenant info by profile_id:', { 
+          count: tenantInfosByProfile?.length, 
+          error: tenantInfoError 
+        });
+
+        if (!tenantInfoError && tenantInfosByProfile) {
+          tenantInfosByProfile.forEach(tenant => {
+            tenantInfoMap.set(tenant.profile_id, tenant);
+          });
+        }
+      }
+
+      // Method 2: If we still have missing tenants, try to get them through leases by unit_id
+      if (unitIds.length > 0) {
+        const { data: leases, error: leasesError } = await supabase
+          .from('leases')
+          .select('unit_id, tenant_info_id, tenant_info:tenant_info_id(first_name, last_name, profile_id)')
+          .in('unit_id', unitIds)
+          .eq('status', 'active');
+
+        console.log('🔍 [Maintenance] Leases by unit_id:', { 
+          count: leases?.length, 
+          error: leasesError 
+        });
+
+        if (!leasesError && leases) {
+          leases.forEach(lease => {
+            if (lease.tenant_info && lease.tenant_info.profile_id) {
+              tenantInfoMap.set(lease.tenant_info.profile_id, {
+                profile_id: lease.tenant_info.profile_id,
+                first_name: lease.tenant_info.first_name,
+                last_name: lease.tenant_info.last_name
+              });
+            }
+          });
+        }
+      }
+
+      console.log('✅ [Maintenance] Tenant info map created with', tenantInfoMap.size, 'entries');
+
       // Format the data to match our interface
-      const formattedRequests: MaintenanceRequest[] = (maintenanceData || []).map((request: any) => ({
-        id: request.id,
-        title: request.title,
-        description: request.description,
-        tenant: request.tenant ? `${request.tenant.first_name || ''} ${request.tenant.last_name || ''}`.trim() : 'Unknown Tenant',
-        tenant_id: request.tenant_id,
-        unit: request.unit ? `${request.unit.property?.name || 'Property'} ${request.unit.unit_number}` : 'Unknown Unit',
-        category: request.category,
-        priority: request.priority,
-        status: request.status,
-        assignedTo: request.assigned ? `${request.assigned.first_name} ${request.assigned.last_name}` : undefined,
-        assignedContractorId: request.assigned_contractor_id,
-        contractorName: request.contractor?.name,
-        contractorSpecialty: request.contractor?.specialty,
-        contractorPhone: request.contractor?.phone,
-        contractorEmail: request.contractor?.email,
-        estimatedCost: request.estimated_cost,
-        actualCost: request.actual_cost,
-        maintenanceCost: request.maintenance_cost,
-        createdDate: new Date(request.created_at).toISOString().split('T')[0],
-        scheduledDate: request.scheduled_date,
-        completedDate: request.completed_date,
-        images: request.images || []
-      }));
+      const formattedRequests: MaintenanceRequest[] = (maintenanceData || []).map((request: any) => {
+        // Get tenant name from tenant_info
+        // Try both tenant_profile.id and tenant_id as fallback
+        const profileId = request.tenant_profile?.id || request.tenant_id;
+        let tenantName = 'Unknown Tenant';
+        
+        if (profileId) {
+          const tenantInfo = tenantInfoMap.get(profileId);
+          if (tenantInfo) {
+            tenantName = `${tenantInfo.first_name || ''} ${tenantInfo.last_name || ''}`.trim() || 'Unknown Tenant';
+            console.log(`✅ [Maintenance] Found tenant name for profile ${profileId}:`, tenantName);
+          } else {
+            console.warn(`⚠️ [Maintenance] No tenant_info found for profile_id: ${profileId}`);
+          }
+        } else {
+          console.warn(`⚠️ [Maintenance] No profile_id found for request ${request.id}`);
+        }
+
+        return {
+          id: request.id,
+          title: request.title,
+          description: request.description,
+          tenant: tenantName,
+          tenant_id: request.tenant_id,
+          unit: request.unit ? `${request.unit.property?.name || 'Property'} ${request.unit.unit_number}` : 'Unknown Unit',
+          category: request.category,
+          priority: request.priority,
+          status: request.status,
+          assignedTo: request.assigned ? `${request.assigned.first_name} ${request.assigned.last_name}` : undefined,
+          assignedContractorId: request.assigned_contractor_id,
+          contractorName: request.contractor?.name,
+          contractorSpecialty: request.contractor?.specialty,
+          contractorPhone: request.contractor?.phone,
+          contractorEmail: request.contractor?.email,
+          estimatedCost: request.estimated_cost,
+          actualCost: request.actual_cost,
+          maintenanceCost: request.maintenance_cost,
+          createdDate: new Date(request.created_at).toISOString().split('T')[0],
+          scheduledDate: request.scheduled_date,
+          completedDate: request.completed_date,
+          images: request.images || []
+        };
+      });
 
       console.log('Formatted requests for role:', profile.role, formattedRequests);
       setRequests(formattedRequests);

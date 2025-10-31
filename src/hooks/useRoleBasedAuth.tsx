@@ -26,27 +26,37 @@ export const useRoleBasedAuth = () => {
       setLoading(true);
       setError(null);
 
-      // First, check if this user has a tenant record
-      const { data: tenantData, error: tenantError } = await supabase
-        .from('tenant_info')
-        .select('*')
-        .eq('profile_id', user.id)
-        .maybeSingle();
-
-      if (tenantError) {
-        console.error('Error fetching tenant data:', tenantError);
+      // Wait for profile to be loaded if not available yet
+      if (!profile?.id && authLoading) {
+        setLoading(true);
+        return; // Wait for profile to load
       }
-      
-      if (tenantData) {
-        // User is a tenant
-        setUserRole({
-          role: 'tenant',
-          isTenant: true,
-          tenantData: tenantData,
-          profileData: profile
-        });
-        setLoading(false);
-        return;
+
+      // If we have a profile, check if this user has a tenant record
+      // Use profile.id instead of user.id because tenant_info.profile_id references profiles.id
+      if (profile?.id) {
+        const { data: tenantData, error: tenantError } = await supabase
+          .from('tenant_info')
+          .select('*')
+          .eq('profile_id', profile.id)
+          .maybeSingle();
+
+        if (tenantError) {
+          console.error('Error fetching tenant data:', tenantError);
+          // Don't throw error, continue to check profile role
+        }
+        
+        if (tenantData) {
+          // User is a tenant
+          setUserRole({
+            role: 'tenant',
+            isTenant: true,
+            tenantData: tenantData,
+            profileData: profile
+          });
+          setLoading(false);
+          return;
+        }
       }
 
       // If not a tenant, check the profile role
@@ -60,36 +70,46 @@ export const useRoleBasedAuth = () => {
         return;
       }
 
-      // If no role found, default to tenant if they have tenant data
+      // If no role found and no profile, wait a bit more or set error
+      if (!profile) {
+        setError('Profile not found. Please complete your profile setup.');
+        setUserRole(null);
+        setLoading(false);
+        return;
+      }
+
+      // Default fallback (shouldn't reach here normally)
       setUserRole({
         role: 'tenant',
-        isTenant: true,
+        isTenant: false,
         tenantData: null,
         profileData: profile
       });
+      setLoading(false);
 
     } catch (err) {
       console.error('Error determining user role:', err);
-      setError('Failed to determine user role');
+      setError(err instanceof Error ? err.message : 'Failed to determine user role');
       setUserRole(null);
-    } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    determineUserRole();
-  }, [user?.id, profile?.role]);
+    if (!authLoading) {
+      determineUserRole();
+    }
+  }, [user?.id, profile?.id, profile?.role, authLoading]);
 
   const switchToTenantRole = async () => {
-    if (!user?.id) return false;
+    if (!user?.id || !profile?.id) return false;
 
     try {
-      // Check if user has tenant data
+      // Check if user has tenant data using profile.id
       const { data: tenantData, error } = await supabase
         .from('tenant_info')
         .select('*')
-        .eq('profile_id', user.id)
+        .eq('profile_id', profile.id)
         .maybeSingle();
       
       if (error) {

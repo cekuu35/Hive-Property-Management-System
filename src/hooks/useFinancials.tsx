@@ -60,6 +60,7 @@ export const useFinancials = () => {
           *,
           lease:leases (
             tenant_id,
+            tenant_info_id,
             unit:units (
               unit_number,
               property:properties (
@@ -72,12 +73,45 @@ export const useFinancials = () => {
 
       if (rentError) throw rentError;
 
-      // Get tenant info separately
-      const tenantIds = rentPayments?.map(payment => payment.lease?.tenant_id).filter(Boolean) || [];
-      const { data: tenants } = await supabase
-        .from('profiles')
-        .select('id, first_name, last_name')
-        .in('id', tenantIds);
+      // Get tenant info from tenant_info table using profile_id (from lease.tenant_id)
+      const tenantProfileIds = [...new Set(rentPayments?.map(payment => payment.lease?.tenant_id).filter(Boolean) || [])];
+      
+      // Also get tenant_info_ids from leases
+      const tenantInfoIds = [...new Set(rentPayments?.map(payment => payment.lease?.tenant_info_id).filter(Boolean) || [])];
+      
+      let tenantInfoMap = new Map();
+      
+      // Method 1: Get tenant_info by profile_id
+      if (tenantProfileIds.length > 0) {
+        const { data: tenantsByProfile, error: tenantError } = await supabase
+          .from('tenant_info')
+          .select('profile_id, first_name, last_name')
+          .in('profile_id', tenantProfileIds);
+
+        if (!tenantError && tenantsByProfile) {
+          tenantsByProfile.forEach(tenant => {
+            tenantInfoMap.set(tenant.profile_id, tenant);
+          });
+        }
+      }
+      
+      // Method 2: Get tenant_info by tenant_info_id (direct)
+      if (tenantInfoIds.length > 0) {
+        const { data: tenantsById, error: tenantByIdError } = await supabase
+          .from('tenant_info')
+          .select('id, profile_id, first_name, last_name')
+          .in('id', tenantInfoIds);
+
+        if (!tenantByIdError && tenantsById) {
+          tenantsById.forEach(tenant => {
+            // Map by both id and profile_id for lookup
+            tenantInfoMap.set(tenant.id, tenant);
+            if (tenant.profile_id) {
+              tenantInfoMap.set(tenant.profile_id, tenant);
+            }
+          });
+        }
+      }
 
       // Fetch expenses data
       const { data: expenses, error: expensesError } = await supabase
@@ -118,10 +152,29 @@ export const useFinancials = () => {
       const recentTransactions: Transaction[] = [
         // Rent payments
         ...monthlyPayments.slice(0, 5).map(payment => {
-          const tenant = tenants?.find(t => t.id === payment.lease?.tenant_id);
+          // Try to get tenant name from tenant_info
+          let tenantName = 'Unknown';
+          const tenantProfileId = payment.lease?.tenant_id;
+          const tenantInfoId = payment.lease?.tenant_info_id;
+          
+          if (tenantProfileId) {
+            const tenantInfo = tenantInfoMap.get(tenantProfileId);
+            if (tenantInfo) {
+              tenantName = `${tenantInfo.first_name || ''} ${tenantInfo.last_name || ''}`.trim() || 'Unknown';
+            }
+          }
+          
+          // Fallback: try by tenant_info_id
+          if (tenantName === 'Unknown' && tenantInfoId) {
+            const tenantInfo = tenantInfoMap.get(tenantInfoId);
+            if (tenantInfo) {
+              tenantName = `${tenantInfo.first_name || ''} ${tenantInfo.last_name || ''}`.trim() || 'Unknown';
+            }
+          }
+          
           return {
             id: payment.id,
-            tenant: tenant ? `${tenant.first_name} ${tenant.last_name}` : 'Unknown',
+            tenant: tenantName,
             unit: payment.lease?.unit?.unit_number || 'Unknown',
             amount: Number(payment.amount || 0),
             date: payment.paid_date || payment.due_date,

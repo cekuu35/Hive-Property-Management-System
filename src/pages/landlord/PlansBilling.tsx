@@ -151,22 +151,87 @@ export default function PlansBilling() {
         landlordId: profile.id
       });
 
-      // Call subscription payment edge function using Safaricom Daraja API
-      const { data, error } = await supabase.functions.invoke('subscription-payment-daraja', {
-        body: {
+      // Call subscription payment edge function using fetch directly to get better error handling
+      // Get auth token from current session
+      const { data: { session } } = await supabase.auth.getSession();
+      const authToken = session?.access_token;
+      
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://kozhlejudselgtmohdfm.supabase.co';
+      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemhsZWp1ZHNlbGd0bW9oZGZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MDQyOTgsImV4cCI6MjA3Mjk4MDI5OH0.10h-c8_GLM3aQd_AbNVXNDt2Pvr4DbQm7VjgvmyiG-M';
+      
+      const response = await fetch(`${supabaseUrl}/functions/v1/subscription-payment-daraja`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken || supabaseKey}`,
+        },
+        body: JSON.stringify({
           planId: selectedPlan.id,
           phoneNumber: formattedPhone,
           landlordId: profile.id
-        }
+        })
       });
 
-      if (error) {
-        console.error('❌ [Subscription Payment] Error:', error);
-        throw error;
+      // Get response body content (can only read once)
+      const contentType = response.headers.get('content-type') || '';
+      let responseData: any = null;
+      let errorMessage = `Payment failed: ${response.status} ${response.statusText}`;
+      
+      try {
+        if (contentType.includes('application/json')) {
+          responseData = await response.json();
+        } else {
+          const text = await response.text();
+          // Try to parse as JSON even if content-type doesn't say so
+          try {
+            responseData = JSON.parse(text);
+          } catch {
+            responseData = text;
+          }
+        }
+      } catch (parseError) {
+        console.error('❌ [Subscription Payment] Failed to parse response:', parseError);
+        // Continue with default error message
       }
 
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to process payment');
+      // Handle non-2xx responses
+      if (!response.ok) {
+        // Log full error details for debugging
+        console.group('❌ [Subscription Payment] Error Details');
+        console.error('Status:', response.status, response.statusText);
+        console.error('Content-Type:', contentType);
+        console.error('Response Data:', responseData);
+        console.error('Full Response:', response);
+        console.groupEnd();
+        
+        // Extract error message from various possible fields
+        if (responseData) {
+          if (typeof responseData === 'string') {
+            errorMessage = responseData;
+          } else if (typeof responseData === 'object') {
+            errorMessage = responseData?.error || 
+                          responseData?.message || 
+                          responseData?.error_description ||
+                          responseData?.ResultDesc ||
+                          (responseData?.details ? JSON.stringify(responseData.details) : null) ||
+                          JSON.stringify(responseData) ||
+                          errorMessage;
+          }
+        }
+        
+        // Log the extracted error message
+        console.error('❌ [Subscription Payment] Extracted Error Message:', errorMessage);
+        
+        throw new Error(errorMessage);
+      }
+
+      // Parse successful response
+      const data = responseData;
+
+      // Check if response indicates failure
+      if (!data || !data.success) {
+        const errorMsg = data?.error || data?.message || 'Failed to process payment';
+        throw new Error(errorMsg);
       }
 
       console.log('✅ [Subscription Payment] STK Push sent:', data.data);
