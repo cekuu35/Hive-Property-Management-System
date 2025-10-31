@@ -236,7 +236,7 @@ const SecurityReportsSection = () => {
               trend.month,
               trend.incidents,
               trend.resolved
-            ])))
+            ]))
           ]
         },
         {
