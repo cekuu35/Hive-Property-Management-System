@@ -118,7 +118,7 @@ export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ className,
       let properties: AssignedProperty[] = [];
       
       try {
-        const { data: assignments } = await (supabase as any)
+        const { data: assignments, error: assignmentsError } = await supabase
           .from('staff_assignments')
           .select(`
             property:properties!staff_assignments_property_id_fkey (
@@ -132,8 +132,21 @@ export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ className,
           .eq('role', 'security')
           .eq('is_active', true);
 
+        if (assignmentsError) {
+          throw assignmentsError;
+        }
+
         // Get assigned properties
-        const propertyList = assignments?.map((a: any) => ({
+        interface AssignmentData {
+          property: {
+            id: string;
+            name: string;
+            address: string;
+            total_units: number;
+          };
+        }
+
+        const propertyList: AssignedProperty[] = (assignments as AssignmentData[])?.map((a) => ({
           id: a.property.id,
           name: a.property.name,
           address: a.property.address,
@@ -216,10 +229,24 @@ export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ className,
             console.warn('Error fetching visitor requests:', error);
           } else if (visitors) {
             // Filter client-side by property_id to avoid URL length issues
-            visitorRequests = visitors
-              .filter((v: any) => v.unit && propertyIds.includes(v.unit.property_id))
+            interface VisitorData {
+              id: string;
+              visitor_name: string;
+              visitor_phone?: string;
+              purpose: string;
+              status: string;
+              created_at: string;
+              unit?: {
+                id: string;
+                unit_number: string;
+                property_id: string;
+              };
+            }
+
+            visitorRequests = (visitors as VisitorData[])
+              .filter((v) => v.unit && propertyIds.includes(v.unit.property_id))
               .slice(0, 10) // Limit to 10 after filtering
-              .map((v: any) => ({
+              .map((v) => ({
                 id: v.id,
                 visitor_name: v.visitor_name,
                 visitor_phone: v.visitor_phone || '',

@@ -13,6 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { format, subDays, startOfMonth, endOfMonth } from 'date-fns';
+import { exportToExcel, exportMultipleSheets, formatCurrency } from '@/utils/excelExport';
 
 const SecurityReportsSection = () => {
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
@@ -178,12 +179,120 @@ const SecurityReportsSection = () => {
   }, [profile?.id, dateRange, visitors, requests]);
 
   const exportReport = () => {
-    // TODO: Implement report export functionality (PDF/CSV)
-    toast({
-      title: "Export Feature",
-      description: "Report export will be available soon",
-      variant: "default"
-    });
+    if (!profile?.id || loading) {
+      toast({
+        title: "Error",
+        description: "Please wait for data to load",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const startDate = dateRange?.from || startOfMonth(new Date());
+      const endDate = dateRange?.to || endOfMonth(new Date());
+      const dateRangeText = format(startDate, 'MMM d, yyyy') + ' - ' + format(endDate, 'MMM d, yyyy');
+
+      // Create comprehensive Excel export with multiple sheets
+      const sheets = [
+        {
+          name: 'Summary',
+          data: [
+            ['SECURITY REPORT SUMMARY'],
+            [`Period: ${dateRangeText}`],
+            [`Generated: ${new Date().toLocaleDateString()}`],
+            [],
+            ['KEY METRICS'],
+            ['Total Incidents', reportData.totalIncidents],
+            ['Patrols Completed', reportData.patrolsCompleted],
+            ['Total Visitors', reportData.totalVisitors],
+            ['Average Response Time', `${reportData.responseTime}h`],
+            [],
+            ['RESOLUTION RATE'],
+            ['Incidents Resolved', reportData.totalIncidents - (incidents?.filter(i => i.status === 'open' || i.status === 'investigating').length || 0)],
+            ['Resolution Rate', `${reportData.totalIncidents > 0 ? Math.round((reportData.totalIncidents - (incidents?.filter(i => i.status === 'open' || i.status === 'investigating').length || 0)) / reportData.totalIncidents * 100) : 0}%`],
+            [],
+            ['PATROL METRICS'],
+            ['Completion Rate', `${patrolStats.completion_rate}%`],
+            ['Completed Patrols', patrolStats.completed_patrols],
+            ['Total Patrols', patrolStats.total_patrols],
+          ]
+        },
+        {
+          name: 'Incidents',
+          data: [
+            ['Incident Type', 'Count'],
+            ...reportData.incidentsByType.map((item: any) => [
+              item.type,
+              item.count
+            ])
+          ]
+        },
+        {
+          name: 'Incident Trends',
+          data: [
+            ['Month', 'Incidents', 'Resolved'],
+            ...reportData.incidentsTrend.map((trend => [
+              trend.month,
+              trend.incidents,
+              trend.resolved
+            ])))
+          ]
+        },
+        {
+          name: 'Patrols',
+          data: [
+            ['Location', 'Completed', 'Scheduled'],
+            ...reportData.patrolMetrics.map((patrol: any) => [
+              patrol.location,
+              patrol.completed,
+              patrol.scheduled
+            ])
+          ]
+        },
+        {
+          name: 'Visitors',
+          data: [
+            ['Day', 'Visitors'],
+            ...reportData.visitorStats.map(stat => [
+              stat.day,
+              stat.visitors
+            ])
+          ]
+        },
+        {
+          name: 'Incident Details',
+          data: [
+            ['Date', 'Type', 'Severity', 'Status', 'Description', 'Location'],
+            ...incidents.map(incident => [
+              format(new Date(incident.created_at), 'MMM d, yyyy h:mm a'),
+              incident.incident_type?.replace(/_/g, ' ') || 'Unknown',
+              incident.severity || 'N/A',
+              incident.status || 'N/A',
+              incident.description || '',
+              incident.location || 'N/A'
+            ])
+          ]
+        }
+      ];
+
+      exportMultipleSheets(
+        sheets,
+        `security-report-${format(new Date(), 'yyyy-MM-dd')}.xlsx`
+      );
+
+      toast({
+        title: "Export Complete",
+        description: "Security report has been exported to Excel successfully",
+      });
+    } catch (error) {
+      console.error('Error exporting report:', error);
+      toast({
+        title: "Export Failed",
+        description: "Failed to export report. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   return (

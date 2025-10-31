@@ -9,6 +9,7 @@ import { SecurityDashboard } from '@/components/dashboard/security/SecurityDashb
 import { Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useSearchParams } from 'react-router-dom';
 
 interface AuthWrapperProps {
   children?: React.ReactNode;
@@ -16,26 +17,44 @@ interface AuthWrapperProps {
 
 export const AuthWrapper = ({ children }: AuthWrapperProps) => {
   const { userRole, loading, error } = useRoleBasedAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState("overview");
   const [activeSection, setActiveSection] = useState<string>("dashboard");
   const isMobile = useIsMobile();
 
+  // Read section from URL query parameters
   useEffect(() => {
-    if (!userRole) return;
-    switch (userRole.role) {
-      case "landlord":
-        setActiveSection("dashboard");
-        break;
-      case "caretaker":
-        setActiveSection("dashboard");
-        break;
-      case "security":
-        setActiveSection("overview");
-        break;
-      default:
-        break;
+    const sectionParam = searchParams.get('section');
+    if (sectionParam) {
+      setActiveSection(sectionParam);
+    } else {
+      // Set default section based on role
+      if (!userRole) return;
+      switch (userRole.role) {
+        case "landlord":
+          setActiveSection("dashboard");
+          break;
+        case "caretaker":
+          setActiveSection("dashboard");
+          break;
+        case "security":
+          setActiveSection("overview");
+          break;
+        default:
+          break;
+      }
     }
-  }, [userRole?.role]);
+  }, [searchParams, userRole?.role]);
+
+  // Update URL when section changes (for security, landlord, caretaker)
+  const handleSectionChange = (section: string) => {
+    setActiveSection(section);
+    if (section === 'overview' || section === 'dashboard') {
+      setSearchParams({});
+    } else {
+      setSearchParams({ section });
+    }
+  };
 
   // Listen for navigate to messages event from notifications
   useEffect(() => {
@@ -118,11 +137,11 @@ export const AuthWrapper = ({ children }: AuthWrapperProps) => {
           <MobileTenantDashboard onTabChange={setActiveTab} /> : 
           <TenantDashboard activeTab={activeTab} onTabChange={setActiveTab} />;
       case 'landlord':
-        return <LandlordDashboard activeSection={activeSection} onSectionChange={setActiveSection} />;
+        return <LandlordDashboard activeSection={activeSection} onSectionChange={handleSectionChange} />;
       case 'caretaker':
-        return <CaretakerDashboard activeSection={activeSection} onSectionChange={setActiveSection} />;
+        return <CaretakerDashboard activeSection={activeSection} onSectionChange={handleSectionChange} />;
       case 'security':
-        return <SecurityDashboard activeSection={activeSection} onSectionChange={setActiveSection} />;
+        return <SecurityDashboard activeSection={activeSection} onSectionChange={handleSectionChange} />;
       case 'admin':
         return (
           <div className="text-center py-12">
@@ -149,7 +168,7 @@ export const AuthWrapper = ({ children }: AuthWrapperProps) => {
       activeTab={activeTab} 
       onTabChange={setActiveTab}
       activeSection={activeSection}
-      onSectionChange={setActiveSection}
+      onSectionChange={handleSectionChange}
     >
       {renderDashboard()}
     </DashboardLayout>

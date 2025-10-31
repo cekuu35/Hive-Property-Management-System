@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useToast } from './use-toast';
 import { RealtimeChannel } from '@supabase/supabase-js';
+import { exportToExcel, exportMultipleSheets, formatCurrency } from '@/utils/excelExport';
 
 export interface ReportData {
   financial: {
@@ -394,9 +395,16 @@ export const useReports = () => {
         const reportContent = generateReportContent(type, dateRange);
         downloadTextFile(`${type}-report.txt`, reportContent);
       } else if (format === 'excel') {
-        // In a real implementation, this would use SheetJS or similar
-        const csvContent = generateCSVContent(type);
-        downloadTextFile(`${type}-report.csv`, csvContent);
+        const excelData = generateExcelData(type, dateRange);
+        if (excelData.length > 0) {
+          exportToExcel(
+            excelData,
+            `${type.charAt(0).toUpperCase() + type.slice(1)} Report`,
+            `${type}-report-${new Date().toISOString().split('T')[0]}.xlsx`
+          );
+        } else {
+          throw new Error('No data to export');
+        }
       } else if (format === 'email') {
         // In a real implementation, this would send via email service
         toast({
@@ -494,6 +502,104 @@ ${reportData.maintenance.categoryBreakdown.map(cat =>
         `;
       default:
         return 'Report data not available';
+    }
+  };
+
+  const generateExcelData = (type: string, dateRange?: { from: Date; to: Date }): any[][] => {
+    if (!reportData) return [];
+
+    const dateRangeText = dateRange ? 
+      `Period: ${dateRange.from.toLocaleDateString()} - ${dateRange.to.toLocaleDateString()}` : 
+      'Period: Current Year';
+    
+    const generatedDate = `Generated: ${new Date().toLocaleDateString()}`;
+
+    switch (type) {
+      case 'financial': {
+        const data: any[][] = [
+          ['FINANCIAL REPORT'],
+          [dateRangeText],
+          [generatedDate],
+          [], // Empty row
+          ['SUMMARY'],
+          ['Total Revenue', `KES ${reportData.financial.totalRevenue.toLocaleString()}`],
+          ['Total Expenses', `KES ${reportData.financial.totalExpenses.toLocaleString()}`],
+          ['Net Profit', `KES ${reportData.financial.netProfit.toLocaleString()}`],
+          ['Occupancy Rate', `${reportData.financial.occupancyRate}%`],
+          ['Average Rent', `KES ${reportData.financial.averageRent.toLocaleString()}`],
+          [], // Empty row
+          ['MONTHLY TREND'],
+          ['Month', 'Revenue', 'Expenses', 'Profit']
+        ];
+        
+        reportData.financial.monthlyTrend.forEach(month => {
+          data.push([
+            month.month,
+            formatCurrency(month.revenue),
+            formatCurrency(month.expenses),
+            formatCurrency(month.revenue - month.expenses)
+          ]);
+        });
+        
+        return data;
+      }
+      case 'occupancy': {
+        const data: any[][] = [
+          ['OCCUPANCY REPORT'],
+          [dateRangeText],
+          [generatedDate],
+          [], // Empty row
+          ['SUMMARY'],
+          ['Total Units', reportData.occupancy.totalUnits],
+          ['Occupied Units', reportData.occupancy.occupiedUnits],
+          ['Vacant Units', reportData.occupancy.vacantUnits],
+          ['Average Vacancy Duration', `${reportData.occupancy.averageVacancyDuration} days`],
+          ['Turnover Rate', `${reportData.occupancy.turnoverRate}%`],
+          [], // Empty row
+          ['PROPERTY BREAKDOWN'],
+          ['Property', 'Occupied', 'Total', 'Rate (%)']
+        ];
+        
+        reportData.occupancy.propertyBreakdown.forEach(prop => {
+          data.push([
+            prop.property,
+            prop.occupied,
+            prop.total,
+            prop.rate
+          ]);
+        });
+        
+        return data;
+      }
+      case 'maintenance': {
+        const data: any[][] = [
+          ['MAINTENANCE REPORT'],
+          [dateRangeText],
+          [generatedDate],
+          [], // Empty row
+          ['SUMMARY'],
+          ['Total Requests', reportData.maintenance.totalRequests],
+          ['Completed Requests', reportData.maintenance.completedRequests],
+          ['Pending Requests', reportData.maintenance.pendingRequests],
+          ['Average Response Time', `${reportData.maintenance.averageResponseTime} days`],
+          ['Total Maintenance Cost', `KES ${reportData.maintenance.totalMaintenanceCost.toLocaleString()}`],
+          [], // Empty row
+          ['CATEGORY BREAKDOWN'],
+          ['Category', 'Count', 'Cost (KES)']
+        ];
+        
+        reportData.maintenance.categoryBreakdown.forEach(cat => {
+          data.push([
+            cat.category,
+            cat.count,
+            formatCurrency(cat.cost)
+          ]);
+        });
+        
+        return data;
+      }
+      default:
+        return [];
     }
   };
 

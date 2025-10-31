@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { DollarSign, TrendingUp, TrendingDown, Receipt, Download, Plus, Calendar, Loader2, CheckCircle, AlertCircle, FileText } from 'lucide-react';
 import { useFinancials } from '@/hooks/useFinancials';
 import { useToast } from '@/hooks/use-toast';
+import { exportToExcel, exportMultipleSheets, formatCurrency, formatDate } from '@/utils/excelExport';
 
 export const FinancialsSection = () => {
   const [selectedPeriod, setSelectedPeriod] = useState('current-month');
@@ -57,11 +58,111 @@ export const FinancialsSection = () => {
   };
 
   const handleExportData = (format: 'csv' | 'excel') => {
-    // In a real app, this would export financial data
-    toast({
-      title: "Export Started",
-      description: `Financial data is being exported as ${format.toUpperCase()}...`,
-    });
+    if (!financialData) {
+      toast({
+        title: "Error",
+        description: "No financial data available to export",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      if (format === 'excel') {
+        // Create multiple sheets for comprehensive export
+        const sheets = [
+          {
+            name: 'Summary',
+            data: [
+              ['FINANCIAL SUMMARY'],
+              [`Generated: ${new Date().toLocaleDateString()}`],
+              [],
+              ['Total Collected', `KES ${financialData.totalCollected.toLocaleString()}`],
+              ['Total Expected', `KES ${financialData.totalExpected.toLocaleString()}`],
+              ['Overdue Payments', `KES ${financialData.overdue.toLocaleString()}`],
+              ['Total Expenses', `KES ${financialData.totalExpenses.toLocaleString()}`],
+              ['Net Profit', `KES ${financialData.netProfit.toLocaleString()}`],
+            ]
+          },
+          {
+            name: 'Transactions',
+            data: [
+              ['Date', 'Tenant', 'Unit', 'Amount', 'Status', 'Type'],
+              ...financialData.recentTransactions.map(t => [
+                formatDate(t.date),
+                t.tenant,
+                t.unit,
+                formatCurrency(Math.abs(t.amount)),
+                t.status,
+                t.type
+              ])
+            ]
+          },
+          {
+            name: 'Monthly Data',
+            data: [
+              ['Month', 'Income', 'Expenses', 'Profit'],
+              ...financialData.monthlyData.map(m => [
+                m.month,
+                formatCurrency(m.income),
+                formatCurrency(m.expenses),
+                formatCurrency(m.profit)
+              ])
+            ]
+          },
+          {
+            name: 'Expenses by Category',
+            data: [
+              ['Category', 'Amount (KES)'],
+              ...Object.entries(financialData.expenses).map(([category, amount]) => [
+                category.charAt(0).toUpperCase() + category.slice(1),
+                formatCurrency(amount)
+              ])
+            ]
+          }
+        ];
+
+        exportMultipleSheets(
+          sheets,
+          `financial-data-${new Date().toISOString().split('T')[0]}.xlsx`
+        );
+
+        toast({
+          title: "Export Complete",
+          description: "Financial data has been exported to Excel successfully",
+        });
+      } else {
+        // CSV export
+        const csvContent = [
+          'Date,Tenant,Unit,Amount,Status,Type',
+          ...financialData.recentTransactions.map(t => 
+            `${formatDate(t.date)},${t.tenant},${t.unit},${Math.abs(t.amount)},${t.status},${t.type}`
+          )
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `financial-data-${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+
+        toast({
+          title: "Export Complete",
+          description: "Financial data has been exported to CSV successfully",
+        });
+      }
+    } catch (error) {
+      console.error('Error exporting data:', error);
+      toast({
+        title: "Export Failed",
+        description: "Failed to export financial data. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   if (loading) {

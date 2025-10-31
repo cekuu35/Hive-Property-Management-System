@@ -66,12 +66,12 @@ const navigationConfig: Record<UserRole, NavigationItem[]> = {
   ],
   security: [
     { id: "overview", label: "Security Overview", icon: Shield, path: "/dashboard" },
-    { id: "visitors", label: "Visitor Management", icon: UserCheck, path: "/visitors" },
-    { id: "visitor-history", label: "Visitor History", icon: Clock, path: "/visitor-history" },
-    { id: "incidents", label: "Incident Management", icon: AlertTriangle, path: "/incidents" },
-    { id: "patrols", label: "Patrols", icon: MapPin, path: "/patrols" },
-    { id: "reports", label: "Reports", icon: FileText, path: "/reports" },
-    { id: "settings", label: "Settings", icon: Settings, path: "/settings" },
+    { id: "visitors", label: "Visitor Management", icon: UserCheck, path: "/dashboard?section=visitors" },
+    { id: "visitor-history", label: "Visitor History", icon: Clock, path: "/dashboard?section=visitor-history" },
+    { id: "incidents", label: "Incident Management", icon: AlertTriangle, path: "/dashboard?section=incidents" },
+    { id: "patrols", label: "Patrols", icon: MapPin, path: "/dashboard?section=patrols" },
+    { id: "reports", label: "Reports", icon: FileText, path: "/dashboard?section=reports" },
+    { id: "settings", label: "Settings", icon: Settings, path: "/dashboard?section=settings" },
   ],
 };
 
@@ -99,14 +99,25 @@ export const AppSidebar = ({ userRole, activeItemId, onSelect }: AppSidebarProps
       return currentTab === tabFromPath || (id === 'overview' && !currentTab);
     }
     
+    // For landlord, caretaker, and security, check if the section matches
+    if ((userRole === 'landlord' || userRole === 'caretaker' || userRole === 'security') && currentPath === '/dashboard') {
+      const sectionFromPath = path.split('section=')[1];
+      const currentSection = searchParams.get('section');
+      if (sectionFromPath) {
+        return currentSection === sectionFromPath;
+      }
+      // Default overview/dashboard section
+      return (id === 'overview' || id === 'dashboard') && !currentSection;
+    }
+    
     return currentPath === path;
   };
   
   const handleNavigate = (item: NavigationItem) => {
-    // Navigate to the path
-    navigate(item.path);
-    // Call the onSelect callback if provided
+    // Call the onSelect callback first to update state
     onSelect?.(item.id);
+    // Then navigate to the path (this will update URL and trigger useEffect in AuthWrapper)
+    navigate(item.path);
   };
   
   const getNavClassName = (active: boolean) => 
