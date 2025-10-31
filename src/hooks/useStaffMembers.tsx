@@ -115,6 +115,54 @@ export const useStaffMembers = () => {
     }
   };
 
+  const updateStaffMember = async (
+    staffId: string,
+    updateData: {
+      first_name?: string;
+      last_name?: string;
+      phone?: string;
+      role?: 'security' | 'caretaker';
+      email?: string;
+      property_ids?: string[];
+      notes?: string;
+    }
+  ): Promise<{ success: boolean; error?: string }> => {
+    if (!profile?.id) {
+      return { success: false, error: 'Not authenticated' };
+    }
+
+    try {
+      const result = await StaffCreationService.updateStaffMember(staffId, profile.id, updateData);
+      
+      if (result.success) {
+        await fetchStaffMembers();
+        toast({
+          title: 'Success',
+          description: 'Staff member updated successfully',
+        });
+      } else {
+        toast({
+          title: 'Error',
+          description: result.error || 'Failed to update staff member',
+          variant: 'destructive'
+        });
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Error updating staff member:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        variant: 'destructive'
+      });
+
+      return { success: false, error: errorMessage };
+    }
+  };
+
   const resetStaffPassword = async (staffId: string): Promise<{ success: boolean; password?: string; error?: string }> => {
     if (!profile?.id) return { success: false, error: 'Not authenticated' };
 
@@ -208,6 +256,7 @@ export const useStaffMembers = () => {
     staffMembers,
     loading,
     createStaffMember,
+    updateStaffMember,
     deactivateStaffMember,
     resetStaffPassword,
     refreshStaffMembers: fetchStaffMembers

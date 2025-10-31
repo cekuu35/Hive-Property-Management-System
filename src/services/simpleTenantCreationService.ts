@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { supabaseAdmin } from '@/integrations/supabase/admin';
+import { generateMemorablePassword } from '@/utils/passwordGenerator';
 
 export interface CreateTenantData {
   first_name: string;
@@ -248,7 +249,6 @@ export class SimpleTenantCreationService {
    */
   private static generateRandomPassword(firstName?: string, lastName?: string): string {
     // Use the new memorable password generator
-    const { generateMemorablePassword } = require('@/utils/passwordGenerator');
     if (firstName) {
       return generateMemorablePassword(firstName, lastName);
     }

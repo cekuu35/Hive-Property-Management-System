@@ -13,7 +13,8 @@ import {
   Users,
   Calendar,
   Key,
-  Copy
+  Copy,
+  Edit
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -22,11 +23,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { StaffCreationForm } from './StaffCreationForm';
+import { StaffEditForm } from './StaffEditForm';
 import { useStaffMembers, StaffMember } from '@/hooks/useStaffMembers';
 import { useToast } from '@/hooks/use-toast';
 
 export const StaffManagementSection: React.FC = () => {
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
   const [showPasswordReset, setShowPasswordReset] = useState(false);
   const [resetPassword, setResetPassword] = useState<string>('');
@@ -37,6 +40,13 @@ export const StaffManagementSection: React.FC = () => {
   const handleStaffCreated = () => {
     console.log('✅ [StaffManagementSection] Staff member created, refreshing list...');
     setShowCreateForm(false);
+    // Explicitly refresh the staff list
+    refreshStaffMembers();
+  };
+
+  const handleStaffUpdated = () => {
+    console.log('✅ [StaffManagementSection] Staff member updated, refreshing list...');
+    setEditingStaff(null);
     // Explicitly refresh the staff list
     refreshStaffMembers();
   };
@@ -54,9 +64,17 @@ export const StaffManagementSection: React.FC = () => {
       if (result.success && result.password) {
         setResetPassword(result.password);
         setShowPasswordReset(true);
+      } else if (!result.success) {
+        // Error toast is already shown by resetStaffPassword, but we ensure loading state is cleared
+        console.error('Failed to reset password:', result.error);
       }
     } catch (error) {
       console.error('Error resetting password:', error);
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'An unexpected error occurred',
+        variant: 'destructive'
+      });
     } finally {
       setResetLoading(false);
     }
@@ -91,6 +109,16 @@ export const StaffManagementSection: React.FC = () => {
       <StaffCreationForm
         onSuccess={handleStaffCreated}
         onCancel={() => setShowCreateForm(false)}
+      />
+    );
+  }
+
+  if (editingStaff) {
+    return (
+      <StaffEditForm
+        staffMember={editingStaff}
+        onSuccess={handleStaffUpdated}
+        onCancel={() => setEditingStaff(null)}
       />
     );
   }
@@ -228,6 +256,10 @@ export const StaffManagementSection: React.FC = () => {
                         <DropdownMenuItem onClick={() => setSelectedStaff(staff)}>
                           <Eye className="w-4 h-4 mr-2" />
                           View Details
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setEditingStaff(staff)}>
+                          <Edit className="w-4 h-4 mr-2" />
+                          Edit
                         </DropdownMenuItem>
                         <DropdownMenuItem 
                           onClick={() => handleResetPassword(staff.id)}

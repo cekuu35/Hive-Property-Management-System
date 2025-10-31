@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/integrations/supabase/admin';
+import { generateMemorablePassword } from '@/utils/passwordGenerator';
 
 export interface CreateStaffData {
   first_name: string;
@@ -28,7 +29,6 @@ export class StaffCreationService {
    */
   static generateRandomPassword(firstName?: string, lastName?: string): string {
     // Use the new memorable password generator
-    const { generateMemorablePassword } = require('@/utils/passwordGenerator');
     if (firstName) {
       return generateMemorablePassword(firstName, lastName);
     }
@@ -444,11 +444,136 @@ export class StaffCreationService {
   }
 
   /**
+   * Update staff member information and assignments
+   */
+  static async updateStaffMember(
+    staffId: string,
+    landlordId: string,
+    updateData: {
+      first_name?: string;
+      last_name?: string;
+      phone?: string;
+      role?: 'security' | 'caretaker';
+      email?: string;
+      property_ids?: string[];
+      notes?: string;
+    }
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Get current staff member data
+      const staffMember = await this.getStaffMemberById(staffId, landlordId);
+      if (!staffMember) {
+        return { success: false, error: 'Staff member not found' };
+      }
+
+      // Update profile information if provided
+      const profileUpdates: any = {};
+      if (updateData.first_name !== undefined) profileUpdates.first_name = updateData.first_name;
+      if (updateData.last_name !== undefined) profileUpdates.last_name = updateData.last_name;
+      if (updateData.phone !== undefined) profileUpdates.phone = updateData.phone;
+      if (updateData.role !== undefined) profileUpdates.role = updateData.role;
+
+      if (Object.keys(profileUpdates).length > 0) {
+        const { error: profileError } = await supabaseAdmin
+          .from('profiles')
+          .update(profileUpdates)
+          .eq('id', staffId);
+
+        if (profileError) {
+          return { success: false, error: `Failed to update profile: ${profileError.message}` };
+        }
+
+        // Update user metadata in auth if role or name changed
+        if (updateData.role !== undefined || updateData.first_name !== undefined || updateData.last_name !== undefined) {
+          const userMetadata: any = {};
+          if (updateData.first_name !== undefined) userMetadata.first_name = updateData.first_name;
+          if (updateData.last_name !== undefined) userMetadata.last_name = updateData.last_name;
+          if (updateData.role !== undefined) userMetadata.role = updateData.role;
+
+          await supabaseAdmin.auth.admin.updateUserById(staffMember.user_id, {
+            user_metadata: userMetadata
+          });
+        }
+      }
+
+      // Update email if provided
+      if (updateData.email && updateData.email !== staffMember.email) {
+        const { error: emailError } = await supabaseAdmin.auth.admin.updateUserById(staffMember.user_id, {
+          email: updateData.email
+        });
+
+        if (emailError) {
+          return { success: false, error: `Failed to update email: ${emailError.message}` };
+        }
+      }
+
+      // Update property assignments if provided
+      if (updateData.property_ids !== undefined) {
+        // Deactivate old assignments
+        const { error: deactivateError } = await supabaseAdmin
+          .from('staff_assignments')
+          .update({ is_active: false })
+          .eq('staff_id', staffId)
+          .eq('assigned_by', landlordId);
+
+        if (deactivateError) {
+          console.error('Error deactivating old assignments:', deactivateError);
+          // Continue anyway, we'll try to create new ones
+        }
+
+        // Create new assignments
+        if (updateData.property_ids.length > 0) {
+          const newAssignments = updateData.property_ids.map(propertyId => ({
+            staff_id: staffId,
+            property_id: propertyId,
+            role: updateData.role || staffMember.role,
+            assigned_by: landlordId,
+            notes: updateData.notes || null,
+            is_active: true
+          }));
+
+          const { error: assignmentError } = await supabaseAdmin
+            .from('staff_assignments')
+            .insert(newAssignments);
+
+          if (assignmentError) {
+            // If assignments table doesn't exist, that's okay
+            if (!assignmentError.message.includes('relation "public.staff_assignments" does not exist')) {
+              return { success: false, error: `Failed to update assignments: ${assignmentError.message}` };
+            }
+          }
+        }
+      } else if (updateData.notes !== undefined) {
+        // If only notes are updated, update all active assignments
+        const { error: notesError } = await supabaseAdmin
+          .from('staff_assignments')
+          .update({ notes: updateData.notes })
+          .eq('staff_id', staffId)
+          .eq('assigned_by', landlordId)
+          .eq('is_active', true);
+
+        if (notesError && !notesError.message.includes('relation "public.staff_assignments" does not exist')) {
+          console.error('Error updating notes:', notesError);
+        }
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating staff member:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      };
+    }
+  }
+
+  /**
    * Get staff member by ID for editing
    */
   static async getStaffMemberById(staffId: string, landlordId: string) {
     try {
-      const { data, error } = await supabaseAdmin
+      // Get staff member through assignments (handles multiple property assignments)
+      const { data: assignmentData, error: assignmentError } = await supabaseAdmin
         .from('staff_assignments')
         .select(`
           *,
@@ -460,7 +585,45 @@ export class StaffCreationService {
             role,
             created_at,
             user_id
-          ),
+          )
+        `)
+        .eq('staff_id', staffId)
+        .eq('assigned_by', landlordId)
+        .eq('is_active', true)
+        .limit(1);
+
+      if (assignmentError || !assignmentData || assignmentData.length === 0) {
+        // If no active assignments, try to get the staff profile directly
+        const { data: profileData, error: profileError } = await supabaseAdmin
+          .from('profiles')
+          .select('id, first_name, last_name, phone, role, created_at, user_id')
+          .eq('id', staffId)
+          .in('role', ['security', 'caretaker'])
+          .single();
+
+        if (profileError || !profileData) {
+          console.error('Error fetching staff member:', assignmentError || profileError || 'Staff member not found');
+          return null;
+        }
+
+        // Get email from auth user
+        const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(profileData.user_id);
+        
+        return {
+          ...profileData,
+          email: authUser?.user?.email || 'No email',
+          assignments: []
+        };
+      }
+
+      // Get email from auth user
+      const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(assignmentData[0].staff.user_id);
+      
+      // Get all assignments for this staff member (not just one)
+      const { data: allAssignments } = await supabaseAdmin
+        .from('staff_assignments')
+        .select(`
+          *,
           property:properties!staff_assignments_property_id_fkey (
             id,
             name,
@@ -469,24 +632,18 @@ export class StaffCreationService {
         `)
         .eq('staff_id', staffId)
         .eq('assigned_by', landlordId)
-        .eq('is_active', true)
-        .single();
+        .eq('is_active', true);
 
-      if (error) throw error;
-
-      // Get email from auth user
-      const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(data.staff.user_id);
-      
       return {
-        ...data.staff,
+        ...assignmentData[0].staff,
         email: authUser?.user?.email || 'No email',
-        assignments: [{
-          property_id: data.property_id,
-          property_name: data.property.name,
-          property_address: data.property.address,
-          assigned_at: data.assigned_at,
-          notes: data.notes
-        }]
+        assignments: (allAssignments || []).map((assignment: any) => ({
+          property_id: assignment.property_id,
+          property_name: assignment.property?.name || 'Unknown',
+          property_address: assignment.property?.address || 'Unknown',
+          assigned_at: assignment.assigned_at,
+          notes: assignment.notes
+        }))
       };
     } catch (error) {
       console.error('Error fetching staff member:', error);
