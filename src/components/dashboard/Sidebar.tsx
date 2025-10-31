@@ -58,11 +58,11 @@ const navigationConfig: Record<UserRole, NavigationItem[]> = {
   ],
   caretaker: [
     { id: "dashboard", label: "Dashboard", icon: BarChart3, path: "/dashboard" },
-    { id: "workorders", label: "Work Orders", icon: Clipboard, path: "/work-orders" },
-    { id: "schedule", label: "Schedule", icon: Calendar, path: "/schedule" },
-    { id: "inventory", label: "Inventory", icon: Package, path: "/inventory" },
-    { id: "reports", label: "Reports", icon: FileText, path: "/reports" },
-    { id: "profile", label: "Profile", icon: User, path: "/profile" },
+    { id: "workorders", label: "Work Orders", icon: Clipboard, path: "/dashboard?section=workorders" },
+    { id: "schedule", label: "Schedule", icon: Calendar, path: "/dashboard?section=schedule" },
+    { id: "inventory", label: "Inventory", icon: Package, path: "/dashboard?section=inventory" },
+    { id: "reports", label: "Reports", icon: FileText, path: "/dashboard?section=reports" },
+    { id: "profile", label: "Profile", icon: User, path: "/dashboard?section=profile" },
   ],
   security: [
     { id: "overview", label: "Security Overview", icon: Shield, path: "/dashboard" },
@@ -106,8 +106,16 @@ export const AppSidebar = ({ userRole, activeItemId, onSelect }: AppSidebarProps
       if (sectionFromPath) {
         return currentSection === sectionFromPath;
       }
-      // Default overview/dashboard section
-      return (id === 'overview' || id === 'dashboard') && !currentSection;
+      // Default overview/dashboard section - no section param means default view
+      if (!currentSection) {
+        // When no section param, check if this item matches the default activeSection
+        if (userRole === 'security') {
+          return id === 'overview';
+        }
+        if (userRole === 'landlord' || userRole === 'caretaker') {
+          return id === 'dashboard';
+        }
+      }
     }
     
     return currentPath === path;

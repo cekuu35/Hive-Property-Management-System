@@ -18,7 +18,7 @@ interface CaretakerDashboardProps {
   onSectionChange?: (section: string) => void;
 }
 
-const CaretakerDashboard = ({ activeSection = 'workorders', onSectionChange }: CaretakerDashboardProps) => {
+const CaretakerDashboard = ({ activeSection = 'dashboard', onSectionChange }: CaretakerDashboardProps) => {
   const { requests, getStats } = useMaintenanceRequests();
   const { profile } = useAuth();
   const stats = getStats();
@@ -42,28 +42,22 @@ const CaretakerDashboard = ({ activeSection = 'workorders', onSectionChange }: C
   );
 
   // Render different sections based on activeSection
-  if (activeSection === 'workorders') {
+  if (activeSection === 'dashboard') {
+    // Show overview dashboard - will fall through to render below
+  } else if (activeSection === 'workorders') {
     return <WorkOrdersSection />;
-  }
-  
-  if (activeSection === 'schedule') {
+  } else if (activeSection === 'schedule') {
     return <ScheduleSection />;
-  }
-  
-  if (activeSection === 'inventory') {
+  } else if (activeSection === 'inventory') {
     return <InventorySection />;
-  }
-  
-  if (activeSection === 'reports') {
+  } else if (activeSection === 'reports') {
     return <ReportsSection />;
-  }
-  
-  if (activeSection === 'profile') {
+  } else if (activeSection === 'profile') {
     return <ProfileSection />;
-  }
-
-  if (activeSection === 'maintenance') {
+  } else if (activeSection === 'maintenance') {
     return <MaintenanceRequestsSection />;
+  } else {
+    // Unknown section, show overview dashboard
   }
 
   const getPriorityColor = (priority: string) => {
