@@ -45,7 +45,7 @@ export const useEmergencyContacts = () => {
         `)
         .eq('tenant_id', profile.id)
         .eq('status', 'active')
-        .single();
+        .maybeSingle();
 
       if (leaseError) {
         console.error('Error fetching lease:', leaseError);

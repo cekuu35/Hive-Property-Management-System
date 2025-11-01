@@ -55,7 +55,6 @@ export const useApprovedLease = () => {
 
     try {
       setLoading(true);
-      `1q2wed`
       
       console.log('🔍 [useApprovedLease] Starting fetch for profile ID:', profile.id);
       console.log('🔍 [useApprovedLease] Profile object:', profile);
@@ -67,7 +66,7 @@ export const useApprovedLease = () => {
         .from('tenant_info')
         .select('*')
         .eq('profile_id', profile.id)
-        .single();
+        .maybeSingle();
 
       // If RLS blocks the query, try with admin client
       if (tenantInfoError && (tenantInfoError.code === '42501' || tenantInfoError.message.includes('RLS'))) {
@@ -76,7 +75,7 @@ export const useApprovedLease = () => {
           .from('tenant_info')
           .select('*')
           .eq('profile_id', profile.id)
-          .single();
+          .maybeSingle();
 
         if (adminTenantInfoError) {
           console.error('❌ [useApprovedLease] Admin client also failed:', adminTenantInfoError);

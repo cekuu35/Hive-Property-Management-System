@@ -167,7 +167,7 @@ export const useMonthlyRent = () => {
               .select('status, due_date, late_fee')
               .eq('lease_id', lease.id)
               .eq('due_date', nextMonthDue)
-              .single();
+              .maybeSingle();
 
             if (nextError) throw nextError;
 
