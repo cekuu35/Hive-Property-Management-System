@@ -49,7 +49,6 @@ export const LeaseTemplatesSection = () => {
         .from('lease_templates')
         .select('*')
         .eq('landlord_id', profile.id)
-        .order('is_default', { ascending: false })
         .order('created_at', { ascending: false });
 
       if (error) throw error;

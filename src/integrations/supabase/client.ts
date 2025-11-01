@@ -9,10 +9,7 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIU
 let supabaseInstance: ReturnType<typeof createClient<Database>> | null = null;
 
 const createSupabaseClient = () => {
-  if (supabaseInstance) {
-    return supabaseInstance;
-  }
-
+  // Always create a new instance to ensure fresh configuration
   supabaseInstance = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     auth: {
       storage: localStorage,
@@ -28,10 +25,6 @@ const createSupabaseClient = () => {
     global: {
       headers: {
         'X-Client-Info': 'lovly-prop-ai',
-        'apikey': supabaseAnonKey,
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Prefer': 'return=representation',
       },
     },
   });
