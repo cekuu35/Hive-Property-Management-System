@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode, useRef } from 'react';
+import { useState, useEffect, createContext, useContext, ReactNode, useRef, useCallback } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -43,58 +43,39 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [loading, setLoading] = useState(true);
   const isLoggingOut = useRef(false);
 
-  useEffect(() => {
-    // Listen for auth changes FIRST (critical for preventing deadlocks)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        console.log('Auth state changed:', event, session?.user?.id);
-        
-        // CRITICAL: Block all auth changes during logout
-        if (isLoggingOut.current) {
-          console.log('Logout in progress, blocking auth state change');
-          return;
-        }
+  const createProfile = useCallback(async (userId: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) return;
 
-        // Only synchronous state updates here
-        setUser(session?.user ?? null);
-        
-        if (session?.user) {
-          // Defer async calls with setTimeout to prevent deadlocks
-          setTimeout(() => {
-            if (!isLoggingOut.current) {
-              fetchProfile(session.user!.id);
-            }
-          }, 0);
-        } else {
-          setProfile(null);
-          setLoading(false);
-        }
+      const profileData = {
+        user_id: userId,
+        role: user.user_metadata?.role || 'tenant',
+        first_name: user.user_metadata?.first_name || null,
+        last_name: user.user_metadata?.last_name || null,
+        phone: null,
+        avatar_url: null
+      };
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .insert(profileData)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating profile:', error);
+        return;
       }
-    );
 
-    // THEN check for existing session
-    if (!isLoggingOut.current) {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (isLoggingOut.current) return;
-        
-        setUser(session?.user ?? null);
-        
-        if (session?.user) {
-          setTimeout(() => {
-            if (!isLoggingOut.current) {
-              fetchProfile(session.user!.id);
-            }
-          }, 0);
-        } else {
-          setLoading(false);
-        }
-      });
+      setProfile(data as Profile);
+    } catch (error) {
+      console.error('Error creating profile:', error);
     }
-
-    return () => subscription.unsubscribe();
   }, []);
 
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = useCallback(async (userId: string) => {
     try {
       // First check if user has a tenant record
       const { data: tenantData, error: tenantError } = await supabase
@@ -158,39 +139,61 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [createProfile]);
 
-  const createProfile = async (userId: string) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) return;
+  useEffect(() => {
+    // Listen for auth changes FIRST (critical for preventing deadlocks)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        console.log('Auth state changed:', event, session?.user?.id);
+        
+        // CRITICAL: Block all auth changes during logout
+        if (isLoggingOut.current) {
+          console.log('Logout in progress, blocking auth state change');
+          return;
+        }
 
-      const profileData = {
-        user_id: userId,
-        role: user.user_metadata?.role || 'tenant',
-        first_name: user.user_metadata?.first_name || null,
-        last_name: user.user_metadata?.last_name || null,
-        phone: null,
-        avatar_url: null
-      };
-
-      const { data, error } = await supabase
-        .from('profiles')
-        .insert(profileData)
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Error creating profile:', error);
-        return;
+        // Only synchronous state updates here
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          // Defer async calls with setTimeout to prevent deadlocks
+          setTimeout(() => {
+            if (!isLoggingOut.current) {
+              fetchProfile(session.user!.id);
+            }
+          }, 0);
+        } else {
+          setProfile(null);
+          setLoading(false);
+        }
       }
+    );
 
-      setProfile(data as Profile);
-    } catch (error) {
-      console.error('Error creating profile:', error);
+    // THEN check for existing session
+    if (!isLoggingOut.current) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (isLoggingOut.current) return;
+        
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          setTimeout(() => {
+            if (!isLoggingOut.current) {
+              fetchProfile(session.user!.id);
+            }
+          }, 0);
+        } else {
+          setLoading(false);
+        }
+      }).catch((error) => {
+        console.error('Error getting session:', error);
+        setLoading(false);
+      });
     }
-  };
+
+    return () => subscription.unsubscribe();
+  }, [fetchProfile]);
 
   const signOut = async () => {
     try {

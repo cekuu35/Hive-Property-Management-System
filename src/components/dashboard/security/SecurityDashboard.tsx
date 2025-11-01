@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -66,51 +66,7 @@ export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ className,
   const { profile } = useAuth();
   const { toast } = useToast();
 
-  // Role verification
-  if (profile && profile.role !== 'security') {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <Shield className="h-12 w-12 text-destructive mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-foreground mb-2">Access Denied</h2>
-          <p className="text-muted-foreground">You do not have permission to access the security portal.</p>
-        </div>
-      </div>
-    );
-  }
-
-  useEffect(() => {
-    if (profile?.id) {
-      fetchDashboardData();
-    }
-  }, [profile?.id]);
-
-  // Handle different sections - connect to your existing components
-  if (activeSection === 'visitors') {
-    return <VisitorsSection />;
-  }
-  
-  if (activeSection === 'visitor-history') {
-    return <VisitorHistorySection />;
-  }
-  
-  if (activeSection === 'incidents') {
-    return <IncidentsSection />;
-  }
-  
-  if (activeSection === 'patrols') {
-    return <PatrolsSection />;
-  }
-  
-  if (activeSection === 'reports') {
-    return <SecurityReportsSection />;
-  }
-  
-  if (activeSection === 'settings') {
-    return <SettingsSection />;
-  }
-
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -275,7 +231,51 @@ export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ className,
     } finally {
       setLoading(false);
     }
-  };
+  }, [profile?.id, toast]);
+
+  useEffect(() => {
+    if (profile?.id) {
+      fetchDashboardData();
+    }
+  }, [profile?.id, fetchDashboardData]);
+
+  // Role verification
+  if (profile && profile.role !== 'security') {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <Shield className="h-12 w-12 text-destructive mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-foreground mb-2">Access Denied</h2>
+          <p className="text-muted-foreground">You do not have permission to access the security portal.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Handle different sections - connect to your existing components
+  if (activeSection === 'visitors') {
+    return <VisitorsSection />;
+  }
+  
+  if (activeSection === 'visitor-history') {
+    return <VisitorHistorySection />;
+  }
+  
+  if (activeSection === 'incidents') {
+    return <IncidentsSection />;
+  }
+  
+  if (activeSection === 'patrols') {
+    return <PatrolsSection />;
+  }
+  
+  if (activeSection === 'reports') {
+    return <SecurityReportsSection />;
+  }
+  
+  if (activeSection === 'settings') {
+    return <SettingsSection />;
+  }
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {

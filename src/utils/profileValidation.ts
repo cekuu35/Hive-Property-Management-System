@@ -11,7 +11,7 @@ export async function validateProfileId(profileId: string): Promise<boolean> {
       .from('profiles')
       .select('id')
       .eq('id', profileId)
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error('❌ [ProfileValidation] Error validating profile ID:', error);
@@ -36,7 +36,7 @@ export async function getProfileIdByAuthUserId(authUserId: string): Promise<stri
       .from('profiles')
       .select('id')
       .eq('user_id', authUserId)
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error('❌ [ProfileValidation] Error getting profile ID by auth user ID:', error);

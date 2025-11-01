@@ -259,6 +259,7 @@ export const useStaffMembers = () => {
     updateStaffMember,
     deactivateStaffMember,
     resetStaffPassword,
+    fetchStaffMembers,
     refreshStaffMembers: fetchStaffMembers
   };
 };

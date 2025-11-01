@@ -17,6 +17,7 @@ import {
   Eye,
   AlertCircle,
   CheckCircle,
+  CheckCircle2,
   Clock,
   Settings,
   User,
@@ -221,6 +222,36 @@ export const TenantManagementSection = () => {
   const handleDeleteTenant = async (tenantId: string) => {
     if (window.confirm('Are you sure you want to delete this tenant?')) {
       await deleteTenant(tenantId);
+    }
+  };
+
+  const handleMarkAsPaid = async (tenant: any) => {
+    if (!window.confirm(`Mark rent balance as paid for ${tenant.tenant_info.first_name} ${tenant.tenant_info.last_name}?`)) {
+      return;
+    }
+
+    try {
+      // Update tenant_info to set balance to 0 and payment_status to paid
+      const { error } = await supabaseAdmin
+        .from('tenant_info')
+        .update({
+          current_balance: 0,
+          payment_status: 'paid',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', tenant.tenant_info.id);
+
+      if (error) {
+        console.error('Error marking rent as paid:', error);
+        toast.error('Failed to mark rent as paid');
+        return;
+      }
+
+      toast.success('Rent balance marked as paid');
+      refetch(); // Refresh the tenant list
+    } catch (error) {
+      console.error('Error marking rent as paid:', error);
+      toast.error('Failed to mark rent as paid');
     }
   };
 
@@ -517,6 +548,7 @@ export const TenantManagementSection = () => {
                     onShowCredentials={handleShowCredentials}
                     onEditTenant={handleEditTenant}
                     onDeleteTenant={handleDeleteTenant}
+                    onMarkAsPaid={handleMarkAsPaid}
                     getStatusBadge={getStatusBadge}
                     getPaymentStatusBadge={getPaymentStatusBadge}
                   />
@@ -542,6 +574,7 @@ export const TenantManagementSection = () => {
                         onShowCredentials={handleShowCredentials}
                         onEditTenant={handleEditTenant}
                         onDeleteTenant={handleDeleteTenant}
+                        onMarkAsPaid={handleMarkAsPaid}
                         getStatusBadge={getStatusBadge}
                         getPaymentStatusBadge={getPaymentStatusBadge}
                       />
@@ -984,6 +1017,7 @@ interface TenantsTableProps {
   onShowCredentials: (tenant: any) => void;
   onEditTenant: (tenant: any) => void;
   onDeleteTenant: (tenantId: string) => void;
+  onMarkAsPaid: (tenant: any) => void;
   getStatusBadge: (status: string) => JSX.Element;
   getPaymentStatusBadge: (status: string) => JSX.Element;
 }
@@ -993,7 +1027,8 @@ const TenantsTable = ({
   onViewDetails, 
   onShowCredentials, 
   onEditTenant, 
-  onDeleteTenant, 
+  onDeleteTenant,
+  onMarkAsPaid,
   getStatusBadge, 
   getPaymentStatusBadge 
 }: TenantsTableProps) => {
@@ -1108,6 +1143,17 @@ const TenantsTable = ({
                   >
                     <Edit className="h-4 w-4" />
                   </Button>
+                  {tenant.tenant_info.current_balance > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onMarkAsPaid(tenant)}
+                      title="Mark Rent as Paid"
+                      className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                    >
+                      <CheckCircle2 className="h-4 w-4" />
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"

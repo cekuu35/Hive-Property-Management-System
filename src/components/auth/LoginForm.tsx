@@ -105,10 +105,8 @@ export const LoginForm = () => {
             title: "Account Created",
             description: "Welcome! Setting up your account...",
           });
-          // Navigate to dashboard after a brief delay to ensure auth state is updated
-          setTimeout(() => {
-            navigate("/dashboard", { replace: true });
-          }, 500);
+          // Navigate immediately - auth state will be updated
+          navigate("/dashboard", { replace: true });
         }
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -141,10 +139,8 @@ export const LoginForm = () => {
             title: "Welcome Back",
             description: "You have successfully logged in.",
           });
-          // Navigate to dashboard after a brief delay to ensure auth state is updated
-          setTimeout(() => {
-            navigate("/dashboard", { replace: true });
-          }, 500);
+          // Navigate immediately - auth state will be updated
+          navigate("/dashboard", { replace: true });
         }
       }
     } catch (error: any) {

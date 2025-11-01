@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from './useAuth';
-import { TenantCreationService } from '@/services/tenantCreationService';
+import { TenantCreationService } from '@/services/simpleTenantCreationService';
 
 export interface TenantData {
   tenant_id: string;

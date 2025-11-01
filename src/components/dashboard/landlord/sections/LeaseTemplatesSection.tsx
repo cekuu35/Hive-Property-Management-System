@@ -11,6 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
+import { format } from 'date-fns';
 
 interface LeaseTemplate {
   id: string;
@@ -49,10 +50,45 @@ export const LeaseTemplatesSection = () => {
         .from('lease_templates')
         .select('*')
         .eq('landlord_id', profile.id)
+        .order('is_default', { ascending: false })
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setTemplates(data || []);
+      
+      // If no templates exist, create a default one
+      if (!data || data.length === 0) {
+        const defaultTemplate = {
+          landlord_id: profile.id,
+          name: 'Default Lease Template',
+          header_content: null,
+          standard_terms: `Use of Premises: The Premises shall be used solely as a private residence.
+Maintenance: Tenant shall maintain the Premises in good condition and shall be responsible for any damage caused by Tenant or Tenant's guests.
+Utilities: Tenant shall be responsible for all utilities unless otherwise agreed in writing.
+Alterations: No alterations or improvements to the Premises may be made without Landlord's prior written consent.
+Termination: Either party may terminate this lease with proper written notice as required by law.`,
+          additional_terms: null,
+          footer_content: 'This document is a legally binding agreement. Please keep a copy for your records.',
+          is_default: true
+        };
+
+        const { error: insertError } = await supabase
+          .from('lease_templates')
+          .insert(defaultTemplate);
+
+        if (insertError) throw insertError;
+
+        // Fetch again to get the newly created template
+        const { data: updatedData, error: fetchError } = await supabase
+          .from('lease_templates')
+          .select('*')
+          .eq('landlord_id', profile.id)
+          .order('created_at', { ascending: false });
+
+        if (fetchError) throw fetchError;
+        setTemplates(updatedData || []);
+      } else {
+        setTemplates(data);
+      }
     } catch (error) {
       console.error('Error fetching templates:', error);
       toast({
@@ -274,34 +310,228 @@ export const LeaseTemplatesSection = () => {
       <Dialog open={showPreview} onOpenChange={setShowPreview}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Template Preview</DialogTitle>
+            <DialogTitle>Lease Document Preview</DialogTitle>
             <DialogDescription>
-              This is how the lease document will appear to tenants (with actual data filled in)
+              This is how the complete lease document will appear to tenants with sample data
             </DialogDescription>
           </DialogHeader>
           {previewTemplate && (
-            <div className="space-y-4 p-6 bg-background">
+            <div className="lease-document p-6 bg-background text-foreground">
+              {/* Document Header */}
+              <div className="header text-center mb-6">
+                <h1 className="text-3xl font-bold mb-2 text-foreground">RESIDENTIAL LEASE AGREEMENT</h1>
+                <p className="text-sm text-muted-foreground">
+                  Agreement Date: {format(new Date(), 'MMMM dd, yyyy')}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Lease ID: EXAMPLE-001
+                </p>
+              </div>
+
+              <Separator className="my-6" />
+
+              {/* Parties Section */}
+              <div className="section mb-6">
+                <h2 className="text-xl font-semibold mb-4 text-foreground">1. PARTIES TO THIS AGREEMENT</h2>
+                
+                <h3 className="text-base font-medium mt-4 mb-3 text-foreground">1.1 LANDLORD:</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div className="p-3 bg-muted/50 border-l-4 border-primary rounded">
+                    <div className="text-sm text-muted-foreground font-medium">Name:</div>
+                    <div className="mt-1 text-foreground">
+                      {profile?.first_name} {profile?.last_name}
+                    </div>
+                  </div>
+                  <div className="p-3 bg-muted/50 border-l-4 border-primary rounded">
+                    <div className="text-sm text-muted-foreground font-medium">Email:</div>
+                    <div className="mt-1 text-foreground">{profile?.email || 'landlord@example.com'}</div>
+                  </div>
+                  <div className="p-3 bg-muted/50 border-l-4 border-primary rounded">
+                    <div className="text-sm text-muted-foreground font-medium">Phone:</div>
+                    <div className="mt-1 text-foreground">{profile?.phone || '+254 700 000 000'}</div>
+                  </div>
+                </div>
+
+                <h3 className="text-base font-medium mt-5 mb-3 text-foreground">1.2 TENANT:</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-3 bg-muted/50 border-l-4 border-primary rounded">
+                    <div className="text-sm text-muted-foreground font-medium">Name:</div>
+                    <div className="mt-1 text-foreground">John Doe</div>
+                  </div>
+                  <div className="p-3 bg-muted/50 border-l-4 border-primary rounded">
+                    <div className="text-sm text-muted-foreground font-medium">Email:</div>
+                    <div className="mt-1 text-foreground">john.doe@example.com</div>
+                  </div>
+                  <div className="p-3 bg-muted/50 border-l-4 border-primary rounded">
+                    <div className="text-sm text-muted-foreground font-medium">Phone:</div>
+                    <div className="mt-1 text-foreground">+254 712 345 678</div>
+                  </div>
+                  <div className="p-3 bg-muted/50 border-l-4 border-primary rounded">
+                    <div className="text-sm text-muted-foreground font-medium">ID Number:</div>
+                    <div className="mt-1 text-foreground">12345678</div>
+                  </div>
+                </div>
+              </div>
+
+              <Separator className="my-6" />
+
+              {/* Property Details */}
+              <div className="section mb-6">
+                <h2 className="text-xl font-semibold mb-4 text-foreground">2. PROPERTY DETAILS</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-3 bg-muted/50 border-l-4 border-primary rounded">
+                    <div className="text-sm text-muted-foreground font-medium">Property Name:</div>
+                    <div className="mt-1 text-foreground">Sample Apartment Complex</div>
+                  </div>
+                  <div className="p-3 bg-muted/50 border-l-4 border-primary rounded">
+                    <div className="text-sm text-muted-foreground font-medium">Unit Number:</div>
+                    <div className="mt-1 text-foreground">A101</div>
+                  </div>
+                  <div className="p-3 bg-muted/50 border-l-4 border-primary rounded">
+                    <div className="text-sm text-muted-foreground font-medium">Address:</div>
+                    <div className="mt-1 text-foreground">123 Sample Street, Nairobi, Kenya</div>
+                  </div>
+                  <div className="p-3 bg-muted/50 border-l-4 border-primary rounded">
+                    <div className="text-sm text-muted-foreground font-medium">Unit Type:</div>
+                    <div className="mt-1 text-foreground capitalize">2BR</div>
+                  </div>
+                </div>
+              </div>
+
+              <Separator className="my-6" />
+
+              {/* Lease Terms */}
+              <div className="section mb-6">
+                <h2 className="text-xl font-semibold mb-4 text-foreground">3. LEASE TERM</h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  <div className="p-3 bg-muted/50 border-l-4 border-primary rounded">
+                    <div className="text-sm text-muted-foreground font-medium">Lease Start Date:</div>
+                    <div className="mt-1 text-foreground">{format(new Date(), 'MMMM dd, yyyy')}</div>
+                  </div>
+                  <div className="p-3 bg-muted/50 border-l-4 border-primary rounded">
+                    <div className="text-sm text-muted-foreground font-medium">Lease End Date:</div>
+                    <div className="mt-1 text-foreground">{format(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), 'MMMM dd, yyyy')}</div>
+                  </div>
+                  <div className="p-3 bg-muted/50 border-l-4 border-primary rounded">
+                    <div className="text-sm text-muted-foreground font-medium">Lease Duration:</div>
+                    <div className="mt-1 text-foreground">12 Months</div>
+                  </div>
+                </div>
+                <div className="p-4 bg-muted/30 rounded-lg">
+                  <p className="text-foreground">
+                    This lease shall commence on <strong>{format(new Date(), 'MMMM dd, yyyy')}</strong> and 
+                    shall terminate on <strong>{format(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), 'MMMM dd, yyyy')}</strong>, unless 
+                    terminated earlier in accordance with the terms of this Agreement.
+                  </p>
+                </div>
+              </div>
+
+              <Separator className="my-6" />
+
+              {/* Rent and Fees */}
+              <div className="section mb-6">
+                <h2 className="text-xl font-semibold mb-4 text-foreground">4. RENT AND FEES</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div className="p-3 bg-primary/10 border-l-4 border-primary rounded">
+                    <div className="text-sm text-muted-foreground font-medium">Monthly Rent:</div>
+                    <div className="mt-1 text-2xl font-bold text-primary">
+                      KES 50,000
+                    </div>
+                  </div>
+                  <div className="p-3 bg-muted/50 border-l-4 border-primary rounded">
+                    <div className="text-sm text-muted-foreground font-medium">Security Deposit:</div>
+                    <div className="mt-1 text-lg font-semibold text-foreground">
+                      KES 50,000
+                    </div>
+                  </div>
+                  <div className="p-3 bg-muted/50 border-l-4 border-primary rounded">
+                    <div className="text-sm text-muted-foreground font-medium">Payment Due Date:</div>
+                    <div className="mt-1 text-foreground">Day 1 of each month</div>
+                  </div>
+                  <div className="p-3 bg-muted/50 border-l-4 border-primary rounded">
+                    <div className="text-sm text-muted-foreground font-medium">Late Fee Policy:</div>
+                    <div className="mt-1 text-foreground">KES 5,000 flat fee</div>
+                  </div>
+                </div>
+              </div>
+
+              <Separator className="my-6" />
+
+              {/* Custom Header from Template */}
               {previewTemplate.header_content && (
-                <div className="whitespace-pre-wrap text-foreground">{previewTemplate.header_content}</div>
-              )}
-              <Separator />
-              {previewTemplate.standard_terms && (
                 <>
-                  <h3 className="text-lg font-semibold">Standard Terms</h3>
-                  <div className="whitespace-pre-wrap text-foreground">{previewTemplate.standard_terms}</div>
-                  <Separator />
+                  <Separator className="my-6" />
+                  <div className="section mb-6">
+                    <div className="p-4 bg-muted/30 rounded-lg">
+                      <div className="whitespace-pre-wrap text-foreground">{previewTemplate.header_content}</div>
+                    </div>
+                  </div>
+                  <Separator className="my-6" />
                 </>
               )}
+
+              {/* Additional Terms from Template */}
               {previewTemplate.additional_terms && (
                 <>
-                  <h3 className="text-lg font-semibold">Additional Terms</h3>
-                  <div className="whitespace-pre-wrap text-foreground">{previewTemplate.additional_terms}</div>
-                  <Separator />
+                  <div className="section mb-6">
+                    <h2 className="text-xl font-semibold mb-4 text-foreground">5. ADDITIONAL TERMS AND CONDITIONS</h2>
+                    <div className="p-4 bg-muted/30 rounded-lg">
+                      <div className="whitespace-pre-wrap text-foreground">{previewTemplate.additional_terms}</div>
+                    </div>
+                  </div>
+                  <Separator className="my-6" />
                 </>
               )}
-              {previewTemplate.footer_content && (
-                <div className="whitespace-pre-wrap text-sm text-muted-foreground">{previewTemplate.footer_content}</div>
+
+              {/* Standard Terms from Template */}
+              {previewTemplate.standard_terms && (
+                <div className="section mb-6">
+                  <h2 className="text-xl font-semibold mb-4 text-foreground">
+                    {previewTemplate.additional_terms ? '6' : '5'}. STANDARD TERMS
+                  </h2>
+                  <div className="p-4 bg-muted/30 rounded-lg">
+                    <div className="whitespace-pre-wrap text-foreground">{previewTemplate.standard_terms}</div>
+                  </div>
+                </div>
               )}
+
+              <Separator className="my-6" />
+
+              {/* Signatures */}
+              <div className="mb-12">
+                <h2 className="text-xl font-semibold mb-8 text-foreground">SIGNATURES</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                  <div>
+                    <p className="font-bold mb-3 text-foreground">LANDLORD:</p>
+                    <div className="border-t-2 border-foreground/20 mt-12 mb-2"></div>
+                    <p className="mt-2 text-foreground">
+                      {profile?.first_name} {profile?.last_name}
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">Date: __________________</p>
+                  </div>
+                  <div>
+                    <p className="font-bold mb-3 text-foreground">TENANT:</p>
+                    <div className="border-t-2 border-foreground/20 mt-12 mb-2"></div>
+                    <p className="mt-2 text-foreground">John Doe</p>
+                    <p className="text-sm text-muted-foreground mt-1">Date: __________________</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer from Template */}
+              <div className="text-center mt-12 pt-6 border-t border-border">
+                {previewTemplate.footer_content ? (
+                  <>
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">{previewTemplate.footer_content}</p>
+                    <p className="text-sm text-muted-foreground mt-1">Generated on {format(new Date(), 'MMMM dd, yyyy \'at\' hh:mm a')}</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground">This document is a legally binding agreement. Please keep a copy for your records.</p>
+                    <p className="text-sm text-muted-foreground mt-1">Generated on {format(new Date(), 'MMMM dd, yyyy \'at\' hh:mm a')}</p>
+                  </>
+                )}
+              </div>
             </div>
           )}
         </DialogContent>

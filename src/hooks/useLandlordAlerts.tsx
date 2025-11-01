@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from './useAuth';
 import { useFinancials } from './useFinancials';
 import { useMaintenanceRequests } from './useMaintenanceRequests';
@@ -20,28 +20,24 @@ export const useLandlordAlerts = () => {
   const { financialData, loading: financialLoading } = useFinancials();
   const { requests, loading: maintenanceLoading } = useMaintenanceRequests();
   const { properties, loading: propertiesLoading } = useProperties();
-  const [alerts, setAlerts] = useState<LandlordAlert[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [readAlerts, setReadAlerts] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
+  const generatedAlerts = useMemo<LandlordAlert[]>(() => {
     if (profile?.role !== 'landlord') {
-      setLoading(false);
-      return;
+      return [];
     }
 
-    if (!financialLoading && !maintenanceLoading && !propertiesLoading) {
-      generateAlerts();
+    if (financialLoading || maintenanceLoading || propertiesLoading) {
+      return [];
     }
-  }, [profile, financialLoading, maintenanceLoading, propertiesLoading, financialData, requests, properties]);
 
-  const generateAlerts = () => {
-    const generatedAlerts: LandlordAlert[] = [];
+    const alerts: LandlordAlert[] = [];
 
     // 1. Maintenance Alerts
     const pendingMaintenance = requests?.filter(r => r.status === 'pending') || [];
     if (pendingMaintenance.length > 0) {
-      generatedAlerts.push({
-        id: `maintenance-pending-${Date.now()}`,
+      alerts.push({
+        id: 'maintenance-pending',
         type: 'maintenance',
         priority: pendingMaintenance.length > 10 ? 'urgent' : pendingMaintenance.length > 5 ? 'high' : 'medium',
         title: 'Pending Maintenance Requests',
@@ -54,8 +50,8 @@ export const useLandlordAlerts = () => {
     // Check for urgent maintenance
     const urgentMaintenance = requests?.filter(r => r.priority === 'urgent' && r.status !== 'completed') || [];
     if (urgentMaintenance.length > 0) {
-      generatedAlerts.push({
-        id: `maintenance-urgent-${Date.now()}`,
+      alerts.push({
+        id: 'maintenance-urgent',
         type: 'maintenance',
         priority: 'urgent',
         title: 'Urgent Maintenance Issues',
@@ -67,8 +63,8 @@ export const useLandlordAlerts = () => {
 
     // 2. Payment/Financial Alerts
     if (financialData?.overdue && financialData.overdue > 0) {
-      generatedAlerts.push({
-        id: `payment-overdue-${Date.now()}`,
+      alerts.push({
+        id: 'payment-overdue',
         type: 'payment',
         priority: financialData.overdue > 100000 ? 'urgent' : financialData.overdue > 50000 ? 'high' : 'medium',
         title: 'Overdue Rent Payments',
@@ -88,8 +84,8 @@ export const useLandlordAlerts = () => {
       const occupancyRate = totalUnits > 0 ? Math.round((occupiedUnits / totalUnits) * 100) : 0;
 
       if (occupancyRate < 85 && totalUnits > 0) {
-        generatedAlerts.push({
-          id: `occupancy-low-${Date.now()}`,
+        alerts.push({
+          id: 'occupancy-low',
           type: 'occupancy',
           priority: occupancyRate < 70 ? 'high' : 'medium',
           title: 'Low Occupancy Rate',
@@ -103,8 +99,8 @@ export const useLandlordAlerts = () => {
     // 4. Check for properties with no units
     const propertiesWithoutUnits = properties?.filter(p => !p.units || p.units.length === 0) || [];
     if (propertiesWithoutUnits.length > 0) {
-      generatedAlerts.push({
-        id: `property-no-units-${Date.now()}`,
+      alerts.push({
+        id: 'property-no-units',
         type: 'general',
         priority: 'low',
         title: 'Properties Without Units',
@@ -115,9 +111,9 @@ export const useLandlordAlerts = () => {
     }
 
     // 5. All good message
-    if (generatedAlerts.length === 0) {
-      generatedAlerts.push({
-        id: `all-good-${Date.now()}`,
+    if (alerts.length === 0) {
+      alerts.push({
+        id: 'all-good',
         type: 'general',
         priority: 'low',
         title: 'All Systems Operating Normally',
@@ -129,24 +125,27 @@ export const useLandlordAlerts = () => {
 
     // Sort by priority
     const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
-    generatedAlerts.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+    alerts.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
 
-    setAlerts(generatedAlerts);
-    setLoading(false);
-  };
+    // Apply read status
+    return alerts.map(alert => ({
+      ...alert,
+      is_read: readAlerts.has(alert.id) || alert.is_read
+    }));
+  }, [profile?.role, financialLoading, maintenanceLoading, propertiesLoading, requests, financialData, properties, readAlerts]);
 
-  const markAsRead = (alertId: string) => {
-    setAlerts(prev => prev.map(alert => 
-      alert.id === alertId ? { ...alert, is_read: true } : alert
-    ));
-  };
+  const loading = financialLoading || maintenanceLoading || propertiesLoading;
 
-  const markAllAsRead = () => {
-    setAlerts(prev => prev.map(alert => ({ ...alert, is_read: true })));
-  };
+  const markAsRead = useCallback((alertId: string) => {
+    setReadAlerts(prev => new Set([...prev, alertId]));
+  }, []);
+
+  const markAllAsRead = useCallback(() => {
+    setReadAlerts(new Set(generatedAlerts.map(alert => alert.id)));
+  }, [generatedAlerts]);
 
   return {
-    alerts,
+    alerts: generatedAlerts,
     loading,
     markAsRead,
     markAllAsRead,

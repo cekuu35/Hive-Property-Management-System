@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
@@ -22,7 +22,7 @@ export const useEmergencyContacts = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchEmergencyContacts = async () => {
+  const fetchEmergencyContacts = useCallback(async () => {
     if (!profile?.id) {
       setLoading(false);
       return;
@@ -81,11 +81,11 @@ export const useEmergencyContacts = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [profile?.id]);
 
   useEffect(() => {
     fetchEmergencyContacts();
-  }, [profile?.id]);
+  }, [fetchEmergencyContacts]);
 
   return {
     contacts,

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Users, Clock, Calendar, Download, Search, Filter } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { format, differenceInMinutes } from 'date-fns';
@@ -17,6 +17,16 @@ interface VisitorHistory {
   time_in: string;
   time_out?: string;
   status: string;
+  unit?: {
+    unit_number: string;
+    property?: {
+      name: string;
+    };
+  };
+  tenant?: {
+    first_name: string;
+    last_name: string;
+  };
 }
 
 export const VisitorHistorySection = () => {
@@ -26,7 +36,7 @@ export const VisitorHistorySection = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const { profile } = useAuth();
 
-  const fetchHistory = async () => {
+  const fetchHistory = useCallback(async () => {
     if (!profile?.id) return;
 
     try {
@@ -37,7 +47,14 @@ export const VisitorHistorySection = () => {
 
       const { data, error } = await supabase
         .from('visitors')
-        .select('*')
+        .select(`
+          *,
+          unit:units!visitors_visiting_unit_id_fkey(
+            unit_number,
+            property:properties(name)
+          ),
+          tenant:profiles!visitors_visiting_tenant_id_fkey(first_name, last_name)
+        `)
         .eq('status', 'checked_out')
         .gte('time_out', daysAgo.toISOString())
         .order('time_out', { ascending: false });
@@ -50,11 +67,11 @@ export const VisitorHistorySection = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [profile?.id, filterDays]);
 
   useEffect(() => {
     fetchHistory();
-  }, [profile?.id, filterDays]);
+  }, [fetchHistory]);
 
   const filteredHistory = history.filter(visitor => {
     if (!searchTerm) return true;
@@ -149,6 +166,12 @@ export const VisitorHistorySection = () => {
                       <h4 className="font-semibold">{visitor.visitor_name}</h4>
                       <Badge variant="outline">Checked Out</Badge>
                     </div>
+                    {visitor.unit && (
+                      <p className="text-sm font-medium mb-1">
+                        Unit: {visitor.unit.unit_number}{visitor.unit.property?.name ? ` - ${visitor.unit.property.name}` : ''}
+                        {visitor.tenant && ` (${visitor.tenant.first_name} ${visitor.tenant.last_name})`}
+                      </p>
+                    )}
                     <p className="text-sm text-muted-foreground mb-1">
                       Purpose: {visitor.purpose}
                     </p>

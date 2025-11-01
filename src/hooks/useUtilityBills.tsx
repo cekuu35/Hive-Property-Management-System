@@ -638,7 +638,7 @@ export const useUtilityBills = () => {
       console.log('🔕 [useUtilityBills] Cleaning up realtime subscription');
       supabase.removeChannel(channel);
     };
-  }, [profile?.id, profile?.role]);
+  }, [profile?.id, profile?.role, fetchTenantBills, fetchLandlordBills]);
 
   return {
     // Data

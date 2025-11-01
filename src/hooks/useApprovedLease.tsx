@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { supabaseAdmin } from '@/integrations/supabase/admin';
 import { useAuth } from '@/hooks/useAuth';
@@ -47,7 +47,7 @@ export const useApprovedLease = () => {
   const [loading, setLoading] = useState(true);
   const { profile } = useAuth();
 
-  const fetchApprovedLease = async () => {
+  const fetchApprovedLease = useCallback(async () => {
     if (!profile?.id) {
       console.log('❌ [useApprovedLease] No profile ID available');
       return;
@@ -276,7 +276,7 @@ export const useApprovedLease = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [profile?.id]);
 
   useEffect(() => {
     console.log('🔍 [useApprovedLease] useEffect triggered, profile?.id:', profile?.id);
@@ -286,7 +286,7 @@ export const useApprovedLease = () => {
       console.log('❌ [useApprovedLease] No profile ID, not fetching lease');
       setLoading(false);
     }
-  }, [profile?.id]);
+  }, [profile?.id, fetchApprovedLease]);
 
   const hasApprovedLease = !!approvedLease;
   

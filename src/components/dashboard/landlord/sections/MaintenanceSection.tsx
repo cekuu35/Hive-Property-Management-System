@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Wrench, Clock, CheckCircle, AlertTriangle, User, Calendar, DollarSign, Search, Filter, Loader2, Edit, Eye, MoreHorizontal, Plus, Phone, Mail, MapPin, Star, Trash2, Camera, X } from 'lucide-react';
 import { useMaintenanceRequests } from '@/hooks/useMaintenanceRequests';
 import { useContractors } from '@/hooks/useContractors';
+import { useStaffMembers } from '@/hooks/useStaffMembers';
 import { MaintenanceRequestModal } from '@/components/dashboard/maintenance/MaintenanceRequestModal';
 import { ContractorModal } from '@/components/dashboard/maintenance/ContractorModal';
 import { EmergencyContactsManagement } from '../EmergencyContactsManagement';
@@ -28,12 +29,14 @@ export const MaintenanceSection = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isContractorModalOpen, setIsContractorModalOpen] = useState(false);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [isAssignCaretakerModalOpen, setIsAssignCaretakerModalOpen] = useState(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [isCostModalOpen, setIsCostModalOpen] = useState(false);
   const [isViewDetailsOpen, setIsViewDetailsOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
   const [assignmentData, setAssignmentData] = useState({
     contractorId: '',
+    caretakerId: '',
     notes: '',
     estimatedCost: '',
     scheduledDate: ''
@@ -61,6 +64,12 @@ export const MaintenanceSection = () => {
     toggleContractorStatus,
     getActiveContractors
   } = useContractors();
+  
+  const {
+    staffMembers,
+    loading: staffLoading,
+    fetchStaffMembers
+  } = useStaffMembers();
   
   const { toast } = useToast();
 
@@ -103,9 +112,80 @@ export const MaintenanceSection = () => {
 
       setIsAssignModalOpen(false);
       setSelectedRequest(null);
-      setAssignmentData({ contractorId: '', notes: '', estimatedCost: '', scheduledDate: '' });
+      setAssignmentData({ contractorId: '', caretakerId: '', notes: '', estimatedCost: '', scheduledDate: '' });
     } catch (error) {
       console.error('Error assigning contractor:', error);
+    }
+  };
+
+  const handleAssignCaretaker = async (request: any) => {
+    setSelectedRequest(request);
+    await fetchStaffMembers(); // Ensure staff list is loaded
+    setAssignmentData({
+      contractorId: '',
+      caretakerId: '',
+      notes: '',
+      estimatedCost: '',
+      scheduledDate: ''
+    });
+    setIsAssignCaretakerModalOpen(true);
+  };
+
+  const handleSubmitCaretakerAssignment = async () => {
+    if (!selectedRequest || !assignmentData.caretakerId) {
+      toast({
+        title: "Error",
+        description: "Please select a caretaker",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      // Find the caretaker profile to get the full name
+      const caretaker = staffMembers.find((s: any) => s.id === assignmentData.caretakerId);
+      
+      if (!caretaker) {
+        toast({
+          title: "Error",
+          description: "Selected caretaker not found",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Update the maintenance request
+      const { error } = await supabase
+        .from('maintenance_requests')
+        .update({
+          assigned_to: assignmentData.caretakerId,
+          status: 'assigned',
+          scheduled_date: assignmentData.scheduledDate || null
+        })
+        .eq('id', selectedRequest.id);
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Success",
+        description: `Maintenance request assigned to ${caretaker.first_name} ${caretaker.last_name}`,
+      });
+
+      setIsAssignCaretakerModalOpen(false);
+      setSelectedRequest(null);
+      setAssignmentData({ contractorId: '', caretakerId: '', notes: '', estimatedCost: '', scheduledDate: '' });
+      
+      // Refresh the requests list
+      refetch();
+    } catch (error) {
+      console.error('Error assigning caretaker:', error);
+      toast({
+        title: "Error",
+        description: "Failed to assign caretaker",
+        variant: "destructive"
+      });
     }
   };
 
@@ -133,7 +213,7 @@ export const MaintenanceSection = () => {
 
       setIsScheduleModalOpen(false);
       setSelectedRequest(null);
-      setAssignmentData({ contractorId: '', notes: '', estimatedCost: '', scheduledDate: '' });
+      setAssignmentData({ contractorId: '', caretakerId: '', notes: '', estimatedCost: '', scheduledDate: '' });
     } catch (error) {
       console.error('Error scheduling maintenance:', error);
     }
@@ -142,7 +222,8 @@ export const MaintenanceSection = () => {
   const handleUpdateCost = async (request: any) => {
     setSelectedRequest(request);
     setAssignmentData({
-      contractorId: request.assignedTo || '',
+      contractorId: '',
+      caretakerId: '',
       notes: '',
       estimatedCost: request.estimatedCost?.toString() || '',
       scheduledDate: request.scheduledDate || ''
@@ -186,7 +267,7 @@ export const MaintenanceSection = () => {
 
       setIsCostModalOpen(false);
       setSelectedRequest(null);
-      setAssignmentData({ contractorId: '', notes: '', estimatedCost: '', scheduledDate: '' });
+      setAssignmentData({ contractorId: '', caretakerId: '', notes: '', estimatedCost: '', scheduledDate: '' });
     } catch (error: any) {
       console.error('❌ Error completing request:', error);
       toast({
@@ -512,6 +593,14 @@ export const MaintenanceSection = () => {
                               <Button 
                                 variant="ghost" 
                                 size="sm"
+                                onClick={() => handleAssignCaretaker(request)}
+                                title={request.assignedTo ? "Change Caretaker" : "Assign Caretaker"}
+                              >
+                                <Wrench className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
                                 onClick={() => handleAssignContractor(request)}
                                 title={request.contractorName ? "Change Contractor" : "Assign Contractor"}
                               >
@@ -817,6 +906,67 @@ export const MaintenanceSection = () => {
               </Button>
               <Button onClick={handleSubmitAssignment}>
                 Assign Contractor
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Caretaker Assignment Modal */}
+      <Dialog open={isAssignCaretakerModalOpen} onOpenChange={setIsAssignCaretakerModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign Caretaker</DialogTitle>
+            <DialogDescription>
+              Assign a caretaker to handle this maintenance request
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="caretaker">Caretaker</Label>
+              <Select 
+                value={assignmentData.caretakerId} 
+                onValueChange={(value) => setAssignmentData(prev => ({ ...prev, caretakerId: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select caretaker" />
+                </SelectTrigger>
+                <SelectContent>
+                  {staffMembers
+                    .filter((staff: any) => staff.role === 'caretaker')
+                    .map((caretaker: any) => (
+                      <SelectItem key={caretaker.id} value={caretaker.id}>
+                        {caretaker.first_name} {caretaker.last_name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="scheduledDate">Scheduled Date</Label>
+              <Input
+                id="scheduledDate"
+                type="date"
+                value={assignmentData.scheduledDate}
+                onChange={(e) => setAssignmentData(prev => ({ ...prev, scheduledDate: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label htmlFor="notes">Notes</Label>
+              <Textarea
+                id="notes"
+                value={assignmentData.notes}
+                onChange={(e) => setAssignmentData(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder="Assignment notes (optional)"
+                rows={3}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsAssignCaretakerModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSubmitCaretakerAssignment}>
+                Assign Caretaker
               </Button>
             </div>
           </div>

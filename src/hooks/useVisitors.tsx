@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useToast } from './use-toast';
@@ -48,7 +48,7 @@ export const useVisitors = () => {
   const { profile } = useAuth();
   const { toast } = useToast();
 
-  const fetchVisitors = async () => {
+  const fetchVisitors = useCallback(async () => {
     if (!profile?.id) return;
 
     try {
@@ -56,7 +56,14 @@ export const useVisitors = () => {
 
       const { data, error } = await supabase
         .from('visitors')
-        .select('*')
+        .select(`
+          *,
+          unit:units!visitors_visiting_unit_id_fkey(
+            unit_number,
+            property:properties(name)
+          ),
+          tenant:profiles!visitors_visiting_tenant_id_fkey(first_name, last_name)
+        `)
         .order('time_in', { ascending: false });
 
       if (error) throw error;
@@ -67,7 +74,7 @@ export const useVisitors = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [profile?.id]);
 
   const registerVisitor = async (visitorData: CreateVisitor) => {
     if (!profile?.id || profile.role !== 'security') {
@@ -193,7 +200,7 @@ export const useVisitors = () => {
 
   useEffect(() => {
     fetchVisitors();
-  }, [profile?.id]);
+  }, [fetchVisitors]);
 
   return {
     visitors,

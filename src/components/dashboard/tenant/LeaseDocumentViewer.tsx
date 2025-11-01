@@ -5,7 +5,7 @@ import { Download, Printer, X } from 'lucide-react';
 import { useApprovedLease } from '@/hooks/useApprovedLease';
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface LeaseDocumentViewerProps {
@@ -39,25 +39,7 @@ export const LeaseDocumentViewer = ({ open, onClose }: LeaseDocumentViewerProps)
   const [template, setTemplate] = useState<LeaseTemplate | null>(getDefaultTemplate());
   const [loadingTemplate, setLoadingTemplate] = useState(false);
 
-  if (!approvedLease) return null;
-
-  const lease = approvedLease;
-  const startDate = lease.start_date ? new Date(lease.start_date) : null;
-  const endDate = lease.end_date ? new Date(lease.end_date) : null;
-  const createdDate = lease.created_at ? new Date(lease.created_at) : new Date();
-  const landlordId = lease.units?.properties?.landlord_id;
-
-  // Fetch lease template when dialog opens
-  useEffect(() => {
-    if (open && landlordId) {
-      fetchLeaseTemplate(landlordId);
-    } else if (open && !landlordId) {
-      // If no landlord ID, just use default template
-      setTemplate(getDefaultTemplate());
-    }
-  }, [open, landlordId]);
-
-  const fetchLeaseTemplate = async (landlordId: string) => {
+  const fetchLeaseTemplate = useCallback(async (landlordId: string) => {
     try {
       setLoadingTemplate(true);
       
@@ -123,7 +105,24 @@ export const LeaseDocumentViewer = ({ open, onClose }: LeaseDocumentViewerProps)
     } finally {
       setLoadingTemplate(false);
     }
-  };
+  }, []);
+
+  // Fetch lease template when dialog opens
+  useEffect(() => {
+    if (open && approvedLease?.units?.properties?.landlord_id) {
+      fetchLeaseTemplate(approvedLease.units.properties.landlord_id);
+    } else if (open && !approvedLease?.units?.properties?.landlord_id) {
+      // If no landlord ID, just use default template
+      setTemplate(getDefaultTemplate());
+    }
+  }, [open, approvedLease?.units?.properties?.landlord_id, fetchLeaseTemplate]);
+
+  if (!approvedLease) return null;
+
+  const lease = approvedLease;
+  const startDate = lease.start_date ? new Date(lease.start_date) : null;
+  const endDate = lease.end_date ? new Date(lease.end_date) : null;
+  const createdDate = lease.created_at ? new Date(lease.created_at) : new Date();
 
   const handlePrint = () => {
     window.print();

@@ -22,6 +22,13 @@ export const useTenantNotices = () => {
 
   const fetchNotices = async () => {
     if (!profile?.id) return;
+    
+    // Only fetch notices for tenants
+    if (profile.role !== 'tenant') {
+      setNotices([]);
+      setLoading(false);
+      return;
+    }
 
     try {
       setLoading(true);
@@ -32,7 +39,7 @@ export const useTenantNotices = () => {
         .from('tenant_info')
         .select('id, current_balance, payment_status')
         .eq('profile_id', profile.id)
-        .single();
+        .maybeSingle();
 
       if (tenantInfoError) {
         console.error('Error fetching tenant info:', tenantInfoError);

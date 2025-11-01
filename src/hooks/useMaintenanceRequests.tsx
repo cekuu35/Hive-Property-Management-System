@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useToast } from './use-toast';
@@ -44,7 +44,7 @@ export const useMaintenanceRequests = () => {
   const { profile } = useAuth();
   const { toast } = useToast();
 
-  const fetchMaintenanceRequests = async () => {
+  const fetchMaintenanceRequests = useCallback(async () => {
     if (!profile?.id) return;
 
     console.log('Fetching maintenance requests for profile:', profile);
@@ -57,7 +57,7 @@ export const useMaintenanceRequests = () => {
         .select(`
           *,
           unit:units(unit_number, property:properties(name)),
-          tenant_profile:profiles!tenant_id(id),
+          tenant_profile:profiles!tenant_id(id, first_name, last_name),
           assigned:profiles!assigned_to(first_name, last_name),
           contractor:contractors!assigned_contractor_id(id, name, specialty, phone, email)
         `);
@@ -150,6 +150,11 @@ export const useMaintenanceRequests = () => {
       }
 
       console.log('Raw maintenance data for role:', profile.role, maintenanceData);
+      
+      // Debug: Log each request's structure
+      if (maintenanceData && maintenanceData.length > 0) {
+        console.log('🔍 [Maintenance] First request structure:', JSON.stringify(maintenanceData[0], null, 2));
+      }
 
       // Extract all tenant profile IDs and unit IDs from maintenance requests
       const tenantProfileIds = [...new Set((maintenanceData || [])
@@ -174,7 +179,8 @@ export const useMaintenanceRequests = () => {
 
         console.log('🔍 [Maintenance] Tenant info by profile_id:', { 
           count: tenantInfosByProfile?.length, 
-          error: tenantInfoError 
+          error: tenantInfoError,
+          data: tenantInfosByProfile
         });
 
         if (!tenantInfoError && tenantInfosByProfile) {
@@ -184,17 +190,59 @@ export const useMaintenanceRequests = () => {
         }
       }
 
+      // Method 1.5: Also fetch from profiles directly as fallback for missing tenant_info
+      if (tenantProfileIds.length > 0) {
+        console.log('🔍 [Maintenance] Querying profiles for IDs:', tenantProfileIds);
+        
+        // Also try querying all profiles to see what we have
+        const { data: allProfiles, error: allProfilesError } = await supabase
+          .from('profiles')
+          .select('id, first_name, last_name, role')
+          .limit(100);
+        console.log('🔍 [Maintenance] Sample of all profiles in DB:', { 
+          count: allProfiles?.length, 
+          error: allProfilesError,
+          sample: allProfiles?.slice(0, 5)
+        });
+        
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('profiles')
+          .select('id, first_name, last_name')
+          .in('id', tenantProfileIds);
+
+        console.log('🔍 [Maintenance] Profiles by id:', { 
+          count: profilesData?.length, 
+          error: profilesError,
+          data: profilesData,
+          queryingIds: tenantProfileIds
+        });
+
+        if (!profilesError && profilesData) {
+          profilesData.forEach(profile => {
+            // Only add if not already in map from tenant_info
+            if (!tenantInfoMap.has(profile.id)) {
+              tenantInfoMap.set(profile.id, {
+                profile_id: profile.id,
+                first_name: profile.first_name,
+                last_name: profile.last_name
+              });
+              console.log(`✅ [Maintenance] Added profile fallback for ${profile.id}:`, profile.first_name, profile.last_name);
+            }
+          });
+        }
+      }
+
       // Method 2: If we still have missing tenants, try to get them through leases by unit_id
       if (unitIds.length > 0) {
         const { data: leases, error: leasesError } = await supabase
           .from('leases')
-          .select('unit_id, tenant_info_id, tenant_info:tenant_info_id(first_name, last_name, profile_id)')
-          .in('unit_id', unitIds)
-          .eq('status', 'active');
+          .select('unit_id, tenant_info_id, tenant_id, tenant_info:tenant_info_id(first_name, last_name, profile_id)')
+          .in('unit_id', unitIds);
 
-        console.log('🔍 [Maintenance] Leases by unit_id:', { 
+        console.log('🔍 [Maintenance] Leases by unit_id (all statuses):', { 
           count: leases?.length, 
-          error: leasesError 
+          error: leasesError,
+          data: leases
         });
 
         if (!leasesError && leases) {
@@ -205,6 +253,35 @@ export const useMaintenanceRequests = () => {
                 first_name: lease.tenant_info.first_name,
                 last_name: lease.tenant_info.last_name
               });
+              console.log(`✅ [Maintenance] Added tenant from lease for unit ${lease.unit_id}:`, lease.tenant_info.first_name, lease.tenant_info.last_name);
+            }
+          });
+        }
+      }
+
+      // Method 3: Direct query leases by tenant_id to get tenant info even if unit doesn't have an active lease
+      if (tenantProfileIds.length > 0) {
+        const { data: tenantLeases, error: tenantLeasesError } = await supabase
+          .from('leases')
+          .select('tenant_id, tenant_info_id, tenant_info:tenant_info_id(first_name, last_name, profile_id)')
+          .in('tenant_id', tenantProfileIds)
+          .limit(100); // Safety limit
+
+        console.log('🔍 [Maintenance] Leases by tenant_id (direct):', { 
+          count: tenantLeases?.length, 
+          error: tenantLeasesError,
+          data: tenantLeases
+        });
+
+        if (!tenantLeasesError && tenantLeases) {
+          tenantLeases.forEach(lease => {
+            if (lease.tenant_info && lease.tenant_info.profile_id && !tenantInfoMap.has(lease.tenant_info.profile_id)) {
+              tenantInfoMap.set(lease.tenant_info.profile_id, {
+                profile_id: lease.tenant_info.profile_id,
+                first_name: lease.tenant_info.first_name,
+                last_name: lease.tenant_info.last_name
+              });
+              console.log(`✅ [Maintenance] Added tenant from direct lease query:`, lease.tenant_info.first_name, lease.tenant_info.last_name);
             }
           });
         }
@@ -214,18 +291,22 @@ export const useMaintenanceRequests = () => {
 
       // Format the data to match our interface
       const formattedRequests: MaintenanceRequest[] = (maintenanceData || []).map((request: any) => {
-        // Get tenant name from tenant_info
-        // Try both tenant_profile.id and tenant_id as fallback
+        // Get tenant name from tenant_info first, then fall back to tenant_profile
         const profileId = request.tenant_profile?.id || request.tenant_id;
         let tenantName = 'Unknown Tenant';
         
         if (profileId) {
+          // First try to get from tenant_info map
           const tenantInfo = tenantInfoMap.get(profileId);
           if (tenantInfo) {
             tenantName = `${tenantInfo.first_name || ''} ${tenantInfo.last_name || ''}`.trim() || 'Unknown Tenant';
             console.log(`✅ [Maintenance] Found tenant name for profile ${profileId}:`, tenantName);
+          } else if (request.tenant_profile?.first_name || request.tenant_profile?.last_name) {
+            // Fallback to profiles data if tenant_info not found
+            tenantName = `${request.tenant_profile.first_name || ''} ${request.tenant_profile.last_name || ''}`.trim() || 'Unknown Tenant';
+            console.log(`✅ [Maintenance] Using profiles fallback for profile ${profileId}:`, tenantName);
           } else {
-            console.warn(`⚠️ [Maintenance] No tenant_info found for profile_id: ${profileId}`);
+            console.warn(`⚠️ [Maintenance] No tenant_info or profiles data found for profile_id: ${profileId}`);
           }
         } else {
           console.warn(`⚠️ [Maintenance] No profile_id found for request ${request.id}`);
@@ -270,7 +351,7 @@ export const useMaintenanceRequests = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [profile?.id, toast]);
 
   const createMaintenanceRequest = async (requestData: CreateMaintenanceRequest) => {
     if (!profile?.id) {
@@ -776,7 +857,7 @@ export const useMaintenanceRequests = () => {
         supabase.removeChannel(channel);
       };
     }
-  }, [profile?.id]);
+  }, [profile?.id, fetchMaintenanceRequests]);
 
   return {
     requests,

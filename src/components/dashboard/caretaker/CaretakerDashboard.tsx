@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Clipboard, Calendar, Package, FileText, Clock, MapPin, Wrench, User } from 'lucide-react';
+import { Clipboard, Calendar, Package, FileText, Clock, MapPin, Wrench, User, Building } from 'lucide-react';
 import { WorkOrdersSection } from './WorkOrdersSection';
 import { ScheduleSection } from './ScheduleSection';
 import { InventorySection } from './InventorySection';
@@ -9,7 +9,7 @@ import { ReportsSection } from './ReportsSection';
 import { ProfileSection } from './ProfileSection';
 import { MaintenanceRequestsSection } from './MaintenanceRequestsSection';
 import { useMaintenanceRequests } from '@/hooks/useMaintenanceRequests';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -22,6 +22,52 @@ const CaretakerDashboard = ({ activeSection = 'dashboard', onSectionChange }: Ca
   const { requests, getStats } = useMaintenanceRequests();
   const { profile } = useAuth();
   const stats = getStats();
+  const [assignedProperties, setAssignedProperties] = useState<any[]>([]);
+  const [propertiesLoading, setPropertiesLoading] = useState(true);
+
+  // Fetch assigned properties
+  useEffect(() => {
+    const fetchAssignedProperties = async () => {
+      if (!profile?.id || (profile.role !== 'caretaker' && profile.role !== 'security')) {
+        setPropertiesLoading(false);
+        return;
+      }
+
+      try {
+        const { data: assignments, error } = await supabase
+          .from('staff_assignments')
+          .select(`
+            property_id,
+            assigned_at,
+            notes,
+            property:properties!staff_assignments_property_id_fkey (
+              id,
+              name,
+              address,
+              total_units
+            )
+          `)
+          .eq('staff_id', profile.id)
+          .eq('role', profile.role)
+          .eq('is_active', true)
+          .order('assigned_at', { ascending: false });
+
+        if (error) {
+          console.error('Error fetching assignments:', error);
+          setAssignedProperties([]);
+        } else {
+          setAssignedProperties(assignments || []);
+        }
+      } catch (error) {
+        console.error('Error fetching properties:', error);
+        setAssignedProperties([]);
+      } finally {
+        setPropertiesLoading(false);
+      }
+    };
+
+    fetchAssignedProperties();
+  }, [profile]);
 
   // Real-time updates are now handled in useMaintenanceRequests hook
 
@@ -193,6 +239,42 @@ const CaretakerDashboard = ({ activeSection = 'dashboard', onSectionChange }: Ca
         </CardContent>
       </Card>
 
+      {/* Assigned Properties */}
+      {!propertiesLoading && assignedProperties.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Building className="h-5 w-5" />
+              My Assigned Properties
+            </CardTitle>
+            <CardDescription>Properties you are assigned to manage</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {assignedProperties.map((assignment) => {
+                const property = assignment.property;
+                return (
+                  <div key={assignment.property_id} className="flex items-start gap-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+                    <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Building className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-medium text-sm truncate">{property?.name || 'Unknown Property'}</h4>
+                      <p className="text-xs text-muted-foreground mt-1 truncate">{property?.address || 'No address'}</p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <Badge variant="outline" className="text-xs">
+                          {property?.total_units || 0} units
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Work Orders and Inventory */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Today's Work Orders */}
@@ -282,9 +364,18 @@ const CaretakerDashboard = ({ activeSection = 'dashboard', onSectionChange }: Ca
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            <p className="text-sm">• Building A daily inspection due at 8:00 AM</p>
-            <p className="text-sm">• Emergency contact training scheduled for 3:00 PM</p>
-            <p className="text-sm">• Weekly inventory check due by end of day</p>
+            {myAssignedRequests.length > 0 && (
+              <p className="text-sm">• You have {myAssignedRequests.length} assigned task{myAssignedRequests.length !== 1 ? 's' : ''} pending completion</p>
+            )}
+            {urgentRequests.length > 0 && (
+              <p className="text-sm text-destructive">• {urgentRequests.length} urgent high-priority task{urgentRequests.length !== 1 ? 's' : ''} require{urgentRequests.length === 1 ? 's' : ''} immediate attention</p>
+            )}
+            {scheduledRequests.length > 0 && (
+              <p className="text-sm">• {scheduledRequests.length} task{scheduledRequests.length !== 1 ? 's' : ''} scheduled for upcoming dates</p>
+            )}
+            {(myAssignedRequests.length === 0 && urgentRequests.length === 0 && scheduledRequests.length === 0) && (
+              <p className="text-sm text-muted-foreground italic">No active reminders for today. Keep up the good work!</p>
+            )}
           </div>
         </CardContent>
       </Card>

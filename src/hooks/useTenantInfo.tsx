@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
@@ -19,7 +19,7 @@ export const useTenantInfo = () => {
   const [tenantInfo, setTenantInfo] = useState<TenantInfo | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchTenantInfo = async () => {
+  const fetchTenantInfo = useCallback(async () => {
     if (!profile?.id) return;
     
     try {
@@ -58,11 +58,11 @@ export const useTenantInfo = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [profile?.id]);
 
   useEffect(() => {
     fetchTenantInfo();
-  }, [profile?.id]);
+  }, [fetchTenantInfo]);
 
   // Set up real-time subscription for tenant_info changes
   useEffect(() => {
@@ -88,7 +88,7 @@ export const useTenantInfo = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [profile?.id]);
+  }, [profile?.id, fetchTenantInfo]);
 
   return {
     tenantInfo,

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -113,6 +113,21 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
       status: approvedLease.status
     } : null
   });
+
+  // Global refresh function for balance updates (must be defined before useEffect)
+  const refreshBalance = useCallback(async () => {
+    console.log('🔄 [TenantDashboard] Global balance refresh triggered');
+    try {
+      await Promise.all([
+        refetchPayments?.(),
+        refetchTenantInfo?.(),
+        refetchLease?.()
+      ].filter(Boolean));
+      console.log('✅ [TenantDashboard] Global refresh completed');
+    } catch (error) {
+      console.error('❌ [TenantDashboard] Global refresh failed:', error);
+    }
+  }, [refetchPayments, refetchTenantInfo, refetchLease]);
 
   // Real-time updates for all tenant data
   useEffect(() => {
@@ -248,6 +263,7 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
       .subscribe();
 
     return () => {
+      supabase.removeChannel(tenantDataChannel);
       supabase.removeChannel(rentPaymentsChannel);
       supabase.removeChannel(maintenanceChannel);
       supabase.removeChannel(notificationsChannel);
@@ -255,7 +271,7 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
       supabase.removeChannel(paymentUpdatesChannel);
       supabase.removeChannel(tenantInfoChannel);
     };
-  }, [refetch]);
+  }, [refetch, refreshBalance, refetchPayments, refetchTenantInfo, refetchLease]);
 
   const mockData = {
     rentBalance: tenantRentBalance || rentBalance,
@@ -318,21 +334,6 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
     setShowMaintenanceView(true);
   };
 
-  // Global refresh function for balance updates
-  const refreshBalance = async () => {
-    console.log('🔄 [TenantDashboard] Global balance refresh triggered');
-    try {
-      await Promise.all([
-        refetchPayments?.(),
-        refetchTenantInfo?.(),
-        refetchLease?.()
-      ].filter(Boolean));
-      console.log('✅ [TenantDashboard] Global refresh completed');
-    } catch (error) {
-      console.error('❌ [TenantDashboard] Global refresh failed:', error);
-    }
-  };
-
   // Keyboard shortcut for refreshing balance (Ctrl+R or Cmd+R)
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -344,7 +345,7 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [refreshBalance]);
 
   // Filter maintenance requests
   const filteredMaintenanceRequests = (mockData.maintenanceRequests || []).filter((request: any) => {
