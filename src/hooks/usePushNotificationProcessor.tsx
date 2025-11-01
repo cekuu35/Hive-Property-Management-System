@@ -109,11 +109,11 @@ export const usePushNotificationProcessor = () => {
     }
 
     // Check notification preferences
-    const { data: preferences } = await supabase
+    const { data: preferences, error: prefsError } = await supabase
       .from('notification_preferences')
       .select('*')
       .eq('profile_id', payload.userId)
-      .single();
+      .maybeSingle();
 
     if (preferences && !preferences.push_enabled) {
       console.log('[sendPushNotification] Push notifications disabled');

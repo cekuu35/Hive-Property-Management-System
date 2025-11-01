@@ -79,12 +79,15 @@ serve(async (req) => {
       );
     }
 
-    // Get notification preferences
-    const { data: preferences } = await supabaseClient
+    // Get notification preferences - need to convert userId to profileId first
+    // First get the profile_id from push_subscriptions
+    const profileId = subscriptions?.[0]?.profile_id;
+    
+    const { data: preferences } = profileId ? await supabaseClient
       .from('notification_preferences')
       .select('*')
-      .eq('user_id', userId)
-      .single();
+      .eq('profile_id', profileId)
+      .single() : { data: null };
 
     // Check if push notifications are enabled
     if (preferences && !preferences.push_enabled) {
