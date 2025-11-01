@@ -250,18 +250,44 @@ serve(async (req) => {
     }
     
     tenantInfoId = tenantInfo.id;
-    console.log('📋 [track-payment] Balance update details:', {
+    
+    // Get current balance to deduct paid amount
+    const { data: currentTenant, error: fetchError } = await supabase
+      .from('tenant_info')
+      .select('current_balance')
+      .eq('id', tenantInfoId)
+      .single()
+    
+    if (fetchError) {
+      console.error('❌ [track-payment] Error fetching current balance:', fetchError)
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Failed to fetch current balance' 
+        }),
+        { 
+          status: 500, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+    
+    const currentBalance = currentTenant?.current_balance || 0
+    const newBalance = Math.max(0, currentBalance - amount)
+    
+    console.log('💰 [track-payment] Balance calculation:', {
       originalTenantId: tenantId,
       tenantInfoId: tenantInfoId,
-      currentBalance: 0,
-      paymentStatus: 'paid'
+      currentBalance,
+      amountPaid: amount,
+      newBalance
     })
     
     const { error: balanceError } = await supabase
       .from('tenant_info')
       .update({
-        current_balance: 0,
-        payment_status: 'paid',
+        current_balance: newBalance,
+        payment_status: newBalance > 0 ? 'unpaid' : 'paid',
         updated_at: new Date().toISOString()
       })
       .eq('id', tenantInfoId)

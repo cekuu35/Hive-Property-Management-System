@@ -23,6 +23,38 @@ export const useMonthlyRent = () => {
   const [loading, setLoading] = useState(true);
   const { profile } = useAuth();
 
+  const generateNextMonthPayment = useCallback(async (leaseId: string, rentAmount: number, dueDate: string) => {
+    try {
+      console.log('🔄 [generateNextMonthPayment] Creating payment record...');
+      console.log('📋 [generateNextMonthPayment] Payment data:', {
+        lease_id: leaseId,
+        amount: rentAmount,
+        due_date: dueDate,
+        status: 'pending'
+      });
+      
+      const { data, error } = await supabase
+        .from('rent_payments')
+        .insert({
+          lease_id: leaseId,
+          amount: rentAmount,
+          due_date: dueDate,
+          status: 'pending'
+        })
+        .select();
+
+      if (error) {
+        console.error('❌ [generateNextMonthPayment] Insert failed:', error);
+        throw error;
+      }
+      
+      console.log('✅ [generateNextMonthPayment] Payment created:', data);
+    } catch (error) {
+      console.error('❌ [generateNextMonthPayment] Error generating next month payment:', error);
+      throw error;
+    }
+  }, []);
+
   const calculateMonthlyRent = useCallback(async () => {
     if (!profile?.id) return;
 
@@ -241,39 +273,7 @@ export const useMonthlyRent = () => {
     } finally {
       setLoading(false);
     }
-  }, [profile?.id]);
-
-  const generateNextMonthPayment = async (leaseId: string, rentAmount: number, dueDate: string) => {
-    try {
-      console.log('🔄 [generateNextMonthPayment] Creating payment record...');
-      console.log('📋 [generateNextMonthPayment] Payment data:', {
-        lease_id: leaseId,
-        amount: rentAmount,
-        due_date: dueDate,
-        status: 'pending'
-      });
-      
-      const { data, error } = await supabase
-        .from('rent_payments')
-        .insert({
-          lease_id: leaseId,
-          amount: rentAmount,
-          due_date: dueDate,
-          status: 'pending'
-        })
-        .select();
-
-      if (error) {
-        console.error('❌ [generateNextMonthPayment] Insert failed:', error);
-        throw error;
-      }
-      
-      console.log('✅ [generateNextMonthPayment] Payment created:', data);
-    } catch (error) {
-      console.error('❌ [generateNextMonthPayment] Error generating next month payment:', error);
-      throw error;
-    }
-  };
+  }, [profile?.id, generateNextMonthPayment]);
 
   const generateMonthlyRentForAllTenants = async () => {
     try {

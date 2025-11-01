@@ -246,7 +246,7 @@ async function processRentPayment(supabaseAdmin: any, reference: string, metadat
     // Find the tenant_info record by profile_id first
     const { data: tenantInfo, error: tenantInfoError } = await supabaseAdmin
       .from('tenant_info')
-      .select('id')
+      .select('id, current_balance')
       .eq('profile_id', tenant_id)
       .maybeSingle()
 
@@ -260,12 +260,23 @@ async function processRentPayment(supabaseAdmin: any, reference: string, metadat
       return
     }
 
+    // Calculate new balance by deducting paid amount
+    const currentBalance = tenantInfo?.current_balance || 0
+    const paidAmountInKES = amount / 100 // Convert from kobo to KES
+    const newBalance = Math.max(0, currentBalance - paidAmountInKES)
+    
+    console.log('💰 [Paystack Webhook] Balance calculation:', {
+      currentBalance,
+      amountPaid: paidAmountInKES,
+      newBalance
+    })
+
     // Update tenant balance using the correct tenant_info id
     const { error: balanceError } = await supabaseAdmin
       .from('tenant_info')
       .update({
-        current_balance: 0,
-        payment_status: 'paid',
+        current_balance: newBalance,
+        payment_status: newBalance > 0 ? 'unpaid' : 'paid',
         updated_at: new Date().toISOString()
       })
       .eq('id', tenantInfo.id)
@@ -273,7 +284,7 @@ async function processRentPayment(supabaseAdmin: any, reference: string, metadat
     if (balanceError) {
       console.error('Error updating tenant balance:', balanceError)
     } else {
-      console.log('Successfully updated tenant balance for tenant_info_id:', tenantInfo.id)
+      console.log(`Successfully updated tenant balance: ${currentBalance} → ${newBalance}`)
     }
 
     // Send notification to tenant

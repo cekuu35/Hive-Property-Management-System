@@ -299,20 +299,40 @@ Deno.serve(async (req) => {
 
     // Update tenant_info to reflect payment using admin client
     if (lease?.tenant_info_id) {
-      const { error: tenantUpdateError } = await supabaseAdmin
+      // First, get current balance to deduct paid amount
+      const { data: currentTenant, error: fetchError } = await supabaseAdmin
         .from('tenant_info')
-        .update({
-          current_balance: 0,
-          payment_status: 'paid',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', lease.tenant_info_id);
+        .select('current_balance')
+        .eq('id', lease.tenant_info_id)
+        .single();
 
-      if (tenantUpdateError) {
-        console.error('Error updating tenant_info:', tenantUpdateError);
-        // Don't fail the entire request if this update fails
+      if (fetchError) {
+        console.error('Error fetching current balance:', fetchError);
       } else {
-        console.log('Tenant info updated after payment');
+        const currentBalance = currentTenant?.current_balance || 0;
+        const newBalance = Math.max(0, currentBalance - amount);
+        
+        console.log('💰 [verify-payment] Balance calculation:', {
+          currentBalance,
+          amountPaid: amount,
+          newBalance
+        });
+
+        const { error: tenantUpdateError } = await supabaseAdmin
+          .from('tenant_info')
+          .update({
+            current_balance: newBalance,
+            payment_status: newBalance > 0 ? 'unpaid' : 'paid',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', lease.tenant_info_id);
+
+        if (tenantUpdateError) {
+          console.error('Error updating tenant_info:', tenantUpdateError);
+          // Don't fail the entire request if this update fails
+        } else {
+          console.log(`Tenant balance updated: ${currentBalance} → ${newBalance}`);
+        }
       }
     }
 

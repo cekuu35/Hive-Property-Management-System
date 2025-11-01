@@ -267,36 +267,57 @@ export const PaymentCallback = () => {
       console.log('✅ [PaymentCallback] Demo mode - skipping balance update');
     } else {
       console.log('🔍 [PaymentCallback] Updating tenant_info balance...');
-      const { data: updateResult, error: balanceError } = await supabase
+      
+      // First, get the current balance to deduct the paid amount
+      const { data: currentTenant, error: fetchError } = await supabase
         .from('tenant_info')
-        .update({
-          current_balance: 0, // Set balance to 0 after payment
-          payment_status: 'paid',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', tenantInfoId)
-        .select();
-
-      if (balanceError) {
-        console.error('❌ [PaymentCallback] Error updating balance:', balanceError);
-        // Don't throw here, payment was recorded successfully
-      } else {
-        console.log('✅ [PaymentCallback] Balance updated successfully:', updateResult);
-      }
-
-      // Verify the balance update
-      console.log('🔍 [PaymentCallback] Verifying balance update...');
-      const { data: verifyTenant, error: verifyError } = await supabase
-        .from('tenant_info')
-        .select('current_balance, payment_status, updated_at')
+        .select('current_balance')
         .eq('id', tenantInfoId)
         .single();
-        
-      if (verifyError) {
-        console.error('❌ [PaymentCallback] Error verifying balance update:', verifyError);
+
+      if (fetchError) {
+        console.error('❌ [PaymentCallback] Error fetching current balance:', fetchError);
       } else {
-        console.log('✅ [PaymentCallback] Balance verification:', verifyTenant);
-        console.log('🔍 [PaymentCallback] Final balance should be 0:', verifyTenant.current_balance);
+        const currentBalance = currentTenant?.current_balance || 0;
+        const newBalance = Math.max(0, currentBalance - amount); // Ensure balance doesn't go negative
+        
+        console.log('💰 [PaymentCallback] Balance calculation:', {
+          currentBalance,
+          amountPaid: amount,
+          newBalance
+        });
+
+        const { data: updateResult, error: balanceError } = await supabase
+          .from('tenant_info')
+          .update({
+            current_balance: newBalance, // Deduct paid amount from current balance
+            payment_status: newBalance > 0 ? 'unpaid' : 'paid',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', tenantInfoId)
+          .select();
+
+        if (balanceError) {
+          console.error('❌ [PaymentCallback] Error updating balance:', balanceError);
+          // Don't throw here, payment was recorded successfully
+        } else {
+          console.log('✅ [PaymentCallback] Balance updated successfully:', updateResult);
+        }
+
+        // Verify the balance update
+        console.log('🔍 [PaymentCallback] Verifying balance update...');
+        const { data: verifyTenant, error: verifyError } = await supabase
+          .from('tenant_info')
+          .select('current_balance, payment_status, updated_at')
+          .eq('id', tenantInfoId)
+          .single();
+          
+        if (verifyError) {
+          console.error('❌ [PaymentCallback] Error verifying balance update:', verifyError);
+        } else {
+          console.log('✅ [PaymentCallback] Balance verification:', verifyTenant);
+          console.log('🔍 [PaymentCallback] Final balance:', verifyTenant.current_balance);
+        }
       }
     }
 

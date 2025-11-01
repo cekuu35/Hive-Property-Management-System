@@ -163,34 +163,65 @@ export const usePaystackPayment = () => {
         }
       }
 
-      // Update tenant_info balance to 0 and payment status to paid
+      // Update tenant_info balance by deducting paid amount
       if (tenantInfoId) {
-        const { error: balanceError } = await supabase
+        // First, get the current balance to deduct the paid amount
+        const { data: currentTenant, error: fetchError } = await supabase
           .from('tenant_info')
-          .update({
-            current_balance: 0,
-            payment_status: 'paid'
-          })
-          .eq('id', tenantInfoId);
+          .select('current_balance')
+          .eq('id', tenantInfoId)
+          .single();
 
-        if (balanceError) {
-          console.error('Error updating balance:', balanceError);
-          throw new Error('Failed to update tenant balance');
-        }
-      } else {
-        // If no tenantInfoId found, try to find it by profile_id
-        const { data: tinfo } = await supabase
-          .from('tenant_info')
-          .select('id')
-          .eq('profile_id', profile?.id)
-          .maybeSingle();
-        
-        if (tinfo?.id) {
+        if (fetchError) {
+          console.error('Error fetching current balance:', fetchError);
+        } else {
+          const currentBalance = currentTenant?.current_balance || 0;
+          const newBalance = Math.max(0, currentBalance - paymentData.amount);
+          
+          console.log('💰 [usePaystackPayment] Balance calculation:', {
+            currentBalance,
+            amountPaid: paymentData.amount,
+            newBalance
+          });
+
           const { error: balanceError } = await supabase
             .from('tenant_info')
             .update({
-              current_balance: 0,
-              payment_status: 'paid'
+              current_balance: newBalance,
+              payment_status: newBalance > 0 ? 'unpaid' : 'paid'
+            })
+            .eq('id', tenantInfoId);
+
+          if (balanceError) {
+            console.error('Error updating balance:', balanceError);
+            throw new Error('Failed to update tenant balance');
+          }
+        }
+      } else {
+        // If no tenantInfoId found, try to find it by profile_id
+        const { data: tinfo, error: fetchTinfoError } = await supabase
+          .from('tenant_info')
+          .select('id, current_balance')
+          .eq('profile_id', profile?.id)
+          .maybeSingle();
+        
+        if (fetchTinfoError) {
+          console.error('Error fetching tenant_info:', fetchTinfoError);
+        } else if (tinfo?.id) {
+          const currentBalance = tinfo?.current_balance || 0;
+          const newBalance = Math.max(0, currentBalance - paymentData.amount);
+          
+          console.log('💰 [usePaystackPayment] Balance calculation:', {
+            currentBalance,
+            amountPaid: paymentData.amount,
+            newBalance
+          });
+
+          const { error: balanceError } = await supabase
+            .from('tenant_info')
+            .update({
+              current_balance: newBalance,
+              payment_status: newBalance > 0 ? 'unpaid' : 'paid'
             })
             .eq('id', tinfo.id);
 
