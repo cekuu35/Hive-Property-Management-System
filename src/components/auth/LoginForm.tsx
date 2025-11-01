@@ -8,7 +8,7 @@ import { RoleSelector, UserRole } from "./RoleSelector";
 import { AnimatedBackground } from "./AnimatedBackground";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +26,7 @@ export const LoginForm = () => {
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
   const [isResettingPassword, setIsResettingPassword] = useState(false);
   const { toast } = useToast();
+  const navigate = useNavigate();
   
   const [formData, setFormData] = useState({
     email: "",
@@ -104,6 +105,10 @@ export const LoginForm = () => {
             title: "Account Created",
             description: "Welcome! Setting up your account...",
           });
+          // Navigate to dashboard after a brief delay to ensure auth state is updated
+          setTimeout(() => {
+            navigate("/dashboard", { replace: true });
+          }, 500);
         }
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -136,6 +141,10 @@ export const LoginForm = () => {
             title: "Welcome Back",
             description: "You have successfully logged in.",
           });
+          // Navigate to dashboard after a brief delay to ensure auth state is updated
+          setTimeout(() => {
+            navigate("/dashboard", { replace: true });
+          }, 500);
         }
       }
     } catch (error: any) {

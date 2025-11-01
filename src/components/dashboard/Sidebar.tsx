@@ -51,6 +51,7 @@ const navigationConfig: Record<UserRole, NavigationItem[]> = {
     { id: "utility-bills", label: "Utility Bills", icon: Receipt, path: "/dashboard?section=utility-bills" },
     { id: "maintenance", label: "Maintenance", icon: Wrench, path: "/dashboard?section=maintenance" },
     { id: "incidents", label: "Security Incidents", icon: AlertTriangle, path: "/dashboard?section=incidents" },
+    { id: "lease-templates", label: "Lease Templates", icon: FileText, path: "/dashboard?section=lease-templates" },
     { id: "plans-billing", label: "Plans & Billing", icon: CreditCard, path: "/landlord/plans-billing" },
     { id: "messages", label: "Messages", icon: MessageCircle, path: "/dashboard?section=messages" },
     { id: "reports", label: "Reports", icon: TrendingUp, path: "/dashboard?section=reports" },

@@ -5,17 +5,27 @@ import { Download, Printer, X } from 'lucide-react';
 import { useApprovedLease } from '@/hooks/useApprovedLease';
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
 interface LeaseDocumentViewerProps {
   open: boolean;
   onClose: () => void;
 }
 
+interface LeaseTemplate {
+  header_content: string | null;
+  standard_terms: string | null;
+  additional_terms: string | null;
+  footer_content: string | null;
+}
+
 export const LeaseDocumentViewer = ({ open, onClose }: LeaseDocumentViewerProps) => {
   const { approvedLease } = useApprovedLease();
   const { profile } = useAuth();
   const printRef = useRef<HTMLDivElement>(null);
+  const [template, setTemplate] = useState<LeaseTemplate | null>(null);
+  const [loadingTemplate, setLoadingTemplate] = useState(false);
 
   if (!approvedLease) return null;
 
@@ -23,6 +33,71 @@ export const LeaseDocumentViewer = ({ open, onClose }: LeaseDocumentViewerProps)
   const startDate = lease.start_date ? new Date(lease.start_date) : null;
   const endDate = lease.end_date ? new Date(lease.end_date) : null;
   const createdDate = lease.created_at ? new Date(lease.created_at) : new Date();
+  const landlordId = lease.units?.properties?.landlord_id;
+
+  // Fetch lease template when dialog opens
+  useEffect(() => {
+    if (open && landlordId) {
+      fetchLeaseTemplate(landlordId);
+    }
+  }, [open, landlordId]);
+
+  const fetchLeaseTemplate = async (landlordId: string) => {
+    try {
+      setLoadingTemplate(true);
+      // First try to get the default template
+      const { data: defaultTemplate } = await supabase
+        .from('lease_templates')
+        .select('header_content, standard_terms, additional_terms, footer_content')
+        .eq('landlord_id', landlordId)
+        .eq('is_default', true)
+        .single();
+
+      if (defaultTemplate) {
+        setTemplate(defaultTemplate);
+        return;
+      }
+
+      // If no default, get the first template
+      const { data: firstTemplate } = await supabase
+        .from('lease_templates')
+        .select('header_content, standard_terms, additional_terms, footer_content')
+        .eq('landlord_id', landlordId)
+        .limit(1)
+        .single();
+
+      if (firstTemplate) {
+        setTemplate(firstTemplate);
+      } else {
+        // Use default template if none exists
+        setTemplate({
+          header_content: null,
+          standard_terms: `Use of Premises: The Premises shall be used solely as a private residence.
+Maintenance: Tenant shall maintain the Premises in good condition and shall be responsible for any damage caused by Tenant or Tenant's guests.
+Utilities: Tenant shall be responsible for all utilities unless otherwise agreed in writing.
+Alterations: No alterations or improvements to the Premises may be made without Landlord's prior written consent.
+Termination: Either party may terminate this lease with proper written notice as required by law.`,
+          additional_terms: null,
+          footer_content: 'This document is a legally binding agreement. Please keep a copy for your records.',
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching lease template:', error);
+      // Use default template on error
+      setTemplate({
+        header_content: null,
+        standard_terms: `Use of Premises: The Premises shall be used solely as a private residence.
+Maintenance: Tenant shall maintain the Premises in good condition and shall be responsible for any damage caused by Tenant or Tenant's guests.
+Utilities: Tenant shall be responsible for all utilities unless otherwise agreed in writing.
+Alterations: No alterations or improvements to the Premises may be made without Landlord's prior written consent.
+Termination: Either party may terminate this lease with proper written notice as required by law.`,
+        additional_terms: null,
+        footer_content: 'This document is a legally binding agreement. Please keep a copy for your records.',
+      });
+    } finally {
+      setLoadingTemplate(false);
+    }
+  };
 
   const handlePrint = () => {
     window.print();
@@ -312,32 +387,62 @@ export const LeaseDocumentViewer = ({ open, onClose }: LeaseDocumentViewerProps)
             </div>
           </div>
 
+          {/* Custom Header Content from Template */}
+          {template?.header_content && (
+            <>
+              <Separator className="my-6" />
+              <div className="section mb-6">
+                <div className="p-4 bg-muted/30 rounded-lg">
+                  <p className="whitespace-pre-wrap text-foreground">{template.header_content}</p>
+                </div>
+              </div>
+            </>
+          )}
+
           <Separator className="my-6" />
 
-          {/* Additional Terms */}
-          {lease.terms && (
+          {/* Additional Terms - from lease or template */}
+          {(lease.terms || template?.additional_terms) && (
             <>
               <div className="section mb-6">
                 <h2 className="text-xl font-semibold mb-4 text-foreground">5. ADDITIONAL TERMS AND CONDITIONS</h2>
                 <div className="p-4 bg-muted/30 rounded-lg">
-                  <p className="whitespace-pre-wrap text-foreground">{lease.terms}</p>
+                  <p className="whitespace-pre-wrap text-foreground">
+                    {template?.additional_terms || lease.terms}
+                  </p>
                 </div>
               </div>
               <Separator className="my-6" />
             </>
           )}
 
-          {/* Standard Terms */}
-          <div className="section mb-6">
-            <h2 className="text-xl font-semibold mb-4 text-foreground">{lease.terms ? '6' : '5'}. STANDARD TERMS</h2>
-            <div className="p-4 bg-muted/30 rounded-lg space-y-3">
-              <p className="text-foreground"><strong>Use of Premises:</strong> The Premises shall be used solely as a private residence.</p>
-              <p className="text-foreground"><strong>Maintenance:</strong> Tenant shall maintain the Premises in good condition and shall be responsible for any damage caused by Tenant or Tenant's guests.</p>
-              <p className="text-foreground"><strong>Utilities:</strong> Tenant shall be responsible for all utilities unless otherwise agreed in writing.</p>
-              <p className="text-foreground"><strong>Alterations:</strong> No alterations or improvements to the Premises may be made without Landlord's prior written consent.</p>
-              <p className="text-foreground"><strong>Termination:</strong> Either party may terminate this lease with proper written notice as required by law.</p>
+          {/* Standard Terms - from template */}
+          {template?.standard_terms && (
+            <div className="section mb-6">
+              <h2 className="text-xl font-semibold mb-4 text-foreground">
+                {lease.terms || template?.additional_terms ? '6' : '5'}. STANDARD TERMS
+              </h2>
+              <div className="p-4 bg-muted/30 rounded-lg">
+                <p className="whitespace-pre-wrap text-foreground">{template.standard_terms}</p>
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Fallback Standard Terms if no template */}
+          {!template?.standard_terms && (
+            <div className="section mb-6">
+              <h2 className="text-xl font-semibold mb-4 text-foreground">
+                {lease.terms || template?.additional_terms ? '6' : '5'}. STANDARD TERMS
+              </h2>
+              <div className="p-4 bg-muted/30 rounded-lg space-y-3">
+                <p className="text-foreground"><strong>Use of Premises:</strong> The Premises shall be used solely as a private residence.</p>
+                <p className="text-foreground"><strong>Maintenance:</strong> Tenant shall maintain the Premises in good condition and shall be responsible for any damage caused by Tenant or Tenant's guests.</p>
+                <p className="text-foreground"><strong>Utilities:</strong> Tenant shall be responsible for all utilities unless otherwise agreed in writing.</p>
+                <p className="text-foreground"><strong>Alterations:</strong> No alterations or improvements to the Premises may be made without Landlord's prior written consent.</p>
+                <p className="text-foreground"><strong>Termination:</strong> Either party may terminate this lease with proper written notice as required by law.</p>
+              </div>
+            </div>
+          )}
 
           <Separator className="my-6" />
 
@@ -362,10 +467,19 @@ export const LeaseDocumentViewer = ({ open, onClose }: LeaseDocumentViewerProps)
             </div>
           </div>
 
-          {/* Footer */}
+          {/* Footer - from template or default */}
           <div className="text-center mt-12 pt-6 border-t border-border">
-            <p className="text-sm text-muted-foreground">This document is a legally binding agreement. Please keep a copy for your records.</p>
-            <p className="text-sm text-muted-foreground mt-1">Generated on {format(new Date(), 'MMMM dd, yyyy \'at\' hh:mm a')}</p>
+            {template?.footer_content ? (
+              <>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{template.footer_content}</p>
+                <p className="text-sm text-muted-foreground mt-1">Generated on {format(new Date(), 'MMMM dd, yyyy \'at\' hh:mm a')}</p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground">This document is a legally binding agreement. Please keep a copy for your records.</p>
+                <p className="text-sm text-muted-foreground mt-1">Generated on {format(new Date(), 'MMMM dd, yyyy \'at\' hh:mm a')}</p>
+              </>
+            )}
           </div>
         </div>
       </DialogContent>
