@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { supabaseAdmin } from '@/integrations/supabase/admin';
 import { useAuth } from '@/hooks/useAuth';
@@ -23,7 +23,7 @@ export const useMonthlyRent = () => {
   const [loading, setLoading] = useState(true);
   const { profile } = useAuth();
 
-  const calculateMonthlyRent = async () => {
+  const calculateMonthlyRent = useCallback(async () => {
     if (!profile?.id) return;
 
     try {
@@ -241,7 +241,7 @@ export const useMonthlyRent = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [profile?.id]);
 
   const generateNextMonthPayment = async (leaseId: string, rentAmount: number, dueDate: string) => {
     try {
@@ -292,7 +292,7 @@ export const useMonthlyRent = () => {
 
   useEffect(() => {
     calculateMonthlyRent();
-  }, [profile?.id]);
+  }, [calculateMonthlyRent]);
 
   // Set up real-time subscription for rent_payments changes
   useEffect(() => {
@@ -317,7 +317,7 @@ export const useMonthlyRent = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [profile?.id]);
+  }, [profile?.id, calculateMonthlyRent]);
 
   return {
     ...monthlyRentData,
