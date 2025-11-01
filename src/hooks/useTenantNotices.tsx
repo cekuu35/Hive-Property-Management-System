@@ -99,13 +99,14 @@ export const useTenantNotices = () => {
 
     // Get current month's payment
     const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
+    const lastDayOfMonth = new Date(currentYear, currentMonth + 1, 0);
     const { data: currentPayment } = await supabase
       .from('rent_payments')
       .select('id, amount, due_date, status, paid_date')
       .eq('lease_id', lease.id)
       .gte('due_date', firstDayOfMonth.toISOString().split('T')[0])
-      .lt('due_date', new Date(currentYear, currentMonth + 1, 1).toISOString().split('T')[0])
-      .single();
+      .lte('due_date', lastDayOfMonth.toISOString().split('T')[0])
+      .maybeSingle();
 
     if (currentPayment) {
       const dueDate = new Date(currentPayment.due_date);
