@@ -116,7 +116,7 @@ export function MobileTenantDashboard({ onTabChange }: MobileTenantDashboardProp
     [maintenanceRequests]
   );
   const unreadCount = useMemo(() => 
-    conversations.reduce((sum, conv) => sum + conv.unread_count, 0), 
+    (conversations || []).reduce((sum, conv) => sum + (conv.unread_count || 0), 0), 
     [conversations]
   );
   

@@ -57,30 +57,30 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
   const [maintenanceFilter, setMaintenanceFilter] = useState('all');
   const [maintenanceSearchTerm, setMaintenanceSearchTerm] = useState('');
   
-  const { requests: maintenanceRequests, loading: maintenanceLoading, refetch } = useMaintenanceRequests();
-  const { approvedLease, hasApprovedLease, loading: leaseLoading, refetch: refetchLease } = useApprovedLease();
+  const { requests: maintenanceRequests = [], loading: maintenanceLoading, refetch } = useMaintenanceRequests();
+  const { approvedLease, hasApprovedLease = false, loading: leaseLoading, refetch: refetchLease } = useApprovedLease();
   const { 
-    recentPayments, 
-    rentBalance: tenantRentBalance, 
-    nextPaymentDue,
-    currentRentDue,
-    isOverdue,
-    daysUntilDue,
-    lateFee,
+    recentPayments = [], 
+    rentBalance: tenantRentBalance = 0, 
+    nextPaymentDue = '',
+    currentRentDue = 0,
+    isOverdue = false,
+    daysUntilDue = 0,
+    lateFee = 0,
     refetch: refetchPayments
   } = useTenantPayments();
   
   const { 
-    hasActiveLease, 
-    securityDepositPaid, 
-    monthlyRentDue, 
-    loading: rentFlowLoading 
+    hasActiveLease = false, 
+    securityDepositPaid = false, 
+    monthlyRentDue = 0, 
+    loading: rentFlowLoading = false 
   } = useRentFlow();
-  const { tenantInfo, refetch: refetchTenantInfo } = useTenantInfo();
-  const { conversations } = useMessages();
-  const { contacts: emergencyContacts, loading: emergencyContactsLoading } = useEmergencyContacts();
-  const pendingRequestsCount = maintenanceRequests.filter(r => r.status === 'pending').length;
-  const unreadCount = conversations.reduce((sum, c) => sum + (c.unread_count || 0), 0);
+  const { tenantInfo = null, refetch: refetchTenantInfo } = useTenantInfo();
+  const { conversations = [] } = useMessages();
+  const { contacts: emergencyContacts = [], loading: emergencyContactsLoading = false } = useEmergencyContacts();
+  const pendingRequestsCount = (maintenanceRequests || []).filter((r: any) => r?.status === 'pending').length;
+  const unreadCount = (conversations || []).reduce((sum: number, c: any) => sum + (c?.unread_count || 0), 0);
   
   // Use calculated balance from monthly rent hook as the primary source
   // The monthly rent hook calculates based on actual payments and is more accurate
