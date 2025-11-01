@@ -20,11 +20,23 @@ interface LeaseTemplate {
   footer_content: string | null;
 }
 
+// Helper function to get default template
+const getDefaultTemplate = (): LeaseTemplate => ({
+  header_content: null,
+  standard_terms: `Use of Premises: The Premises shall be used solely as a private residence.
+Maintenance: Tenant shall maintain the Premises in good condition and shall be responsible for any damage caused by Tenant or Tenant's guests.
+Utilities: Tenant shall be responsible for all utilities unless otherwise agreed in writing.
+Alterations: No alterations or improvements to the Premises may be made without Landlord's prior written consent.
+Termination: Either party may terminate this lease with proper written notice as required by law.`,
+  additional_terms: null,
+  footer_content: 'This document is a legally binding agreement. Please keep a copy for your records.',
+});
+
 export const LeaseDocumentViewer = ({ open, onClose }: LeaseDocumentViewerProps) => {
   const { approvedLease } = useApprovedLease();
   const { profile } = useAuth();
   const printRef = useRef<HTMLDivElement>(null);
-  const [template, setTemplate] = useState<LeaseTemplate | null>(null);
+  const [template, setTemplate] = useState<LeaseTemplate | null>(getDefaultTemplate());
   const [loadingTemplate, setLoadingTemplate] = useState(false);
 
   if (!approvedLease) return null;
@@ -39,6 +51,9 @@ export const LeaseDocumentViewer = ({ open, onClose }: LeaseDocumentViewerProps)
   useEffect(() => {
     if (open && landlordId) {
       fetchLeaseTemplate(landlordId);
+    } else if (open && !landlordId) {
+      // If no landlord ID, just use default template
+      setTemplate(getDefaultTemplate());
     }
   }, [open, landlordId]);
 
@@ -47,7 +62,9 @@ export const LeaseDocumentViewer = ({ open, onClose }: LeaseDocumentViewerProps)
       setLoadingTemplate(true);
       
       if (!landlordId) {
-        throw new Error('Landlord ID not available');
+        // No landlord ID, use default template
+        setTemplate(getDefaultTemplate());
+        return;
       }
 
       // First try to get the default template
@@ -57,6 +74,18 @@ export const LeaseDocumentViewer = ({ open, onClose }: LeaseDocumentViewerProps)
         .eq('landlord_id', landlordId)
         .eq('is_default', true)
         .maybeSingle();
+
+      // Check if error is because table doesn't exist
+      if (defaultError) {
+        // If table doesn't exist, use default template
+        if (defaultError.message?.includes('does not exist') || defaultError.code === '42P01') {
+          console.log('Lease templates table does not exist yet, using default template');
+          setTemplate(getDefaultTemplate());
+          return;
+        }
+        // For other errors, log but continue
+        console.warn('Error fetching default template:', defaultError);
+      }
 
       // If we got data (even if null), use it
       if (defaultTemplate) {
@@ -71,34 +100,26 @@ export const LeaseDocumentViewer = ({ open, onClose }: LeaseDocumentViewerProps)
         .eq('landlord_id', landlordId)
         .limit(1);
 
+      if (templatesError) {
+        // If table doesn't exist, use default template
+        if (templatesError.message?.includes('does not exist') || templatesError.code === '42P01') {
+          console.log('Lease templates table does not exist yet, using default template');
+          setTemplate(getDefaultTemplate());
+          return;
+        }
+        console.warn('Error fetching templates:', templatesError);
+      }
+
       if (templates && templates.length > 0) {
         setTemplate(templates[0]);
       } else {
         // Use default template if none exists
-        setTemplate({
-          header_content: null,
-          standard_terms: `Use of Premises: The Premises shall be used solely as a private residence.
-Maintenance: Tenant shall maintain the Premises in good condition and shall be responsible for any damage caused by Tenant or Tenant's guests.
-Utilities: Tenant shall be responsible for all utilities unless otherwise agreed in writing.
-Alterations: No alterations or improvements to the Premises may be made without Landlord's prior written consent.
-Termination: Either party may terminate this lease with proper written notice as required by law.`,
-          additional_terms: null,
-          footer_content: 'This document is a legally binding agreement. Please keep a copy for your records.',
-        });
+        setTemplate(getDefaultTemplate());
       }
     } catch (error: any) {
       console.error('Error fetching lease template:', error);
       // Use default template on error - this ensures the document still displays
-      setTemplate({
-        header_content: null,
-        standard_terms: `Use of Premises: The Premises shall be used solely as a private residence.
-Maintenance: Tenant shall maintain the Premises in good condition and shall be responsible for any damage caused by Tenant or Tenant's guests.
-Utilities: Tenant shall be responsible for all utilities unless otherwise agreed in writing.
-Alterations: No alterations or improvements to the Premises may be made without Landlord's prior written consent.
-Termination: Either party may terminate this lease with proper written notice as required by law.`,
-        additional_terms: null,
-        footer_content: 'This document is a legally binding agreement. Please keep a copy for your records.',
-      });
+      setTemplate(getDefaultTemplate());
     } finally {
       setLoadingTemplate(false);
     }
