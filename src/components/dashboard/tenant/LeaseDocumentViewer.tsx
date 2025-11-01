@@ -45,29 +45,34 @@ export const LeaseDocumentViewer = ({ open, onClose }: LeaseDocumentViewerProps)
   const fetchLeaseTemplate = async (landlordId: string) => {
     try {
       setLoadingTemplate(true);
+      
+      if (!landlordId) {
+        throw new Error('Landlord ID not available');
+      }
+
       // First try to get the default template
-      const { data: defaultTemplate } = await supabase
+      const { data: defaultTemplate, error: defaultError } = await supabase
         .from('lease_templates')
         .select('header_content, standard_terms, additional_terms, footer_content')
         .eq('landlord_id', landlordId)
         .eq('is_default', true)
-        .single();
+        .maybeSingle();
 
+      // If we got data (even if null), use it
       if (defaultTemplate) {
         setTemplate(defaultTemplate);
         return;
       }
 
-      // If no default, get the first template
-      const { data: firstTemplate } = await supabase
+      // If no default, get the first template (not using .single() to avoid error if none exists)
+      const { data: templates, error: templatesError } = await supabase
         .from('lease_templates')
         .select('header_content, standard_terms, additional_terms, footer_content')
         .eq('landlord_id', landlordId)
-        .limit(1)
-        .single();
+        .limit(1);
 
-      if (firstTemplate) {
-        setTemplate(firstTemplate);
+      if (templates && templates.length > 0) {
+        setTemplate(templates[0]);
       } else {
         // Use default template if none exists
         setTemplate({
@@ -81,9 +86,9 @@ Termination: Either party may terminate this lease with proper written notice as
           footer_content: 'This document is a legally binding agreement. Please keep a copy for your records.',
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching lease template:', error);
-      // Use default template on error
+      // Use default template on error - this ensures the document still displays
       setTemplate({
         header_content: null,
         standard_terms: `Use of Premises: The Premises shall be used solely as a private residence.
