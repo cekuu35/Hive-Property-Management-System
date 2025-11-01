@@ -129,3 +129,29 @@ FROM pg_policies
 WHERE tablename = 'tenant_info' 
 AND (policyname LIKE '%Caretakers%' OR policyname LIKE '%Security%');
 
+-- ==========================================
+-- Add Indexes for Performance (Critical for rent_payments queries)
+-- ==========================================
+
+-- Add composite index for rent_payments queries (lease_id + due_date)
+CREATE INDEX IF NOT EXISTS idx_rent_payments_lease_id_due_date 
+ON public.rent_payments(lease_id, due_date);
+
+-- Add index for status lookups
+CREATE INDEX IF NOT EXISTS idx_rent_payments_status 
+ON public.rent_payments(status) 
+WHERE status IN ('pending', 'overdue');
+
+-- Add index for paid_date queries
+CREATE INDEX IF NOT EXISTS idx_rent_payments_paid_date 
+ON public.rent_payments(paid_date) 
+WHERE paid_date IS NOT NULL;
+
+-- Verify indexes were created
+SELECT 
+  tablename, 
+  indexname,
+  indexdef
+FROM pg_indexes 
+WHERE tablename = 'rent_payments' 
+ORDER BY indexname;
