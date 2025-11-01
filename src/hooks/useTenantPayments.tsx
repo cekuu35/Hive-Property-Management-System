@@ -183,7 +183,7 @@ export const useTenantPayments = () => {
         .from('leases')
         .select('start_date')
         .eq('id', leaseId)
-        .single();
+        .maybeSingle();
 
       const leaseStartDate = leaseDetails?.start_date ? new Date(leaseDetails.start_date) : new Date();
       console.log('📅 [useTenantPayments] Lease start date:', leaseStartDate);
@@ -307,14 +307,18 @@ export const useTenantPayments = () => {
       setNextPaymentDue(nextDueDate);
       
       console.log('✅ [useTenantPayments] Payment fetch completed successfully');
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ [useTenantPayments] Error in fetchPayments:', error);
       console.error('❌ [useTenantPayments] Error details:', {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint
+        message: error?.message,
+        code: error?.code,
+        details: error?.details,
+        hint: error?.hint
       });
+      // Set empty state on error to prevent component crash
+      setRecentPayments([]);
+      setRentBalance(0);
+      setNextPaymentDue('');
     } finally {
       setLoading(false);
     }
