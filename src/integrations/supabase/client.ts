@@ -28,6 +28,7 @@ const createSupabaseClient = () => {
     global: {
       headers: {
         'X-Client-Info': 'lovly-prop-ai',
+        'apikey': supabaseAnonKey,
         'Accept': 'application/json',
         'Content-Type': 'application/json',
         'Prefer': 'return=representation',

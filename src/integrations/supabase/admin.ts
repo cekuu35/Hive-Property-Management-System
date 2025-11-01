@@ -15,6 +15,7 @@ export const supabaseAdmin = createClient(
     global: {
       headers: {
         'X-Client-Info': 'lovly-prop-ai',
+        'apikey': supabaseServiceKey,
         'Accept': 'application/json',
         'Content-Type': 'application/json',
         'Prefer': 'return=representation',
