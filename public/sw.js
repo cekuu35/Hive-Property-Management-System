@@ -129,9 +129,28 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   
+  // For preview/localhost, don't intercept fetches to avoid errors
+  if (event.request.url.includes('localhost') || event.request.url.includes('127.0.0.1')) {
+    return;
+  }
+  
   event.respondWith(
     caches.match(event.request).then((response) => {
-      return response || fetch(event.request);
+      if (response) {
+        return response;
+      }
+      // Try to fetch, but don't fail if it errors
+      return fetch(event.request).catch((error) => {
+        console.error('[Service Worker] Fetch failed:', error);
+        // Return a basic response instead of failing
+        return new Response('Network error', { status: 408 });
+      });
+    }).catch((error) => {
+      console.error('[Service Worker] Cache match failed:', error);
+      // Fallback to fetch
+      return fetch(event.request).catch(() => {
+        return new Response('Service unavailable', { status: 503 });
+      });
     })
   );
 });

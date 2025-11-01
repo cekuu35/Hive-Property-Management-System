@@ -132,7 +132,7 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
             setRentBalance(prev => Math.max(0, prev - (payload.new.amount || 0)));
           }
           // Refresh maintenance requests to update overview stats
-          refetch();
+          refetch?.();
         }
       )
       .subscribe();
@@ -149,7 +149,7 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
         (payload) => {
           console.log('Maintenance request update:', payload);
           // Refresh maintenance requests data
-          refetch();
+          refetch?.();
         }
       )
       .subscribe();
@@ -196,7 +196,7 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
           console.log('🔄 [TenantDashboard] Payment completion notification received:', payload);
           // Refresh all data when payment is completed
           refreshBalance();
-          refetch();
+          refetch?.();
           
           // Show success notification
           console.log('Payment processed successfully! Balance updated.');
@@ -218,7 +218,7 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
           console.log('🔄 [TenantDashboard] Rent payment updated:', payload);
           if (payload.new.status === 'paid') {
             refreshBalance();
-            refetch();
+            refetch?.();
             console.log('Payment confirmed! Balance updated.');
           }
         }
@@ -241,7 +241,7 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
           console.log('🔄 [TenantDashboard] New payment status:', payload.new.payment_status);
           // Refresh all data to update the UI
           refreshBalance();
-          refetch();
+          refetch?.();
           console.log('✅ [TenantDashboard] Balance updated from tenant_info change');
         }
       )
@@ -260,7 +260,7 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
   const mockData = {
     rentBalance: tenantRentBalance || rentBalance,
     nextPaymentDue: nextPaymentDue || '2024-02-15',
-    pendingRequests: maintenanceRequests.filter(r => r.status === 'pending').length,
+    pendingRequests: (maintenanceRequests || []).filter((r: any) => r?.status === 'pending').length,
     recentPayments: recentPayments || [],
     maintenanceRequests: maintenanceRequests || [
       { id: '1', title: 'Leaking Faucet', status: 'in_progress', priority: 'medium', date: '2024-01-20', category: 'Plumbing', assignedTo: 'John Technician' },
@@ -299,11 +299,11 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
     try {
       // Immediate refresh of all data sources
       await Promise.all([
-        refetch(), // Maintenance requests
-        refetchPayments(), // Payment data and balance
-        refetchLease(), // Lease information
-        refetchTenantInfo() // Tenant info including balance
-      ]);
+        refetch?.(), // Maintenance requests
+        refetchPayments?.(), // Payment data and balance
+        refetchLease?.(), // Lease information
+        refetchTenantInfo?.() // Tenant info including balance
+      ].filter(Boolean));
       
       console.log('✅ [TenantDashboard] Data refresh completed');
       console.log('🔍 [TenantDashboard] New balance after refresh:', displayBalance);
@@ -323,10 +323,10 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
     console.log('🔄 [TenantDashboard] Global balance refresh triggered');
     try {
       await Promise.all([
-        refetchPayments(),
-        refetchTenantInfo(),
-        refetchLease()
-      ]);
+        refetchPayments?.(),
+        refetchTenantInfo?.(),
+        refetchLease?.()
+      ].filter(Boolean));
       console.log('✅ [TenantDashboard] Global refresh completed');
     } catch (error) {
       console.error('❌ [TenantDashboard] Global refresh failed:', error);
@@ -347,10 +347,10 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
   }, []);
 
   // Filter maintenance requests
-  const filteredMaintenanceRequests = mockData.maintenanceRequests.filter(request => {
-    const matchesFilter = maintenanceFilter === 'all' || request.status === maintenanceFilter;
-    const matchesSearch = request.title.toLowerCase().includes(maintenanceSearchTerm.toLowerCase()) ||
-                         request.category.toLowerCase().includes(maintenanceSearchTerm.toLowerCase());
+  const filteredMaintenanceRequests = (mockData.maintenanceRequests || []).filter((request: any) => {
+    const matchesFilter = maintenanceFilter === 'all' || request?.status === maintenanceFilter;
+    const matchesSearch = (request?.title || '').toLowerCase().includes(maintenanceSearchTerm.toLowerCase()) ||
+                         (request?.category || '').toLowerCase().includes(maintenanceSearchTerm.toLowerCase());
     return matchesFilter && matchesSearch;
   });
 
@@ -844,7 +844,7 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
           {/* Active and Past Requests */}
           <div className="space-y-4">
             <h4 className="font-medium">Active Requests</h4>
-            {mockData.maintenanceRequests.filter(req => req.status !== 'completed').map((request) => (
+            {(mockData.maintenanceRequests || []).filter((req: any) => req?.status !== 'completed').map((request: any) => (
               <Card key={request.id}>
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between">
@@ -922,7 +922,7 @@ const TenantDashboard = ({ activeTab = "overview", onTabChange }: TenantDashboar
             <Separator />
             
             <h4 className="font-medium">Past Requests</h4>
-            {mockData.maintenanceRequests.filter(req => req.status === 'completed').map((request) => (
+            {(mockData.maintenanceRequests || []).filter((req: any) => req?.status === 'completed').map((request: any) => (
               <Card key={request.id} className="opacity-75">
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between">

@@ -6,8 +6,11 @@ import "./index.css";
 console.log('🚀 Main.tsx loading...');
 console.log('Root element:', document.getElementById("root"));
 
-// Register Service Worker for PWA functionality (only in production)
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
+// Register Service Worker for PWA functionality (only in production, not in preview)
+const isPreview = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const isProduction = import.meta.env.PROD && !isPreview;
+
+if ('serviceWorker' in navigator && isProduction) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
       .then((registration) => {
@@ -32,17 +35,21 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
         console.error('❌ Service Worker registration failed:', error);
       });
   });
-} else if (import.meta.env.DEV) {
-  console.log('🚫 Service Worker disabled in development mode to prevent caching');
+} else {
+  console.log('🚫 Service Worker disabled (development or preview mode)');
   
-  // Unregister any existing service workers in development
+  // Unregister any existing service workers in development/preview
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then((registrations) => {
       registrations.forEach((registration) => {
         registration.unregister().then(() => {
           console.log('🗑️ Unregistered existing service worker');
+        }).catch((error) => {
+          console.error('Error unregistering service worker:', error);
         });
       });
+    }).catch((error) => {
+      console.error('Error getting service worker registrations:', error);
     });
   }
 }
