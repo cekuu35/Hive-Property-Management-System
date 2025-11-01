@@ -384,7 +384,7 @@ export const useReports = () => {
     try {
       toast({
         title: "Exporting Report",
-        description: `Generating ${type} report in ${format.toUpperCase()} format...`,
+        description: `Generating ${type || 'report'} in ${(format || 'pdf').toUpperCase()} format...`,
       });
 
       // Simulate export process with actual data formatting
@@ -397,10 +397,11 @@ export const useReports = () => {
       } else if (format === 'excel') {
         const excelData = generateExcelData(type, dateRange);
         if (excelData.length > 0) {
+          const reportType = type || 'Report';
           exportToExcel(
             excelData,
-            `${type.charAt(0).toUpperCase() + type.slice(1)} Report`,
-            `${type}-report-${new Date().toISOString().split('T')[0]}.xlsx`
+            `${reportType.charAt(0).toUpperCase() + reportType.slice(1)} Report`,
+            `${reportType}-report-${new Date().toISOString().split('T')[0]}.xlsx`
           );
         } else {
           throw new Error('No data to export');
@@ -416,7 +417,7 @@ export const useReports = () => {
 
       toast({
         title: "Download Ready",
-        description: `Your ${format.toUpperCase()} report has been downloaded.`,
+        description: `Your ${(format || 'pdf').toUpperCase()} report has been downloaded.`,
       });
 
     } catch (error) {

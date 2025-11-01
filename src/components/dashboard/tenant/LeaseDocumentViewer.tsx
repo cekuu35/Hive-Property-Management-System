@@ -212,7 +212,7 @@ export const LeaseDocumentViewer = ({ open, onClose }: LeaseDocumentViewerProps)
               Agreement Date: {format(createdDate, 'MMMM dd, yyyy')}
             </p>
             <p className="text-sm text-muted-foreground">
-              Lease ID: {lease.id.substring(0, 8).toUpperCase()}
+              Lease ID: {(lease.id || '').substring(0, 8).toUpperCase()}
             </p>
           </div>
 

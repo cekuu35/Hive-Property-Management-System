@@ -437,8 +437,8 @@ export const TenantDocuments = ({ className }: TenantDocumentsProps) => {
         const noticeContent = `Property Notice: ${doc.noticeData.title}
 
 Property: ${doc.noticeData.properties?.name || 'N/A'}
-Type: ${doc.noticeData.type?.replace('_', ' ').toUpperCase()}
-Priority: ${doc.noticeData.priority?.toUpperCase()}
+Type: ${(doc.noticeData.type?.replace('_', ' ') || 'N/A').toUpperCase()}
+Priority: ${(doc.noticeData.priority || 'N/A').toUpperCase()}
 Posted: ${new Date(doc.noticeData.created_at).toLocaleDateString()}
 ${doc.noticeData.expires_at ? `Expires: ${new Date(doc.noticeData.expires_at).toLocaleDateString()}` : ''}
 
@@ -844,7 +844,7 @@ ${doc.noticeData.content}`;
                               }
                               className="text-xs"
                             >
-                              {doc.noticeData.priority?.toUpperCase()}
+                              {(doc.noticeData.priority || 'N/A').toUpperCase()}
                             </Badge>
                           )}
                         </div>
