@@ -54,6 +54,7 @@ export const useFinancials = () => {
       setLoading(true);
 
       // Fetch rent payments with related lease and tenant data
+      // Only fetch payments for properties owned by current landlord
       const { data: rentPayments, error: rentError } = await supabase
         .from('rent_payments')
         .select(`
@@ -63,12 +64,14 @@ export const useFinancials = () => {
             tenant_info_id,
             unit:units (
               unit_number,
-              property:properties (
-                name
+              property:properties!inner (
+                name,
+                landlord_id
               )
             )
           )
         `)
+        .eq('lease.unit.property.landlord_id', profile.id)
         .order('created_at', { ascending: false });
 
       if (rentError) throw rentError;

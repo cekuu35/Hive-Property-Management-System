@@ -312,6 +312,17 @@ export const PropertiesSection = () => {
               {!searchTerm && (
                 <Button 
                   onClick={() => {
+                    // Check subscription before opening form
+                    const check = canAddProperty();
+                    if (!check.allowed) {
+                      toast({
+                        title: check.reason === 'no_subscription' ? "Subscription Required" : "Property Limit Reached",
+                        description: check.message,
+                        variant: "destructive"
+                      });
+                      navigate('/landlord/plans-billing');
+                      return;
+                    }
                     setSelectedProperty(null);
                     setShowPropertyForm(true);
                   }}

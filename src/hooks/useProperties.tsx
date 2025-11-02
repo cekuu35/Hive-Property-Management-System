@@ -78,13 +78,20 @@ export const useProperties = () => {
 
   const fetchUnits = async () => {
     try {
+      // Only fetch units that belong to properties owned by the current landlord
       const { data, error } = await supabase
         .from('units')
-        .select('*')
+        .select('*, property:properties!inner(landlord_id)')
+        .eq('property.landlord_id', profile?.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setUnits((data || []).map(mapUnit));
+      // Filter out the property nested object and map units
+      const unitsData = (data || []).map((unit: any) => {
+        const { property, ...unitData } = unit;
+        return unitData;
+      });
+      setUnits(unitsData.map(mapUnit));
     } catch (error) {
       console.error('Error fetching units:', error);
       toast.error('Failed to load units');

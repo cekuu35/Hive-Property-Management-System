@@ -64,6 +64,7 @@ export default function PlansBilling() {
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [processing, setProcessing] = useState(false);
+  const [activeTab, setActiveTab] = useState('subscription');
 
   useEffect(() => {
     fetchPlans();
@@ -300,7 +301,7 @@ export default function PlansBilling() {
         </p>
       </div>
 
-      <Tabs defaultValue="subscription" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList>
           <TabsTrigger value="subscription">My Subscription</TabsTrigger>
           <TabsTrigger value="plans">Available Plans</TabsTrigger>
@@ -451,10 +452,7 @@ export default function PlansBilling() {
                           <Button 
                             size="sm" 
                             className="mt-2 bg-orange-600 hover:bg-orange-700"
-                            onClick={() => {
-                              const tabElement = document.querySelector('[value="plans"]') as HTMLElement;
-                              tabElement?.click();
-                            }}
+                            onClick={() => setActiveTab('plans')}
                           >
                             View Plans
                           </Button>
@@ -470,10 +468,7 @@ export default function PlansBilling() {
                   <p className="text-muted-foreground mb-4">
                     Choose a plan to continue using Hive Property Management
                   </p>
-                  <Button onClick={() => {
-                    const tabElement = document.querySelector('[value="plans"]') as HTMLElement;
-                    tabElement?.click();
-                  }}>
+                  <Button onClick={() => setActiveTab('plans')}>
                     View Available Plans
                   </Button>
                 </div>

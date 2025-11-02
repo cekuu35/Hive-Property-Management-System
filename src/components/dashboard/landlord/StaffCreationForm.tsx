@@ -152,11 +152,11 @@ export const StaffCreationForm: React.FC<StaffCreationFormProps> = ({ onSuccess,
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+          <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg space-y-3 border-2 border-blue-200 dark:border-blue-700 shadow-sm">
             <div className="flex items-center justify-between">
               <span className="font-medium">Email:</span>
               <div className="flex items-center gap-2">
-                <code className="bg-white px-2 py-1 rounded text-sm">{createdCredentials.email}</code>
+                <code className="bg-white dark:bg-blue-950 text-blue-900 dark:text-blue-100 border-2 border-blue-300 dark:border-blue-600 px-2 py-1 rounded-md text-sm shadow-inner">{createdCredentials.email}</code>
                 <Button
                   size="sm"
                   variant="outline"
@@ -167,9 +167,9 @@ export const StaffCreationForm: React.FC<StaffCreationFormProps> = ({ onSuccess,
               </div>
             </div>
             <div className="flex items-center justify-between">
-              <span className="font-medium">Password:</span>
+              <span className="font-medium">🔑 Password:</span>
               <div className="flex items-center gap-2">
-                <code className="bg-white px-2 py-1 rounded text-sm">{createdCredentials.password}</code>
+                <code className="bg-white dark:bg-blue-950 text-blue-900 dark:text-blue-100 border-2 border-blue-300 dark:border-blue-600 px-2 py-1 rounded-md text-sm font-mono shadow-inner">{createdCredentials.password}</code>
                 <Button
                   size="sm"
                   variant="outline"
@@ -185,10 +185,10 @@ export const StaffCreationForm: React.FC<StaffCreationFormProps> = ({ onSuccess,
             </div>
           </div>
 
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
             <div className="flex items-start gap-2">
-              <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
-              <div className="text-sm text-yellow-800">
+              <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+              <div className="text-sm text-blue-900 dark:text-blue-200">
                 <p className="font-medium">Important:</p>
                 <p>Please save these credentials securely. The password cannot be recovered if lost.</p>
                 <p className="mt-2 font-medium">Note: Property assignments will be created after database migration is applied.</p>

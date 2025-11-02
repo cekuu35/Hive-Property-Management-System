@@ -376,3 +376,51 @@ img, video, canvas, iframe {
     text-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
   }
 }
+
+/* Text Selection Highlighting - Enhanced Blue Theme */
+::selection {
+  background-color: #3b82f6; /* Blue-500 */
+  color: #ffffff;
+}
+
+::-moz-selection {
+  background-color: #3b82f6; /* Blue-500 */
+  color: #ffffff;
+}
+
+/* Even stronger selection for better visibility */
+*::selection {
+  background-color: #2563eb !important; /* Blue-600 for stronger visibility */
+  color: #ffffff !important;
+}
+
+*::-moz-selection {
+  background-color: #2563eb !important; /* Blue-600 for stronger visibility */
+  color: #ffffff !important;
+}
+
+/* Enhanced highlight for input fields */
+input::selection,
+textarea::selection {
+  background-color: #1d4ed8 !important; /* Blue-700 for inputs */
+  color: #ffffff !important;
+}
+
+input::-moz-selection,
+textarea::-moz-selection {
+  background-color: #1d4ed8 !important; /* Blue-700 for inputs */
+  color: #ffffff !important;
+}
+
+/* Code block selection */
+code::selection,
+pre::selection {
+  background-color: #3b82f6 !important; /* Blue-500 */
+  color: #ffffff !important;
+}
+
+code::-moz-selection,
+pre::-moz-selection {
+  background-color: #3b82f6 !important; /* Blue-500 */
+  color: #ffffff !important;
+}

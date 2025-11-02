@@ -900,8 +900,8 @@ export const TenantManagementSection = () => {
                 {tenantCredentials?.password && (
                   <div>
                     <Label className="text-sm font-medium text-muted-foreground">Temporary Password</Label>
-                    <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                      <p className="font-mono text-base font-semibold text-yellow-800">
+                    <div className="p-3 bg-blue-50 dark:bg-blue-900/30 border-2 border-blue-200 dark:border-blue-700 rounded-lg shadow-sm">
+                      <p className="font-mono text-base font-semibold text-blue-900 dark:text-blue-100">
                         {tenantCredentials.password}
                       </p>
                     </div>
@@ -914,8 +914,8 @@ export const TenantManagementSection = () => {
                 {!tenantCredentials?.password && currentPassword && (
                   <div>
                     <Label className="text-sm font-medium text-muted-foreground">Current Password</Label>
-                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                      <p className="font-mono text-base font-semibold text-gray-800">
+                    <div className="p-3 bg-gray-50 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-700 rounded-lg">
+                      <p className="font-mono text-base font-semibold text-gray-800 dark:text-gray-200">
                         {currentPassword}
                       </p>
                     </div>

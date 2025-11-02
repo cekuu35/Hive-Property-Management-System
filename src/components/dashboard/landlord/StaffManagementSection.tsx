@@ -369,12 +369,12 @@ export const StaffManagementSection: React.FC = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="bg-green-50 p-4 rounded-lg">
-                <p className="text-sm text-green-800 mb-2">
-                  <strong>New Password:</strong>
+              <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg border-2 border-blue-200 dark:border-blue-700 shadow-sm">
+                <p className="text-sm text-blue-900 dark:text-blue-200 mb-2">
+                  <strong>🔑 New Password:</strong>
                 </p>
                 <div className="flex items-center gap-2">
-                  <code className="bg-white px-3 py-2 rounded text-sm font-mono flex-1">
+                  <code className="bg-white dark:bg-blue-950 text-blue-900 dark:text-blue-100 border-2 border-blue-300 dark:border-blue-600 px-3 py-2 rounded-md text-sm font-mono flex-1 shadow-inner">
                     {resetPassword}
                   </code>
                   <Button
@@ -386,9 +386,9 @@ export const StaffManagementSection: React.FC = () => {
                   </Button>
                 </div>
               </div>
-              <div className="bg-yellow-50 p-3 rounded-lg">
-                <p className="text-sm text-yellow-800">
-                  <strong>⚠️ Important:</strong> Please share this password with the staff member. 
+              <div className="bg-blue-50 dark:bg-blue-900/30 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+                <p className="text-sm text-blue-900 dark:text-blue-200">
+                  <strong>📋 Important:</strong> Please share this password with the staff member. 
                   They should change it after their first login.
                 </p>
               </div>

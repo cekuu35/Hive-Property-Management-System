@@ -91,6 +91,7 @@ export const useReports = () => {
             )
           )
         `)
+        .eq('lease.unit.property.landlord_id', profile.id)
         .gte('due_date', new Date(new Date().getFullYear(), 0, 1).toISOString());
 
       if (paymentsError) throw paymentsError;
@@ -111,6 +112,7 @@ export const useReports = () => {
             )
           )
         `)
+        .eq('unit.property.landlord_id', profile.id)
         .gte('created_at', new Date(new Date().getFullYear(), 0, 1).toISOString());
 
       if (maintenanceError) throw maintenanceError;

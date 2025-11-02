@@ -16,6 +16,7 @@ import { UnitApplicationsSection } from './UnitApplicationsSection';
 import { PropertyForm } from './PropertyForm';
 import { StaffManagementSection } from './StaffManagementSection';
 import { SubscriptionStatusCard } from '@/components/subscription/SubscriptionStatusCard';
+import { useCanAddResource } from '@/components/subscription/SubscriptionGuard';
 // import { TenantInfoCard } from '../tenant/TenantInfoCard';
 import { useFinancials } from '@/hooks/useFinancials';
 import { useMaintenanceRequests } from '@/hooks/useMaintenanceRequests';
@@ -23,7 +24,9 @@ import { useProperties } from '@/hooks/useProperties';
 import { useTenants } from '@/hooks/useTenants';
 import { MetricCard } from '../MetricCard';
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { useToast } from '@/hooks/use-toast';
 import { quickProfileIdCheck } from '@/utils/dataIntegrityCheck';
 
 interface LandlordDashboardProps {
@@ -63,6 +66,9 @@ const DashboardOverview = ({ onSectionChange }: { onSectionChange?: (section: st
   const { properties, loading: propertiesLoading, createProperty } = useProperties();
   const { tenants, loading: tenantsLoading } = useTenants();
   const [propertyFormOpen, setPropertyFormOpen] = useState(false);
+  const canAddProperty = useCanAddResource('max_properties');
+  const navigate = useNavigate();
+  const { toast: toastNotification } = useToast();
 
   // Run data integrity check on component mount
   useEffect(() => {
@@ -89,6 +95,18 @@ const DashboardOverview = ({ onSectionChange }: { onSectionChange?: (section: st
 
   const handleCreateProperty = async (propertyData: any) => {
     try {
+      // Check subscription before creating
+      const check = canAddProperty();
+      if (!check.allowed) {
+        toastNotification({
+          title: check.reason === 'no_subscription' ? "Subscription Required" : "Property Limit Reached",
+          description: check.message,
+          variant: "destructive"
+        });
+        navigate('/landlord/plans-billing');
+        return;
+      }
+      
       await createProperty(propertyData);
       toast.success('Property created successfully!');
     } catch (error) {
@@ -100,6 +118,17 @@ const DashboardOverview = ({ onSectionChange }: { onSectionChange?: (section: st
   const handleQuickAction = (action: string) => {
     switch (action) {
       case 'add-property':
+        // Check subscription before opening form
+        const check = canAddProperty();
+        if (!check.allowed) {
+          toastNotification({
+            title: check.reason === 'no_subscription' ? "Subscription Required" : "Property Limit Reached",
+            description: check.message,
+            variant: "destructive"
+          });
+          navigate('/landlord/plans-billing');
+          return;
+        }
         setPropertyFormOpen(true);
         break;
       case 'manage-tenants':
@@ -161,7 +190,23 @@ const DashboardOverview = ({ onSectionChange }: { onSectionChange?: (section: st
           <h1 className="text-3xl font-bold text-foreground mb-2">Property Portfolio</h1>
           <p className="text-muted-foreground">Manage your properties and track performance</p>
         </div>
-        <Button className="gap-2" onClick={() => setPropertyFormOpen(true)}>
+        <Button 
+          className="gap-2" 
+          onClick={() => {
+            // Check subscription before opening form
+            const check = canAddProperty();
+            if (!check.allowed) {
+              toastNotification({
+                title: check.reason === 'no_subscription' ? "Subscription Required" : "Property Limit Reached",
+                description: check.message,
+                variant: "destructive"
+              });
+              navigate('/landlord/plans-billing');
+              return;
+            }
+            setPropertyFormOpen(true);
+          }}
+        >
           <Plus className="h-4 w-4" />
           Add Property
         </Button>

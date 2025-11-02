@@ -1,0 +1,101 @@
+{
+  "generated_at": "2025-11-02T08:34:31.098Z",
+  "database_url": "https://kozhlejudselgtmohdfm.supabase.co",
+  "tables": [
+    {
+      "name": "contractors",
+      "row_count": 2,
+      "exists": true
+    },
+    {
+      "name": "expenses",
+      "row_count": 0,
+      "exists": true
+    },
+    {
+      "name": "inventory",
+      "row_count": 1,
+      "exists": true
+    },
+    {
+      "name": "leases",
+      "row_count": 12,
+      "exists": true
+    },
+    {
+      "name": "maintenance_requests",
+      "row_count": 5,
+      "exists": true
+    },
+    {
+      "name": "messages",
+      "row_count": 21,
+      "exists": true
+    },
+    {
+      "name": "notifications",
+      "row_count": 121,
+      "exists": true
+    },
+    {
+      "name": "payments",
+      "row_count": 0,
+      "exists": true
+    },
+    {
+      "name": "profiles",
+      "row_count": 26,
+      "exists": true
+    },
+    {
+      "name": "properties",
+      "row_count": 3,
+      "exists": true
+    },
+    {
+      "name": "property_notices",
+      "row_count": 3,
+      "exists": true
+    },
+    {
+      "name": "rent_payments",
+      "row_count": 178,
+      "exists": true
+    },
+    {
+      "name": "security_logs",
+      "row_count": 2,
+      "exists": true
+    },
+    {
+      "name": "tenant_info",
+      "row_count": 12,
+      "exists": true
+    },
+    {
+      "name": "tenants",
+      "row_count": 1,
+      "exists": true
+    },
+    {
+      "name": "unit_applications",
+      "row_count": 6,
+      "exists": true
+    },
+    {
+      "name": "units",
+      "row_count": 124,
+      "exists": true
+    },
+    {
+      "name": "visitor_requests",
+      "row_count": 6,
+      "exists": true
+    },
+    {
+      "name": "visitors",
+      "row_count": 2,
+      "exists": true
+    }
+  ]
+}
