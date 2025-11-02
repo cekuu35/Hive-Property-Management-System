@@ -36,7 +36,7 @@ BEGIN
         jsonb_build_object(
           'payment_id', NEW.id,
           'amount', NEW.amount,
-          'payment_date', NEW.payment_date
+          'paid_date', NEW.paid_date
         )
       );
     END IF;
