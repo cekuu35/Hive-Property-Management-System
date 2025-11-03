@@ -14,7 +14,7 @@ import {
   CheckCircle, XCircle, AlertCircle, Eye, Edit, Trash2, Bell,
   Search, Check, ChevronsUpDown, Building, Users, QrCode, Camera, FileText
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useVisitorRequests } from '@/hooks/useVisitorRequests';
 import { useVisitors } from '@/hooks/useVisitors';
@@ -23,6 +23,7 @@ import { VisitorRegistrationModal } from './VisitorRegistrationModal';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 
 export const SecurityVisitorManagement = () => {
   const [isCreateRequestDialogOpen, setIsCreateRequestDialogOpen] = useState(false);
@@ -40,6 +41,26 @@ export const SecurityVisitorManagement = () => {
     expected_duration: '',
     special_instructions: ''
   });
+  
+  // Photo capture states for Request Visitor Access form
+  const [idPhotoFile, setIdPhotoFile] = useState<File | null>(null);
+  const [idPhotoPreview, setIdPhotoPreview] = useState<string | null>(null);
+  const [showCamera, setShowCamera] = useState(false);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  // Check-in modal states
+  const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
+  const [selectedRequestForCheckIn, setSelectedRequestForCheckIn] = useState<any>(null);
+  const [checkInIdPhotoFile, setCheckInIdPhotoFile] = useState<File | null>(null);
+  const [checkInIdPhotoPreview, setCheckInIdPhotoPreview] = useState<string | null>(null);
+  const [showCheckInCamera, setShowCheckInCamera] = useState(false);
+  const [checkInStream, setCheckInStream] = useState<MediaStream | null>(null);
+  const checkInVideoRef = useRef<HTMLVideoElement>(null);
+  const checkInCanvasRef = useRef<HTMLCanvasElement>(null);
+  
+  const { profile } = useAuth();
 
   const { 
     requests, 
@@ -114,6 +135,168 @@ export const SecurityVisitorManagement = () => {
     };
   }, []);
 
+  // Camera functions for Request Visitor Access form
+  const startCamera = async () => {
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { 
+          facingMode: 'environment',
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      });
+      setStream(mediaStream);
+      setShowCamera(true);
+    } catch (error) {
+      console.error('Error accessing camera:', error);
+      toast({
+        title: "Camera Error",
+        description: "Unable to access camera. Please check permissions or use file upload instead.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const stopCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      setStream(null);
+    }
+    setShowCamera(false);
+  };
+
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0);
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const file = new File([blob], 'id-photo.jpg', { type: 'image/jpeg' });
+            setIdPhotoFile(file);
+            setIdPhotoPreview(URL.createObjectURL(blob));
+            stopCamera();
+          }
+        }, 'image/jpeg', 0.9);
+      }
+    }
+  };
+
+  // Camera functions for Check-In modal
+  const startCheckInCamera = async () => {
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { 
+          facingMode: 'environment',
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      });
+      setCheckInStream(mediaStream);
+      setShowCheckInCamera(true);
+    } catch (error) {
+      console.error('Error accessing camera:', error);
+      toast({
+        title: "Camera Error",
+        description: "Unable to access camera. Please check permissions or use file upload instead.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const stopCheckInCamera = () => {
+    if (checkInStream) {
+      checkInStream.getTracks().forEach(track => track.stop());
+      setCheckInStream(null);
+    }
+    setShowCheckInCamera(false);
+  };
+
+  const captureCheckInPhoto = () => {
+    if (checkInVideoRef.current && checkInCanvasRef.current) {
+      const video = checkInVideoRef.current;
+      const canvas = checkInCanvasRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0);
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const file = new File([blob], 'checkin-id-photo.jpg', { type: 'image/jpeg' });
+            setCheckInIdPhotoFile(file);
+            setCheckInIdPhotoPreview(URL.createObjectURL(blob));
+            stopCheckInCamera();
+          }
+        }, 'image/jpeg', 0.9);
+      }
+    }
+  };
+
+  // Cleanup camera streams
+  useEffect(() => {
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      if (checkInStream) {
+        checkInStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [stream, checkInStream]);
+
+  // Ensure video displays when streams are set
+  useEffect(() => {
+    if (showCamera && videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+      const video = videoRef.current;
+      const playVideo = () => {
+        video.play().catch(err => console.error('Error playing video:', err));
+      };
+      if (video.readyState >= 2) {
+        playVideo();
+      } else {
+        video.onloadedmetadata = playVideo;
+      }
+    }
+  }, [showCamera, stream]);
+
+  useEffect(() => {
+    if (showCheckInCamera && checkInVideoRef.current && checkInStream) {
+      checkInVideoRef.current.srcObject = checkInStream;
+      const video = checkInVideoRef.current;
+      const playVideo = () => {
+        video.play().catch(err => console.error('Error playing video:', err));
+      };
+      if (video.readyState >= 2) {
+        playVideo();
+      } else {
+        video.onloadedmetadata = playVideo;
+      }
+    }
+  }, [showCheckInCamera, checkInStream]);
+
+  // Close cameras when modals close
+  useEffect(() => {
+    if (!isCreateRequestDialogOpen && stream) {
+      stopCamera();
+      setIdPhotoFile(null);
+      setIdPhotoPreview(null);
+    }
+  }, [isCreateRequestDialogOpen]);
+
+  useEffect(() => {
+    if (!isCheckInModalOpen && checkInStream) {
+      stopCheckInCamera();
+    }
+  }, [isCheckInModalOpen]);
+
   const handleCreateRequest = async () => {
     if (!selectedUnit) {
       toast({
@@ -129,9 +312,44 @@ export const SecurityVisitorManagement = () => {
     );
     if (!unitDetails) return;
 
+    // Upload photo if provided
+    let idDocumentUrl: string | undefined = undefined;
+    if (idPhotoFile && profile?.id) {
+      try {
+        const fileExt = idPhotoFile.name.split('.').pop();
+        const fileName = `request-${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+        const filePath = `${profile.id}/${fileName}`;
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('visitor-id-photos')
+          .upload(filePath, idPhotoFile, {
+            cacheControl: '3600',
+            upsert: false,
+          });
+
+        if (!uploadError) {
+          const { data: signedUrlData } = await supabase.storage
+            .from('visitor-id-photos')
+            .createSignedUrl(filePath, 31536000);
+          
+          if (signedUrlData?.signedUrl) {
+            idDocumentUrl = signedUrlData.signedUrl;
+          }
+        }
+      } catch (error) {
+        console.error('Error uploading photo:', error);
+        toast({
+          title: "Upload Warning",
+          description: "Request created but photo upload failed",
+          variant: "default"
+        });
+      }
+    }
+
     const success = await createSecurityVisitorRequest({
       ...newRequest,
       tenant_id: unitDetails.tenant_id,
+      id_document_url: idDocumentUrl,
       expected_duration: newRequest.expected_duration ? parseInt(newRequest.expected_duration) : undefined
     });
 
@@ -147,6 +365,8 @@ export const SecurityVisitorManagement = () => {
       });
       setSelectedUnit('');
       setUnitSearchTerm('');
+      setIdPhotoFile(null);
+      setIdPhotoPreview(null);
     }
   };
 
@@ -158,8 +378,57 @@ export const SecurityVisitorManagement = () => {
     await updateVisitorRequestStatus(requestId, 'rejected', 'Request rejected by security');
   };
 
-  const handleRegisterApprovedVisitor = async (requestId: string) => {
-    await registerVisitorFromApprovedRequest(requestId);
+  const handleRegisterApprovedVisitor = (request: any) => {
+    setSelectedRequestForCheckIn(request);
+    setIsCheckInModalOpen(true);
+  };
+  
+  const handleConfirmCheckIn = async () => {
+    if (!selectedRequestForCheckIn) return;
+    
+    let idDocumentUrl = selectedRequestForCheckIn.id_document_url;
+    
+    // Upload check-in photo if taken
+    if (checkInIdPhotoFile && profile?.id) {
+      try {
+        const fileExt = checkInIdPhotoFile.name.split('.').pop();
+        const fileName = `checkin-${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+        const filePath = `${profile.id}/${fileName}`;
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('visitor-id-photos')
+          .upload(filePath, checkInIdPhotoFile, {
+            cacheControl: '3600',
+            upsert: false,
+          });
+
+        if (!uploadError) {
+          const { data: signedUrlData } = await supabase.storage
+            .from('visitor-id-photos')
+            .createSignedUrl(filePath, 31536000);
+          
+          if (signedUrlData?.signedUrl) {
+            idDocumentUrl = signedUrlData.signedUrl;
+          }
+        }
+      } catch (error) {
+        console.error('Error uploading check-in photo:', error);
+      }
+    }
+    
+    // Register visitor with photo
+    const success = await registerVisitorFromApprovedRequest(
+      selectedRequestForCheckIn.id, 
+      idDocumentUrl ? { id_document_url: idDocumentUrl } : undefined
+    );
+    
+    if (success) {
+      setIsCheckInModalOpen(false);
+      setSelectedRequestForCheckIn(null);
+      setCheckInIdPhotoFile(null);
+      setCheckInIdPhotoPreview(null);
+      stopCheckInCamera();
+    }
   };
 
   const handleCheckOut = async (visitorId: string) => {
@@ -244,14 +513,14 @@ export const SecurityVisitorManagement = () => {
                 Request Visitor Access
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
+            <DialogContent className="max-w-md max-h-[90vh] flex flex-col p-0 gap-0">
+              <DialogHeader className="px-6 pt-6 pb-4 border-b flex-shrink-0">
                 <DialogTitle>Request Visitor Access</DialogTitle>
                 <DialogDescription>
                   Create a visitor request that requires tenant approval before registration.
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-4">
+              <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0 space-y-4" style={{ maxHeight: 'calc(90vh - 180px)' }}>
                 <div className="space-y-2">
                   <Label htmlFor="tenant_unit" className="text-sm font-medium flex items-center gap-2">
                     <Building className="h-4 w-4" />
@@ -406,7 +675,128 @@ export const SecurityVisitorManagement = () => {
                     onChange={(e) => setNewRequest(prev => ({ ...prev, special_instructions: e.target.value }))}
                   />
                 </div>
+
+                {/* ID Document Photo Upload */}
+                <div>
+                  <Label htmlFor="id_photo">ID Document Photo (Optional)</Label>
+                  <div className="mt-2 space-y-3">
+                    {/* Camera View */}
+                    {showCamera && (
+                      <div className="border rounded-lg p-4 bg-muted">
+                        <div className="relative w-full flex justify-center">
+                          <div className="relative w-full max-w-md aspect-video">
+                            <video
+                              ref={videoRef}
+                              autoPlay
+                              playsInline
+                              muted
+                              className="w-full h-full rounded-lg object-cover"
+                              style={{ 
+                                backgroundColor: '#000',
+                                display: 'block'
+                              }}
+                            />
+                            <canvas ref={canvasRef} className="hidden" />
+                          </div>
+                        </div>
+                        <div className="flex gap-2 mt-4 justify-center">
+                          <Button
+                            type="button"
+                            onClick={capturePhoto}
+                            className="flex items-center gap-2"
+                          >
+                            <Camera className="h-4 w-4" />
+                            Capture Photo
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={stopCamera}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Upload Options */}
+                    {!showCamera && (
+                      <div className="flex items-center gap-4 flex-wrap">
+                        <input
+                          type="file"
+                          id="id_photo_upload"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              if (file.size > 10 * 1024 * 1024) {
+                                toast({
+                                  title: "File Too Large",
+                                  description: "Please select an image smaller than 10MB",
+                                  variant: "destructive"
+                                });
+                                return;
+                              }
+                              setIdPhotoFile(file);
+                              setIdPhotoPreview(URL.createObjectURL(file));
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => document.getElementById('id_photo_upload')?.click()}
+                          className="flex items-center gap-2"
+                        >
+                          <FileText className="h-4 w-4" />
+                          Upload from Device
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={startCamera}
+                          className="flex items-center gap-2"
+                        >
+                          <Camera className="h-4 w-4" />
+                          Take Photo
+                        </Button>
+                        {(idPhotoFile || idPhotoPreview) && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setIdPhotoFile(null);
+                              setIdPhotoPreview(null);
+                            }}
+                          >
+                            Remove
+                          </Button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Photo Preview */}
+                    {idPhotoPreview && !showCamera && (
+                      <div className="mt-4">
+                        <img
+                          src={idPhotoPreview}
+                          alt="ID preview"
+                          className="w-full max-w-md mx-auto rounded-lg border"
+                          style={{ maxHeight: '300px', objectFit: 'contain' }}
+                        />
+                        <p className="text-xs text-muted-foreground mt-2 text-center">
+                          {idPhotoFile?.name || 'Photo preview'}
+                          {idPhotoFile && ` (${(idPhotoFile.size / 1024).toFixed(1)} KB)`}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
                 
+              </div>
+              <div className="px-6 pb-6 pt-4 border-t flex-shrink-0">
                 <Button 
                   onClick={handleCreateRequest} 
                   className="w-full"
@@ -562,7 +952,7 @@ export const SecurityVisitorManagement = () => {
                   <Button 
                     variant="default" 
                     size="sm"
-                    onClick={() => handleRegisterApprovedVisitor(request.id)}
+                    onClick={() => handleRegisterApprovedVisitor(request)}
                   >
                     <UserCheck className="h-4 w-4 mr-1" />
                     Check In Visitor
@@ -676,6 +1066,19 @@ export const SecurityVisitorManagement = () => {
                       )}
                     </div>
                     <div className="flex items-center gap-2">
+                      {visitor && (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => {
+                            setSelectedVisitorDetails(visitor);
+                            setIsVisitorDetailsOpen(true);
+                          }}
+                        >
+                          <Eye className="w-4 h-4 mr-1" />
+                          View Details
+                        </Button>
+                      )}
                       {visitor && visitor.status === 'active' && (
                         <Button 
                           variant="outline" 
@@ -737,6 +1140,177 @@ export const SecurityVisitorManagement = () => {
           </CardContent>
         </Card>
       )}
+
+      {/* Check-In Modal with Photo Capture */}
+      <Dialog open={isCheckInModalOpen} onOpenChange={setIsCheckInModalOpen}>
+        <DialogContent className="max-w-md max-h-[90vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b flex-shrink-0">
+            <DialogTitle>Check In Visitor</DialogTitle>
+            <DialogDescription>
+              Take a photo of the visitor's ID document before checking them in
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0 space-y-4" style={{ maxHeight: 'calc(90vh - 180px)' }}>
+            {selectedRequestForCheckIn && (
+              <>
+                <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                  <p className="font-medium">{selectedRequestForCheckIn.visitor_name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Visiting: {selectedRequestForCheckIn.tenant?.first_name} {selectedRequestForCheckIn.tenant?.last_name}
+                  </p>
+                  <p className="text-sm text-muted-foreground">Purpose: {selectedRequestForCheckIn.purpose}</p>
+                </div>
+
+                {/* ID Document Photo Upload */}
+                <div>
+                  <Label htmlFor="checkin_id_photo">ID Document Photo (Recommended)</Label>
+                  <div className="mt-2 space-y-3">
+                    {/* Camera View */}
+                    {showCheckInCamera && (
+                      <div className="border rounded-lg p-4 bg-muted">
+                        <div className="relative w-full flex justify-center">
+                          <div className="relative w-full max-w-md aspect-video">
+                            <video
+                              ref={checkInVideoRef}
+                              autoPlay
+                              playsInline
+                              muted
+                              className="w-full h-full rounded-lg object-cover"
+                              style={{ 
+                                backgroundColor: '#000',
+                                display: 'block'
+                              }}
+                            />
+                            <canvas ref={checkInCanvasRef} className="hidden" />
+                          </div>
+                        </div>
+                        <div className="flex gap-2 mt-4 justify-center">
+                          <Button
+                            type="button"
+                            onClick={captureCheckInPhoto}
+                            className="flex items-center gap-2"
+                          >
+                            <Camera className="h-4 w-4" />
+                            Capture Photo
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={stopCheckInCamera}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Upload Options */}
+                    {!showCheckInCamera && (
+                      <div className="flex items-center gap-4 flex-wrap">
+                        <input
+                          type="file"
+                          id="checkin_id_photo_upload"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              if (file.size > 10 * 1024 * 1024) {
+                                toast({
+                                  title: "File Too Large",
+                                  description: "Please select an image smaller than 10MB",
+                                  variant: "destructive"
+                                });
+                                return;
+                              }
+                              setCheckInIdPhotoFile(file);
+                              setCheckInIdPhotoPreview(URL.createObjectURL(file));
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => document.getElementById('checkin_id_photo_upload')?.click()}
+                          className="flex items-center gap-2"
+                        >
+                          <FileText className="h-4 w-4" />
+                          Upload from Device
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={startCheckInCamera}
+                          className="flex items-center gap-2"
+                        >
+                          <Camera className="h-4 w-4" />
+                          Take Photo
+                        </Button>
+                        {(checkInIdPhotoFile || checkInIdPhotoPreview) && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setCheckInIdPhotoFile(null);
+                              setCheckInIdPhotoPreview(null);
+                            }}
+                          >
+                            Remove
+                          </Button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Photo Preview */}
+                    {checkInIdPhotoPreview && !showCheckInCamera && (
+                      <div className="mt-4">
+                        <img
+                          src={checkInIdPhotoPreview}
+                          alt="ID preview"
+                          className="w-full max-w-md mx-auto rounded-lg border"
+                          style={{ maxHeight: '300px', objectFit: 'contain' }}
+                        />
+                        <p className="text-xs text-muted-foreground mt-2 text-center">
+                          {checkInIdPhotoFile?.name || 'Photo preview'}
+                          {checkInIdPhotoFile && ` (${(checkInIdPhotoFile.size / 1024).toFixed(1)} KB)`}
+                        </p>
+                      </div>
+                    )}
+
+                    {selectedRequestForCheckIn.id_document_url && !checkInIdPhotoPreview && (
+                      <div className="mt-4 p-3 bg-muted rounded-lg">
+                        <p className="text-sm text-muted-foreground">
+                          ID photo already uploaded from request: {selectedRequestForCheckIn.visitor_name}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+          <div className="px-6 pb-6 pt-4 border-t flex-shrink-0 flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsCheckInModalOpen(false);
+                stopCheckInCamera();
+              }}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmCheckIn}
+              className="flex-1"
+            >
+              <UserCheck className="h-4 w-4 mr-2" />
+              Check In
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Visitor Details Modal */}
       <Dialog open={isVisitorDetailsOpen} onOpenChange={setIsVisitorDetailsOpen}>

@@ -61,6 +61,21 @@ export const VisitorHistorySection = () => {
 
       if (error) throw error;
 
+      // Debug: Log first visitor to verify data structure
+      if (data && data.length > 0) {
+        console.log('[VisitorHistory] Sample visitor data:', {
+          id: data[0].id,
+          visitor_name: data[0].visitor_name,
+          time_in: data[0].time_in,
+          time_out: data[0].time_out,
+          time_in_type: typeof data[0].time_in,
+          time_out_type: typeof data[0].time_out,
+          calculated_duration: data[0].time_in && data[0].time_out 
+            ? differenceInMinutes(new Date(data[0].time_out), new Date(data[0].time_in))
+            : 'N/A'
+        });
+      }
+
       setHistory(data || []);
     } catch (error) {
       console.error('[VisitorHistory] Error:', error);
@@ -84,11 +99,45 @@ export const VisitorHistorySection = () => {
   });
 
   const calculateDuration = (timeIn: string, timeOut?: string) => {
-    if (!timeOut) return 'N/A';
-    const minutes = differenceInMinutes(new Date(timeOut), new Date(timeIn));
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+    if (!timeOut || !timeIn) return 'N/A';
+    
+    try {
+      const checkInDate = new Date(timeIn);
+      const checkOutDate = new Date(timeOut);
+      
+      // Validate dates
+      if (isNaN(checkInDate.getTime()) || isNaN(checkOutDate.getTime())) {
+        console.error('Invalid date format:', { timeIn, timeOut });
+        return 'Invalid Date';
+      }
+      
+      // Ensure check-out is after check-in
+      if (checkOutDate <= checkInDate) {
+        console.error('Check-out time must be after check-in time:', { timeIn, timeOut });
+        return 'N/A';
+      }
+      
+      const minutes = differenceInMinutes(checkOutDate, checkInDate);
+      
+      if (minutes < 0) {
+        console.error('Negative duration calculated:', { timeIn, timeOut, minutes });
+        return 'N/A';
+      }
+      
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      
+      if (hours > 0) {
+        return `${hours}h ${mins}m`;
+      } else if (mins === 0) {
+        return '< 1m';
+      } else {
+        return `${mins}m`;
+      }
+    } catch (error) {
+      console.error('Error calculating duration:', error, { timeIn, timeOut });
+      return 'N/A';
+    }
   };
 
   if (loading) {
@@ -192,7 +241,10 @@ export const VisitorHistorySection = () => {
                           <Clock className="h-4 w-4" />
                           <span>Out: {format(new Date(visitor.time_out), 'MMM d, h:mm a')}</span>
                         </div>
-                        <div className="text-sm font-medium text-primary">
+                        <div 
+                          className="text-sm font-medium text-primary"
+                          title={`Check-in: ${new Date(visitor.time_in).toLocaleString()}\nCheck-out: ${new Date(visitor.time_out).toLocaleString()}\nRaw time_in: ${visitor.time_in}\nRaw time_out: ${visitor.time_out}`}
+                        >
                           Duration: {calculateDuration(visitor.time_in, visitor.time_out)}
                         </div>
                       </>

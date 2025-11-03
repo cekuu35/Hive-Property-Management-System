@@ -13,6 +13,7 @@ export interface VisitorRequest {
   expected_arrival: string;
   expected_duration?: number;
   special_instructions?: string;
+  id_document_url?: string;
   status: 'pending' | 'approved' | 'rejected' | 'expired';
   approved_by?: string;
   approved_at?: string;
@@ -44,6 +45,7 @@ export interface CreateVisitorRequest {
   special_instructions?: string;
   tenant_id?: string; // For security creating requests
   unit_id?: string; // Unit being visited
+  id_document_url?: string; // URL of uploaded ID document photo
 }
 
 export interface CreateSecurityVisitorRequest extends CreateVisitorRequest {

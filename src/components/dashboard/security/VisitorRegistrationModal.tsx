@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -60,6 +60,10 @@ export const VisitorRegistrationModal = ({
   const [qrCode, setQrCode] = useState<string>('');
   const [idPhotoFile, setIdPhotoFile] = useState<File | null>(null);
   const [idPhotoPreview, setIdPhotoPreview] = useState<string | null>(null);
+  const [showCamera, setShowCamera] = useState(false);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const groupedUnits = getGroupedUnits();
 
@@ -147,6 +151,11 @@ export const VisitorRegistrationModal = ({
           setQrCode('');
           setIdPhotoFile(null);
           setIdPhotoPreview(null);
+          setShowCamera(false);
+          if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+            setStream(null);
+          }
           const input = document.getElementById('id_photo') as HTMLInputElement;
           if (input) input.value = '';
           onClose();
@@ -168,8 +177,112 @@ export const VisitorRegistrationModal = ({
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  // Camera functions
+  const startCamera = async () => {
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { 
+          facingMode: 'environment', // Use back camera if available
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      });
+      setStream(mediaStream);
+      setShowCamera(true);
+    } catch (error) {
+      console.error('Error accessing camera:', error);
+      toast({
+        title: "Camera Error",
+        description: "Unable to access camera. Please check permissions or use file upload instead.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const stopCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      setStream(null);
+    }
+    setShowCamera(false);
+  };
+
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0);
+        
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const file = new File([blob], `id-photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
+            setIdPhotoFile(file);
+            
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              setIdPhotoPreview(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+            
+            stopCamera();
+          }
+        }, 'image/jpeg', 0.9);
+      }
+    }
+  };
+
+  // Cleanup camera stream on unmount
+  useEffect(() => {
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [stream]);
+
+  // Ensure video displays when stream is set
+  useEffect(() => {
+    if (showCamera && videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+      const video = videoRef.current;
+      
+      const playVideo = () => {
+        video.play().catch(err => {
+          console.error('Error playing video:', err);
+        });
+      };
+      
+      if (video.readyState >= 2) {
+        // Video already has enough data
+        playVideo();
+      } else {
+        video.onloadedmetadata = playVideo;
+      }
+    }
+  }, [showCamera, stream]);
+
+  // Close camera when modal closes
+  useEffect(() => {
+    if (!isOpen && stream) {
+      stream.getTracks().forEach(track => track.stop());
+      setStream(null);
+      setShowCamera(false);
+    }
+  }, [isOpen, stream]);
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      if (!open) {
+        stopCamera();
+      }
+      onClose();
+    }}>
       <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
@@ -182,7 +295,7 @@ export const VisitorRegistrationModal = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
+        <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0" style={{ maxHeight: 'calc(90vh - 180px)' }}>
           <form onSubmit={handleSubmit} className="space-y-6" id="visitor-registration-form">
           {/* Visitor Information */}
           <Card>
@@ -244,65 +357,117 @@ export const VisitorRegistrationModal = ({
               <div>
                 <Label htmlFor="id_photo">ID Document Photo *</Label>
                 <div className="mt-2 space-y-3">
-                  <div className="flex items-center gap-4">
-                    <input
-                      type="file"
-                      id="id_photo"
-                      accept="image/jpeg,image/png,image/webp"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          // Validate file size (max 10MB)
-                          if (file.size > 10 * 1024 * 1024) {
-                            toast({
-                              title: "File too large",
-                              description: "Please select an image under 10MB",
-                              variant: "destructive"
-                            });
-                            return;
+                  {/* Camera View */}
+                  {showCamera && (
+                    <div className="border rounded-lg p-4 bg-muted">
+                      <div className="relative w-full flex justify-center">
+                        <div className="relative w-full max-w-md aspect-video">
+                          <video
+                            ref={videoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className="w-full h-full rounded-lg object-cover"
+                            style={{ 
+                              backgroundColor: '#000',
+                              display: 'block'
+                            }}
+                          />
+                          <canvas ref={canvasRef} className="hidden" />
+                        </div>
+                      </div>
+                      <div className="flex gap-2 mt-4 justify-center">
+                        <Button
+                          type="button"
+                          onClick={capturePhoto}
+                          className="flex items-center gap-2"
+                        >
+                          <Camera className="h-4 w-4" />
+                          Capture Photo
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={stopCamera}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Upload Options */}
+                  {!showCamera && (
+                    <div className="flex items-center gap-4 flex-wrap">
+                      <input
+                        type="file"
+                        id="id_photo"
+                        accept="image/jpeg,image/png,image/webp"
+                        capture="environment"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            // Validate file size (max 10MB)
+                            if (file.size > 10 * 1024 * 1024) {
+                              toast({
+                                title: "File too large",
+                                description: "Please select an image under 10MB",
+                                variant: "destructive"
+                              });
+                              return;
+                            }
+                            
+                            setIdPhotoFile(file);
+                            
+                            // Create preview
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              setIdPhotoPreview(reader.result as string);
+                            };
+                            reader.readAsDataURL(file);
                           }
-                          
-                          setIdPhotoFile(file);
-                          
-                          // Create preview
-                          const reader = new FileReader();
-                          reader.onloadend = () => {
-                            setIdPhotoPreview(reader.result as string);
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => document.getElementById('id_photo')?.click()}
-                      className="flex items-center gap-2"
-                    >
-                      <Camera className="h-4 w-4" />
-                      {idPhotoFile ? 'Change Photo' : 'Take/Upload Photo'}
-                    </Button>
-                    
-                    {idPhotoFile && (
+                        }}
+                      />
                       <Button
                         type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setIdPhotoFile(null);
-                          setIdPhotoPreview(null);
-                          const input = document.getElementById('id_photo') as HTMLInputElement;
-                          if (input) input.value = '';
-                        }}
+                        variant="default"
+                        onClick={startCamera}
+                        className="flex items-center gap-2"
                       >
-                        Remove
+                        <Camera className="h-4 w-4" />
+                        Take Photo
                       </Button>
-                    )}
-                  </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => document.getElementById('id_photo')?.click()}
+                        className="flex items-center gap-2"
+                      >
+                        <FileText className="h-4 w-4" />
+                        Upload from Device
+                      </Button>
+                      
+                      {idPhotoFile && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setIdPhotoFile(null);
+                            setIdPhotoPreview(null);
+                            const input = document.getElementById('id_photo') as HTMLInputElement;
+                            if (input) input.value = '';
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      )}
+                    </div>
+                  )}
 
                   {/* Photo Preview */}
-                  {idPhotoPreview && (
+                  {idPhotoPreview && !showCamera && (
                     <div className="relative w-full max-w-md border rounded-lg overflow-hidden">
                       <img
                         src={idPhotoPreview}
@@ -310,12 +475,12 @@ export const VisitorRegistrationModal = ({
                         className="w-full h-auto max-h-64 object-contain bg-muted"
                       />
                       <div className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
-                        {idPhotoFile?.name}
+                        {idPhotoFile?.name || 'Captured Photo'}
                       </div>
                     </div>
                   )}
 
-                  {!idPhotoPreview && (
+                  {!idPhotoPreview && !showCamera && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <AlertCircle className="h-4 w-4" />
                       <span>Required: Capture or upload a photo of the visitor's ID document</span>

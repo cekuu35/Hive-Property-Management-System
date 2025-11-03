@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,13 +9,18 @@ import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { 
   UserCheck, Plus, Clock, User, Phone, Calendar, MapPin, 
-  CheckCircle, XCircle, AlertCircle, Eye, Edit, Trash2 
+  CheckCircle, XCircle, AlertCircle, Eye, Edit, Trash2, Camera, FileText
 } from 'lucide-react';
 import { useVisitorRequests } from '@/hooks/useVisitorRequests';
 import { useVisitors } from '@/hooks/useVisitors';
 import { format } from 'date-fns';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 
 export const VisitorsSection = () => {
+  const { toast } = useToast();
+  const { profile } = useAuth();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newRequest, setNewRequest] = useState({
     visitor_name: '',
@@ -25,6 +30,13 @@ export const VisitorsSection = () => {
     expected_duration: '',
     special_instructions: ''
   });
+  
+  const [idPhotoFile, setIdPhotoFile] = useState<File | null>(null);
+  const [idPhotoPreview, setIdPhotoPreview] = useState<string | null>(null);
+  const [showCamera, setShowCamera] = useState(false);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const { 
     requests, 
@@ -36,10 +48,148 @@ export const VisitorsSection = () => {
   
   const { visitors, loading: visitorsLoading } = useVisitors();
 
+  // Camera functions
+  const startCamera = async () => {
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { 
+          facingMode: 'environment',
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      });
+      setStream(mediaStream);
+      setShowCamera(true);
+    } catch (error) {
+      console.error('Error accessing camera:', error);
+      toast({
+        title: "Camera Error",
+        description: "Unable to access camera. Please check permissions or use file upload instead.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const stopCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      setStream(null);
+    }
+    setShowCamera(false);
+  };
+
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0);
+        
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const file = new File([blob], `id-photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
+            setIdPhotoFile(file);
+            
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              setIdPhotoPreview(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+            
+            stopCamera();
+          }
+        }, 'image/jpeg', 0.9);
+      }
+    }
+  };
+
+  // Cleanup camera stream
+  useEffect(() => {
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [stream]);
+
+  // Ensure video displays when stream is set
+  useEffect(() => {
+    if (showCamera && videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+      const video = videoRef.current;
+      
+      const playVideo = () => {
+        video.play().catch(err => {
+          console.error('Error playing video:', err);
+        });
+      };
+      
+      if (video.readyState >= 2) {
+        // Video already has enough data
+        playVideo();
+      } else {
+        video.onloadedmetadata = playVideo;
+      }
+    }
+  }, [showCamera, stream]);
+
+  // Close camera when modal closes
+  useEffect(() => {
+    if (!isCreateDialogOpen && stream) {
+      stream.getTracks().forEach(track => track.stop());
+      setStream(null);
+      setShowCamera(false);
+    }
+  }, [isCreateDialogOpen, stream]);
+
   const handleCreateRequest = async () => {
+    if (!profile?.id) return;
+
+    // Upload ID photo if provided
+    let idDocumentUrl: string | undefined;
+    if (idPhotoFile) {
+      try {
+        const fileExt = idPhotoFile.name.split('.').pop();
+        const fileName = `visitor-request-${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+        const filePath = `${profile.id}/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('visitor-id-photos')
+          .upload(filePath, idPhotoFile, {
+            cacheControl: '3600',
+            upsert: false,
+          });
+
+        if (uploadError) {
+          console.error('ID photo upload error:', uploadError);
+          toast({
+            title: "Upload Warning",
+            description: "Request submitted but ID photo upload failed",
+            variant: "default"
+          });
+        } else {
+          const { data: signedUrlData } = await supabase.storage
+            .from('visitor-id-photos')
+            .createSignedUrl(filePath, 31536000);
+          
+          if (signedUrlData?.signedUrl) {
+            idDocumentUrl = signedUrlData.signedUrl;
+          }
+        }
+      } catch (error) {
+        console.error('Error uploading photo:', error);
+      }
+    }
+
     const success = await createVisitorRequest({
       ...newRequest,
-      expected_duration: newRequest.expected_duration ? parseInt(newRequest.expected_duration) : undefined
+      expected_duration: newRequest.expected_duration ? parseInt(newRequest.expected_duration) : undefined,
+      id_document_url: idDocumentUrl
     });
 
     if (success) {
@@ -52,6 +202,13 @@ export const VisitorsSection = () => {
         expected_duration: '',
         special_instructions: ''
       });
+      setIdPhotoFile(null);
+      setIdPhotoPreview(null);
+      setShowCamera(false);
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        setStream(null);
+      }
     }
   };
 
@@ -97,14 +254,14 @@ export const VisitorsSection = () => {
               Request Visitor Access
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
+          <DialogContent className="max-w-md max-h-[90vh] flex flex-col p-0 gap-0">
+            <DialogHeader className="px-6 pt-6 pb-4 border-b flex-shrink-0">
               <DialogTitle>Request Visitor Access</DialogTitle>
               <DialogDescription>
                 Submit a visitor request for approval. Security will be notified once approved.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4">
+            <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0 space-y-4" style={{ maxHeight: 'calc(90vh - 180px)' }}>
               <div>
                 <Label htmlFor="visitor_name">Visitor Name</Label>
                 <Input
@@ -165,7 +322,137 @@ export const VisitorsSection = () => {
                   onChange={(e) => setNewRequest(prev => ({ ...prev, special_instructions: e.target.value }))}
                 />
               </div>
-              
+
+              {/* ID Document Photo Upload */}
+              <div>
+                <Label htmlFor="id_photo">ID Document Photo (Optional)</Label>
+                <div className="mt-2 space-y-3">
+                  {/* Camera View */}
+                  {showCamera && (
+                    <div className="border rounded-lg p-4 bg-muted">
+                      <div className="relative w-full flex justify-center">
+                        <div className="relative w-full max-w-md aspect-video">
+                          <video
+                            ref={videoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className="w-full h-full rounded-lg object-cover"
+                            style={{ 
+                              backgroundColor: '#000',
+                              display: 'block'
+                            }}
+                          />
+                          <canvas ref={canvasRef} className="hidden" />
+                        </div>
+                      </div>
+                      <div className="flex gap-2 mt-4 justify-center">
+                        <Button
+                          type="button"
+                          onClick={capturePhoto}
+                          className="flex items-center gap-2"
+                        >
+                          <Camera className="h-4 w-4" />
+                          Capture Photo
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={stopCamera}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Upload Options */}
+                  {!showCamera && (
+                    <div className="flex items-center gap-4 flex-wrap">
+                      <input
+                        type="file"
+                        id="id_photo"
+                        accept="image/jpeg,image/png,image/webp"
+                        capture="environment"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            // Validate file size (max 10MB)
+                            if (file.size > 10 * 1024 * 1024) {
+                              toast({
+                                title: "File too large",
+                                description: "Please select an image under 10MB",
+                                variant: "destructive"
+                              });
+                              return;
+                            }
+                            
+                            setIdPhotoFile(file);
+                            
+                            // Create preview
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              setIdPhotoPreview(reader.result as string);
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="default"
+                        onClick={startCamera}
+                        className="flex items-center gap-2"
+                      >
+                        <Camera className="h-4 w-4" />
+                        Take Photo
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => document.getElementById('id_photo')?.click()}
+                        className="flex items-center gap-2"
+                      >
+                        <FileText className="h-4 w-4" />
+                        Upload from Device
+                      </Button>
+                      
+                      {idPhotoFile && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setIdPhotoFile(null);
+                            setIdPhotoPreview(null);
+                            const input = document.getElementById('id_photo') as HTMLInputElement;
+                            if (input) input.value = '';
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Photo Preview */}
+                  {idPhotoPreview && !showCamera && (
+                    <div className="relative w-full max-w-md border rounded-lg overflow-hidden">
+                      <img
+                        src={idPhotoPreview}
+                        alt="ID Document Preview"
+                        className="w-full h-auto max-h-64 object-contain bg-muted"
+                      />
+                      <div className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
+                        {idPhotoFile?.name || 'Captured Photo'}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="px-6 pb-6 pt-4 border-t flex-shrink-0">
               <Button 
                 onClick={handleCreateRequest} 
                 className="w-full"
