@@ -124,7 +124,7 @@ export const useUtilityBills = () => {
       setLoading(true);
       setError(null);
 
-      // Use direct database approach instead of edge function
+      // Use direct database approach with proper joins to get tenant info
       const { data: bills, error: billsError } = await (supabase as any)
         .from('unit_bills')
         .select(`
@@ -138,49 +138,34 @@ export const useUtilityBills = () => {
           utilities!unit_bills_utility_id_fkey (name),
           units!unit_bills_unit_id_fkey (
             unit_number,
-            properties!units_property_id_fkey (name)
+            properties!units_property_id_fkey!inner (
+              name,
+              landlord_id
+            )
+          ),
+          tenant_info:tenant_info!unit_bills_tenant_id_fkey (
+            id,
+            first_name,
+            last_name
           )
         `)
-        .eq('landlord_id', profile.id)
+        .eq('units.properties.landlord_id', profile.id)
         .order('created_at', { ascending: false });
 
       if (billsError) {
         throw billsError;
       }
 
-      console.log('Raw bills data:', bills);
-
-      // Get tenant_info records
-      const { data: tenantInfos, error: tenantInfosError } = await supabase
-        .from('tenant_info')
-        .select('id, first_name, last_name');
-
-      if (tenantInfosError) {
-        console.warn('Error fetching tenant_info:', tenantInfosError);
-      }
-
-      // Create tenant lookup map
-      const tenantMap = new Map();
-      if (tenantInfos) {
-        tenantInfos.forEach(tenant => {
-          tenantMap.set(tenant.id, tenant);
-        });
-      }
-
-      // Add tenant information to bills
+      // Transform bills data
       const billsWithTenants = (bills || []).map(bill => {
-        let tenantInfo = null;
-        
-        if (bill.tenant_id && tenantMap.has(bill.tenant_id)) {
-          tenantInfo = tenantMap.get(bill.tenant_id);
-        }
-        
         return {
           ...bill,
-          tenant_info: tenantInfo,
+          tenant_info: bill.tenant_info || null,
           unit_number: bill.units?.unit_number || 'Unknown',
           property_name: bill.units?.properties?.name || 'Unknown Property',
-          tenant_name: tenantInfo ? `${tenantInfo.first_name} ${tenantInfo.last_name}` : undefined
+          tenant_name: bill.tenant_info 
+            ? `${bill.tenant_info.first_name} ${bill.tenant_info.last_name}` 
+            : undefined
         };
       });
 

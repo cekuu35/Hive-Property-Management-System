@@ -30,6 +30,8 @@ export const SecurityVisitorManagement = () => {
   const [selectedUnit, setSelectedUnit] = useState<string>('');
   const [unitSearchOpen, setUnitSearchOpen] = useState(false);
   const [unitSearchTerm, setUnitSearchTerm] = useState('');
+  const [selectedVisitorDetails, setSelectedVisitorDetails] = useState<any>(null);
+  const [isVisitorDetailsOpen, setIsVisitorDetailsOpen] = useState(false);
   const [newRequest, setNewRequest] = useState({
     visitor_name: '',
     visitor_phone: '',
@@ -604,13 +606,26 @@ export const SecurityVisitorManagement = () => {
                       <p className="text-sm text-muted-foreground">Phone: {visitor.visitor_phone}</p>
                     )}
                   </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => handleCheckOut(visitor.id)}
-                  >
-                    Check Out
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        setSelectedVisitorDetails(visitor);
+                        setIsVisitorDetailsOpen(true);
+                      }}
+                    >
+                      <Eye className="w-4 h-4 mr-1" />
+                      View Details
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleCheckOut(visitor.id)}
+                    >
+                      Check Out
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -722,6 +737,156 @@ export const SecurityVisitorManagement = () => {
           </CardContent>
         </Card>
       )}
+
+      {/* Visitor Details Modal */}
+      <Dialog open={isVisitorDetailsOpen} onOpenChange={setIsVisitorDetailsOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="h-5 w-5" />
+              Visitor Details
+            </DialogTitle>
+            <DialogDescription>
+              Complete visitor information including ID document
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedVisitorDetails && (
+            <div className="space-y-6">
+              {/* Basic Information */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Visitor Information</CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Name</Label>
+                    <p className="font-medium">{selectedVisitorDetails.visitor_name}</p>
+                  </div>
+                  {selectedVisitorDetails.visitor_phone && (
+                    <div>
+                      <Label className="text-sm text-muted-foreground">Phone</Label>
+                      <p className="font-medium">{selectedVisitorDetails.visitor_phone}</p>
+                    </div>
+                  )}
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Visiting Unit</Label>
+                    <p className="font-medium">
+                      {selectedVisitorDetails.unit?.unit_number || 'Unknown Unit'}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Tenant</Label>
+                    <p className="font-medium">
+                      {selectedVisitorDetails.tenant?.first_name} {selectedVisitorDetails.tenant?.last_name}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Purpose</Label>
+                    <p className="font-medium">{selectedVisitorDetails.purpose}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Status</Label>
+                    <Badge className={getVisitorStatusColor(selectedVisitorDetails.status)}>
+                      {selectedVisitorDetails.status}
+                    </Badge>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Checked In</Label>
+                    <p className="font-medium">
+                      {format(new Date(selectedVisitorDetails.time_in), 'MMM d, yyyy h:mm a')}
+                    </p>
+                  </div>
+                  {selectedVisitorDetails.time_out && (
+                    <div>
+                      <Label className="text-sm text-muted-foreground">Checked Out</Label>
+                      <p className="font-medium">
+                        {format(new Date(selectedVisitorDetails.time_out), 'MMM d, yyyy h:mm a')}
+                      </p>
+                    </div>
+                  )}
+                  {selectedVisitorDetails.emergency_contact && (
+                    <div className="col-span-2">
+                      <Label className="text-sm text-muted-foreground">Emergency Contact</Label>
+                      <p className="font-medium">{selectedVisitorDetails.emergency_contact}</p>
+                    </div>
+                  )}
+                  {selectedVisitorDetails.security_notes && (
+                    <div className="col-span-2">
+                      <Label className="text-sm text-muted-foreground">Security Notes</Label>
+                      <p className="font-medium">{selectedVisitorDetails.security_notes}</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* ID Document Photo */}
+              {selectedVisitorDetails.id_document_url && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <FileText className="h-5 w-5" />
+                      ID Document
+                    </CardTitle>
+                    <CardDescription>Visitor's identification document photo</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="relative w-full border rounded-lg overflow-hidden bg-muted">
+                      <img
+                        src={selectedVisitorDetails.id_document_url}
+                        alt="ID Document"
+                        className="w-full h-auto max-h-96 object-contain"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          const parent = target.parentElement;
+                          if (parent) {
+                            parent.innerHTML = `
+                              <div class="p-8 text-center text-muted-foreground">
+                                <svg class="h-8 w-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                                <p>ID Document photo not available</p>
+                              </div>
+                            `;
+                          }
+                        }}
+                      />
+                    </div>
+                    <Button
+                      variant="outline"
+                      className="mt-4"
+                      onClick={() => {
+                        window.open(selectedVisitorDetails.id_document_url, '_blank');
+                      }}
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      View Full Size
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
+              {!selectedVisitorDetails.id_document_url && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <FileText className="h-5 w-5" />
+                      ID Document
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="p-8 text-center text-muted-foreground border rounded-lg">
+                      <AlertCircle className="h-8 w-8 mx-auto mb-2" />
+                      <p>No ID document photo available</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Visitor Registration Modal */}
       <VisitorRegistrationModal

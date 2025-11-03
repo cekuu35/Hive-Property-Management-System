@@ -58,6 +58,8 @@ export const VisitorRegistrationModal = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedUnit, setSelectedUnit] = useState<any>(null);
   const [qrCode, setQrCode] = useState<string>('');
+  const [idPhotoFile, setIdPhotoFile] = useState<File | null>(null);
+  const [idPhotoPreview, setIdPhotoPreview] = useState<string | null>(null);
 
   const groupedUnits = getGroupedUnits();
 
@@ -94,6 +96,15 @@ export const VisitorRegistrationModal = ({
       return;
     }
 
+    if (!idPhotoFile) {
+      toast({
+        title: "ID Photo Required",
+        description: "Please capture or upload a photo of the visitor's ID document",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -104,7 +115,8 @@ export const VisitorRegistrationModal = ({
         visiting_tenant_id: selectedUnit?.tenant_id,
         purpose: formData.purpose,
         security_notes: formData.special_instructions,
-        emergency_contact: formData.emergency_contact
+        emergency_contact: formData.emergency_contact,
+        id_document_file: idPhotoFile
       });
 
       if (success) {
@@ -133,6 +145,10 @@ export const VisitorRegistrationModal = ({
             visitor_type: 'guest'
           });
           setQrCode('');
+          setIdPhotoFile(null);
+          setIdPhotoPreview(null);
+          const input = document.getElementById('id_photo') as HTMLInputElement;
+          if (input) input.value = '';
           onClose();
         }, 2000);
       }
@@ -154,18 +170,20 @@ export const VisitorRegistrationModal = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <UserCheck className="h-5 w-5" />
             Visitor Registration
+            <span className="text-xs font-normal text-muted-foreground ml-2">(v2.0)</span>
           </DialogTitle>
           <DialogDescription>
-            Register a new visitor and generate access credentials
+            Register a new visitor and generate access credentials. ID photo required.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
+          <form onSubmit={handleSubmit} className="space-y-6" id="visitor-registration-form">
           {/* Visitor Information */}
           <Card>
             <CardHeader>
@@ -219,6 +237,90 @@ export const VisitorRegistrationModal = ({
                       <SelectItem value="emergency">Emergency</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+              </div>
+
+              {/* ID Document Photo Upload */}
+              <div>
+                <Label htmlFor="id_photo">ID Document Photo *</Label>
+                <div className="mt-2 space-y-3">
+                  <div className="flex items-center gap-4">
+                    <input
+                      type="file"
+                      id="id_photo"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          // Validate file size (max 10MB)
+                          if (file.size > 10 * 1024 * 1024) {
+                            toast({
+                              title: "File too large",
+                              description: "Please select an image under 10MB",
+                              variant: "destructive"
+                            });
+                            return;
+                          }
+                          
+                          setIdPhotoFile(file);
+                          
+                          // Create preview
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setIdPhotoPreview(reader.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => document.getElementById('id_photo')?.click()}
+                      className="flex items-center gap-2"
+                    >
+                      <Camera className="h-4 w-4" />
+                      {idPhotoFile ? 'Change Photo' : 'Take/Upload Photo'}
+                    </Button>
+                    
+                    {idPhotoFile && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setIdPhotoFile(null);
+                          setIdPhotoPreview(null);
+                          const input = document.getElementById('id_photo') as HTMLInputElement;
+                          if (input) input.value = '';
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Photo Preview */}
+                  {idPhotoPreview && (
+                    <div className="relative w-full max-w-md border rounded-lg overflow-hidden">
+                      <img
+                        src={idPhotoPreview}
+                        alt="ID Document Preview"
+                        className="w-full h-auto max-h-64 object-contain bg-muted"
+                      />
+                      <div className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
+                        {idPhotoFile?.name}
+                      </div>
+                    </div>
+                  )}
+
+                  {!idPhotoPreview && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <AlertCircle className="h-4 w-4" />
+                      <span>Required: Capture or upload a photo of the visitor's ID document</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -435,8 +537,9 @@ export const VisitorRegistrationModal = ({
               </CardContent>
             </Card>
           )}
-
-          {/* Action Buttons */}
+        </form>
+        </div>
+        <div className="px-6 pb-6 pt-4 border-t flex-shrink-0">
           <div className="flex justify-between">
             <Button 
               type="button" 
@@ -457,7 +560,11 @@ export const VisitorRegistrationModal = ({
               <Button type="button" variant="outline" onClick={onClose}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button 
+                type="submit" 
+                form="visitor-registration-form"
+                disabled={isSubmitting}
+              >
                 {isSubmitting ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
@@ -472,7 +579,7 @@ export const VisitorRegistrationModal = ({
               </Button>
             </div>
           </div>
-        </form>
+        </div>
       </DialogContent>
     </Dialog>
   );

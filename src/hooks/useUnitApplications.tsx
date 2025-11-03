@@ -100,6 +100,7 @@ export const useUnitApplications = () => {
     try {
       console.log('🔍 [useUnitApplications] Fetching landlord applications for profile:', profile?.id);
       
+      // Use !inner join to filter at database level by landlord_id
       const { data, error } = await supabase
         .from('unit_applications')
         .select(`
@@ -112,7 +113,7 @@ export const useUnitApplications = () => {
             images,
             property_id
           ),
-          properties (
+          properties!inner (
             name,
             address,
             landlord_id
@@ -124,6 +125,7 @@ export const useUnitApplications = () => {
             avatar_url
           )
         `)
+        .eq('properties.landlord_id', profile?.id)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -131,16 +133,9 @@ export const useUnitApplications = () => {
         throw error;
       }
       
-      console.log('📋 [useUnitApplications] Raw applications data:', data);
+      console.log('📋 [useUnitApplications] Applications for landlord:', data?.length || 0);
       
-      // Filter applications for this landlord's properties
-      const landlordApplications = (data || []).filter((app: any) => 
-        app.properties?.landlord_id === profile?.id
-      );
-      
-      console.log('🏠 [useUnitApplications] Filtered applications for landlord:', landlordApplications);
-      
-      setApplications(landlordApplications as UnitApplication[]);
+      setApplications((data || []) as UnitApplication[]);
     } catch (error) {
       console.error('❌ [useUnitApplications] Error fetching applications:', error);
       toast.error('Failed to load applications');

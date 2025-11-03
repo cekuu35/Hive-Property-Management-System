@@ -104,17 +104,51 @@ export class StaffCreationService {
 
           // Create property assignments (if table exists)
           try {
-            const assignments = staffData.property_ids.map(propertyId => ({
-              staff_id: profile.id,
-              property_id: propertyId,
-              role: staffData.role,
-              assigned_by: landlordId,
-              notes: staffData.notes
-            }));
+            // For each property, check if assignment exists
+            const assignmentsToCreate = [];
+            const assignmentsToUpdate = [];
 
-            const { error: assignmentError } = await supabaseAdmin
-              .from('staff_assignments')
-              .insert(assignments);
+            for (const propertyId of staffData.property_ids) {
+              // Check if assignment already exists (even if inactive)
+              const { data: existingAssignment } = await supabaseAdmin
+                .from('staff_assignments')
+                .select('id, is_active')
+                .eq('staff_id', profile.id)
+                .eq('property_id', propertyId)
+                .eq('role', staffData.role)
+                .maybeSingle();
+
+              if (existingAssignment) {
+                // Update existing assignment to active
+                await supabaseAdmin
+                  .from('staff_assignments')
+                  .update({
+                    is_active: true,
+                    assigned_by: landlordId,
+                    notes: staffData.notes
+                  })
+                  .eq('id', existingAssignment.id);
+              } else {
+                // Create new assignment
+                assignmentsToCreate.push({
+                  staff_id: profile.id,
+                  property_id: propertyId,
+                  role: staffData.role,
+                  assigned_by: landlordId,
+                  notes: staffData.notes,
+                  is_active: true
+                });
+              }
+            }
+
+            // Create new assignments if any
+            let assignmentError = null;
+            if (assignmentsToCreate.length > 0) {
+              const { error } = await supabaseAdmin
+                .from('staff_assignments')
+                .insert(assignmentsToCreate);
+              assignmentError = error;
+            }
 
             if (assignmentError) {
               // If table doesn't exist, still return success but with a warning
@@ -263,42 +297,68 @@ export class StaffCreationService {
       // Create property assignments (if table exists)
       console.log('3. Creating property assignments...');
       try {
-        const assignments = staffData.property_ids.map(propertyId => ({
-          staff_id: profile.id,
-          property_id: propertyId,
-          role: staffData.role,
-          assigned_by: landlordId,
-          notes: staffData.notes
-        }));
+        // For each property, check if assignment exists
+        const assignmentsToCreate = [];
+        const assignmentsToUpdate = [];
 
-        const { error: assignmentError } = await supabaseAdmin
-          .from('staff_assignments')
-          .insert(assignments);
+        for (const propertyId of staffData.property_ids) {
+          // Check if assignment already exists (even if inactive)
+          const { data: existingAssignment } = await supabaseAdmin
+            .from('staff_assignments')
+            .select('id, is_active')
+            .eq('staff_id', profile.id)
+            .eq('property_id', propertyId)
+            .eq('role', staffData.role)
+            .maybeSingle();
 
-        if (assignmentError) {
-          // If table doesn't exist, still return success but with a warning
-          if (assignmentError.message.includes('relation "public.staff_assignments" does not exist')) {
-            console.warn('staff_assignments table does not exist. Property assignments not created.');
-            return {
-              success: true,
-              profile_id: profile.id,
-              auth_user_id: authData.user.id,
-              email: staffData.email,
-              password: password,
+          if (existingAssignment) {
+            // Update existing assignment to active
+            assignmentsToUpdate.push({
+              id: existingAssignment.id,
+              is_active: true,
+              assigned_by: landlordId,
+              notes: staffData.notes,
+              updated_at: new Date().toISOString()
+            });
+          } else {
+            // Create new assignment
+            assignmentsToCreate.push({
+              staff_id: profile.id,
+              property_id: propertyId,
               role: staffData.role,
-              assigned_properties: staffData.property_ids,
-              warning: 'Property assignments not created - database migration needed'
-            };
+              assigned_by: landlordId,
+              notes: staffData.notes,
+              is_active: true
+            });
           }
-          console.error('Error creating assignments:', assignmentError);
-          // Clean up auth user and profile
-          await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
-          await supabaseAdmin.from('profiles').delete().eq('id', profile.id);
-          return {
-            success: false,
-            error: `Failed to create property assignments: ${assignmentError.message}`
-          };
         }
+
+        // Create new assignments
+        if (assignmentsToCreate.length > 0) {
+          const { error: createError } = await supabaseAdmin
+            .from('staff_assignments')
+            .insert(assignmentsToCreate);
+
+          if (createError) throw createError;
+        }
+
+        // Update existing assignments
+        if (assignmentsToUpdate.length > 0) {
+          for (const update of assignmentsToUpdate) {
+            const { error: updateError } = await supabaseAdmin
+              .from('staff_assignments')
+              .update({
+                is_active: true,
+                assigned_by: landlordId,
+                notes: staffData.notes
+              })
+              .eq('id', update.id);
+
+            if (updateError) throw updateError;
+          }
+        }
+
+        // No error check needed - we handled both create and update cases above
 
         console.log('✅ Property assignments created');
       } catch (err) {
@@ -521,25 +581,58 @@ export class StaffCreationService {
           // Continue anyway, we'll try to create new ones
         }
 
-        // Create new assignments
+        // Create new assignments (check for existing ones first to avoid 409)
         if (updateData.property_ids.length > 0) {
-          const newAssignments = updateData.property_ids.map(propertyId => ({
-            staff_id: staffId,
-            property_id: propertyId,
-            role: updateData.role || staffMember.role,
-            assigned_by: landlordId,
-            notes: updateData.notes || null,
-            is_active: true
-          }));
+          const assignmentsToCreate = [];
+          
+          for (const propertyId of updateData.property_ids) {
+            // Check if assignment already exists
+            const { data: existingAssignment } = await supabaseAdmin
+              .from('staff_assignments')
+              .select('id, is_active')
+              .eq('staff_id', staffId)
+              .eq('property_id', propertyId)
+              .eq('role', updateData.role || staffMember.role)
+              .maybeSingle();
 
-          const { error: assignmentError } = await supabaseAdmin
-            .from('staff_assignments')
-            .insert(newAssignments);
+            if (existingAssignment) {
+              // Update existing assignment to active
+              const { error: updateError } = await supabaseAdmin
+                .from('staff_assignments')
+                .update({
+                  is_active: true,
+                  assigned_by: landlordId,
+                  notes: updateData.notes || null
+                })
+                .eq('id', existingAssignment.id);
 
-          if (assignmentError) {
-            // If assignments table doesn't exist, that's okay
-            if (!assignmentError.message.includes('relation "public.staff_assignments" does not exist')) {
-              return { success: false, error: `Failed to update assignments: ${assignmentError.message}` };
+              if (updateError && !updateError.message.includes('relation "public.staff_assignments" does not exist')) {
+                return { success: false, error: `Failed to update assignment: ${updateError.message}` };
+              }
+            } else {
+              // Create new assignment
+              assignmentsToCreate.push({
+                staff_id: staffId,
+                property_id: propertyId,
+                role: updateData.role || staffMember.role,
+                assigned_by: landlordId,
+                notes: updateData.notes || null,
+                is_active: true
+              });
+            }
+          }
+
+          // Insert new assignments if any
+          if (assignmentsToCreate.length > 0) {
+            const { error: assignmentError } = await supabaseAdmin
+              .from('staff_assignments')
+              .insert(assignmentsToCreate);
+
+            if (assignmentError) {
+              // If assignments table doesn't exist, that's okay
+              if (!assignmentError.message.includes('relation "public.staff_assignments" does not exist')) {
+                return { success: false, error: `Failed to create assignments: ${assignmentError.message}` };
+              }
             }
           }
         }

@@ -17,6 +17,7 @@ export interface Visitor {
   status: 'active' | 'checked_out';
   security_notes?: string;
   emergency_contact?: string;
+  id_document_url?: string;
   created_at: string;
   updated_at: string;
   tenant?: {
@@ -40,6 +41,8 @@ export interface CreateVisitor {
   purpose: string;
   security_notes?: string;
   emergency_contact?: string;
+  id_document_file?: File; // File to upload for ID photo
+  id_document_url?: string; // URL if already uploaded
 }
 
 export const useVisitors = () => {
@@ -83,6 +86,46 @@ export const useVisitors = () => {
     }
 
     try {
+      let idDocumentUrl = visitorData.id_document_url;
+
+      // Upload ID document photo if provided
+      if (visitorData.id_document_file) {
+        const fileExt = visitorData.id_document_file.name.split('.').pop();
+        const fileName = `visitor-${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+        const filePath = `${profile.id}/${fileName}`;
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('visitor-id-photos')
+          .upload(filePath, visitorData.id_document_file, {
+            cacheControl: '3600',
+            upsert: false,
+          });
+
+        if (uploadError) {
+          console.error('ID photo upload error:', uploadError);
+          toast({
+            title: "Upload Warning",
+            description: "Visitor registered but ID photo upload failed",
+            variant: "default"
+          });
+        } else {
+          // Generate signed URL for private bucket (valid for 1 year)
+          const { data: signedUrlData } = await supabase.storage
+            .from('visitor-id-photos')
+            .createSignedUrl(filePath, 31536000); // 1 year expiry
+          
+          if (signedUrlData?.signedUrl) {
+            idDocumentUrl = signedUrlData.signedUrl;
+          } else {
+            // Fallback to public URL if signed URL fails
+            const { data: urlData } = supabase.storage
+              .from('visitor-id-photos')
+              .getPublicUrl(filePath);
+            idDocumentUrl = urlData.publicUrl;
+          }
+        }
+      }
+
       const { data, error } = await supabase
         .from('visitors')
         .insert({
@@ -95,6 +138,7 @@ export const useVisitors = () => {
           security_notes: visitorData.security_notes || null,
           emergency_contact: visitorData.emergency_contact || null,
           visitor_request_id: visitorData.visitor_request_id || null,
+          id_document_url: idDocumentUrl || null,
           status: 'active',
           time_in: new Date().toISOString(),
         })
