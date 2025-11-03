@@ -156,7 +156,10 @@ export const useVisitors = () => {
     }
   };
 
-  const registerVisitorFromApprovedRequest = async (visitorRequestId: string) => {
+  const registerVisitorFromApprovedRequest = async (
+    visitorRequestId: string,
+    options?: { id_document_url?: string }
+  ) => {
     if (!profile?.id || profile.role !== 'security') return false;
 
     try {
@@ -179,6 +182,41 @@ export const useVisitors = () => {
         .eq('status', 'active')
         .single();
 
+      // Check if visitor already exists for this request
+      const { data: existingVisitor } = await supabase
+        .from('visitors')
+        .select('id')
+        .eq('visitor_request_id', visitorRequestId)
+        .maybeSingle();
+
+      if (existingVisitor) {
+        // Visitor already checked in, update with new photo if provided
+        const idDocumentUrl = options?.id_document_url || request.id_document_url || null;
+        
+        const updateData: any = {};
+        if (idDocumentUrl) {
+          updateData.id_document_url = idDocumentUrl;
+        }
+        if (Object.keys(updateData).length > 0) {
+          const { error: updateError } = await supabase
+            .from('visitors')
+            .update(updateData)
+            .eq('id', existingVisitor.id);
+          
+          if (updateError) throw updateError;
+        }
+        
+        toast({ 
+          title: "Info", 
+          description: "Visitor already checked in. Photo updated if provided." 
+        });
+        await fetchVisitors();
+        return true;
+      }
+
+      // Use provided ID document URL, or fallback to request's ID document URL
+      const idDocumentUrl = options?.id_document_url || request.id_document_url || null;
+
       // Register the visitor
       const { error } = await supabase
         .from('visitors')
@@ -190,11 +228,34 @@ export const useVisitors = () => {
           visiting_unit_id: lease?.unit_id || null,
           visiting_tenant_id: request.tenant_id,
           purpose: request.purpose,
+          id_document_url: idDocumentUrl,
           status: 'active',
           time_in: new Date().toISOString(),
         });
 
-      if (error) throw error;
+      if (error) {
+        // Handle various conflict scenarios (HTTP 409, PostgreSQL unique constraint, etc.)
+        const isConflict = 
+          error.code === '23505' || // PostgreSQL unique constraint
+          error.code === 'PGRST116' || // PostgREST conflict
+          (error as any).status === 409 || // HTTP 409 Conflict
+          error.message?.toLowerCase().includes('duplicate') ||
+          error.message?.toLowerCase().includes('already exists') ||
+          error.message?.toLowerCase().includes('conflict');
+        
+        if (isConflict) {
+          toast({ 
+            title: "Already Checked In", 
+            description: "This visitor has already been checked in." 
+          });
+          await fetchVisitors();
+          return true;
+        }
+        
+        // Log the error for debugging
+        console.error('Error registering visitor:', error);
+        throw error;
+      }
 
       toast({ title: "Success", description: "Visitor registered from approved request" });
       await fetchVisitors(); // Refetch after registration
